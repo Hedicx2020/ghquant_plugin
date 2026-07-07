@@ -44,6 +44,7 @@ def bond_portfolio_backtest(holdings, quotes, cost_bps: float = 0.0) -> pd.DataF
 5. `drawdown.png` — 组合回撤
 
 ## 6. 验证指标与通过标准
+> 容差与必需产物清单以 templates/standards.json 为准，本节为人读说明。
 | 指标 | 通过标准 |
 |------|---------|
 | 到期收益率 YTM、久期、凸性 | 偏差 < 5%（纯计算类，须精确） |

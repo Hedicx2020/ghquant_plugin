@@ -1,7 +1,8 @@
 # 通用 plan.md 骨架
 
-> `quant-pdf-reader` 生成 `plan/{report_name}/plan.md` 时遵循本骨架：**先 frontmatter（分诊结论），后正文**。
+> `quant-planner` 生成 `workspace/{report_name}/plan.md` 时遵循本骨架：**先 frontmatter（分诊结论），后正文**。
 > 正文的类型特化章节见对应的 `templates/{type}.md`。
+> `quant-planner` **只读 spec.md 不读 PDF**（倒逼 spec 完备，缺口由审计暴露）——本文件回答「按什么顺序做」，不重复回答「研报里有什么」，研报要素的权威来源永远是 `workspace/{report_name}/spec/spec.md`。
 
 ---
 
@@ -16,8 +17,9 @@ date: <研报发布日 YYYY-MM-DD>
 type: <factor | timing | allocation | fixed_income | ml>   # 主类型，单选，决定回测框架与验证标准
 tags: []                  # 附加维度（可选，多选）：ml / event / convertible_bond / fund / industry_rotation ...
 difficulty: <easy | medium | hard>
-feasibility: <ok | partial | blocked>
+feasibility: <feasible | degraded | blocked>
 template: templates/<type>.md
+spec_ref: workspace/<report_name>/spec/spec.md   # 指向本报告的复现规格书；R 类基准表等要素内容一律引用它，不在 plan.md 重复抄录
 data_requirements:
   - name: <数据名，如 A股日行情>
     source: <local_data 文件名，或「外部」>
@@ -27,6 +29,8 @@ milestones:
   - id: m1
     name: <里程碑名>
     desc: <该里程碑要交付什么>
+    deps: []                        # 依赖的其它 milestone id 列表，无依赖写 []；check_gates 按此判环（G-PL-5）
+    elements: [F1, F2, B1]           # 本 milestone 覆盖的 spec.md 要素 ID 列表，供 coverage_matrix.md 的 milestone 列回填核对
   # easy=1 个；medium=2~3 个；hard=≥3 个
 ---
 ```
@@ -34,8 +38,8 @@ milestones:
 ### 字段填写规则
 - **type**：看研报最终回测对象。截面选股=`factor`；时序仓位信号=`timing`；多资产权重=`allocation`；债券/收益率曲线=`fixed_income`；需训练模型=`ml`。混合时取「最终回测形态」为 type，其余进 tags（例：深度学习选股 → `type: factor` + `tags: [ml]`）。
 - **difficulty**：按 §三 难度判定表，任一维度落 hard 即 hard；含模型训练自动 ≥ medium。
-- **feasibility**：所有核心 data_requirement 为 available/derive → `ok`；部分非核心数据 missing 但不影响主结论 → `partial`；核心数据 missing 或核心方法无法确定 → `blocked`（触发主流程停下问用户）。
-- **milestones**：每个里程碑应是一个「可独立实现+验证」的闭环单元，粒度参考对应类型模板的「plan 正文结构」。
+- **feasibility**：取值 ∈ `{feasible, degraded, blocked}`（与 `tools/state.py` 的 `FEASIBILITY_VALUES` 逐字对齐，注意不是 `ok/partial`）。所有核心 data_requirement 为 available/derive → `feasible`；部分非核心数据 missing 但不影响主结论、需降级复现 → `degraded`；核心数据 missing 或核心方法无法确定 → `blocked`（触发主流程停下问用户，`tools/check_gates.py` G-PL-9 断言 `feasibility != blocked` 才能放行）。
+- **milestones**：每个里程碑应是一个「可独立实现+验证」的闭环单元，粒度参考对应类型模板的「plan 正文结构」。`deps` 描述里程碑间的先后依赖（`tools/check_gates.py` G-PL-5 会检测环依赖，成环直接判 FAIL）；`elements` 是该里程碑要交付的 spec.md 要素 ID 清单，写完后须与 `coverage_matrix.md` 对应行的 milestone 列相互印证（一个要素只能落在一个 milestone）。
 
 ---
 
@@ -59,10 +63,10 @@ milestones:
 > 类型特化的参数清单见 templates/{type}.md
 
 ## 三、研报核心结果（验证基准）
-> 把研报里给出的关键数值（表格化）抄下来，作为 quant-verify 的对照基准
-| 指标 | 研报值 |
-|------|--------|
-| ... | ... |
+> 引用 spec.md 的「五、研报核心数值结果基准（R 类）」，**不在本文件重复抄录数值**——spec.md 是验证基准的唯一真相源，两处各抄一份容易产生不一致。本节只需列出本计划覆盖到的 R 要素 ID、一句话摘要与关联 milestone，具体数值/原文/页码以 spec.md 为准。
+| R 要素ID | 一句话摘要 | 关联 milestone |
+|----------|-----------|---------------|
+| R1 | 表3 动量因子测试结果 | m1 |
 
 ## 四、复现计划（按 milestone 拆分）
 ### m1: {名称}

@@ -45,6 +45,7 @@ def portfolio_backtest(
 5. `drawdown.png` — 组合回撤
 
 ## 6. 验证指标与通过标准
+> 容差与必需产物清单以 templates/standards.json 为准，本节为人读说明。
 | 指标 | 通过标准 |
 |------|---------|
 | 组合年化收益、夏普、最大回撤 | 偏差 < 10% |

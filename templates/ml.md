@@ -50,6 +50,7 @@ def evaluate_predictions(pred: pd.Series, forward_return: pd.Series) -> dict:
 5. `prediction_scatter.png` — 预测 vs 实际收益散点
 
 ## 6. 验证指标与通过标准（**分层**）
+> 容差与必需产物清单以 templates/standards.json 为准，本节为人读说明。
 | 层 | 指标 | 通过标准 |
 |----|------|---------|
 | **数据/特征层** | 样本数、特征均值/分位、标签分布、缺失率 | 偏差 < 5%（精确复现） |

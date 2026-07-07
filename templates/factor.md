@@ -42,6 +42,7 @@ from common.data_loader import load_market_data, load_industry, get_stock_univer
 5. `net_value_comparison.png` — 多空/多头 vs 基准净值
 
 ## 6. 验证指标与通过标准
+> 容差与必需产物清单以 templates/standards.json 为准，本节为人读说明。
 | 指标 | 通过标准 |
 |------|---------|
 | RankIC 均值、ICIR | 方向一致，偏差 < 20%（Pearson/Rank、中性化口径差异容忍） |

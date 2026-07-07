@@ -43,6 +43,7 @@ def timing_metrics(nav: pd.Series, position: pd.Series, benchmark_nav: pd.Series
 5. `rolling_sharpe.png` — 滚动夏普（或滚动超额）
 
 ## 6. 验证指标与通过标准
+> 容差与必需产物清单以 templates/standards.json 为准，本节为人读说明。
 | 指标 | 通过标准 |
 |------|---------|
 | 年化收益、最大回撤、夏普 | 偏差 < 5% |
