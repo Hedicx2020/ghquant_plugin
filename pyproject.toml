@@ -27,6 +27,12 @@ ml = [
 [dependency-groups]
 dev = ["pytest>=8.0"]
 
+[tool.pytest.ini_options]
+# 仅收集 tests/（T1 新增的工具测试）；src/{report_id}/ 下各案例自带的旧式
+# unittest 用例（如 src/test/test_strategy.py）不在此默认发现范围内，
+# 避免 `uv run pytest` 因其独立的导入约定（需 PYTHONPATH=repo 根）而报错。
+testpaths = ["tests"]
+
 [tool.uv]
 # 纯环境管理，本项目不作为可安装包构建
 package = false
