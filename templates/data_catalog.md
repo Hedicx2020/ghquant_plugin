@@ -1,6 +1,6 @@
 # 本地数据目录（data_catalog）
 
-> 供 `quant-pdf-reader` **分诊**时对照，判断研报所需数据在本地是否可得，避免每次扫描 10GB。
+> 供 `quant-planner` **分诊**时对照（quant-extractor 提取数据要求后由 planner 判定可得性），判断研报所需数据在本地是否可得，避免每次扫描 10GB。
 > 数据根目录：`~/local_data/`（即 `Path.home()/"local_data"`），全部为 **parquet** 格式。
 > 加载方式：`pd.read_parquet("~/local_data/<file>.parquet", columns=[...])`。
 > 通用约定：日期列多为 `date`；`JSID` 为数据源内部 ID，可忽略；股票代码列为 `stock_code`（6 位，如 `600000`）。
