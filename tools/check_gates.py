@@ -1060,7 +1060,9 @@ def check_verify(root: Path, report_id: str) -> list[CheckResult]:
 # 接受残差」、blocked 是「缺外部输入」），该轮天然不会产出 changes.md——若仍要求
 # changes.md，这类轮次会被 G-IT-1 永久判 FAIL，构成死锁。按「结论: stop_partial」
 # 一类行豁免 changes.md（diagnosis.md 与 comparison.json 仍必须齐）。
-_ITER_EXEMPT_CONCLUSION_RE = re.compile(r"结论[:：].*(stop_partial|blocked)")
+# 枚举值必须紧跟冒号（允许尾随附注）：防止「结论: continue（已排除 stop_partial 假设）」
+# 这类同行提及被否决枚举值的写法被误判豁免。
+_ITER_EXEMPT_CONCLUSION_RE = re.compile(r"结论[:：]\s*(stop_partial|blocked)\b")
 
 
 def check_iterate(root: Path, report_id: str) -> list[CheckResult]:

@@ -968,6 +968,42 @@ def test_check_iterate_continue_round_still_requires_changes_md(tmp_path: Path) 
     assert "changes.md" in by_id["G-IT-1"].detail
 
 
+def test_check_iterate_continue_mentioning_stop_partial_not_exempt(tmp_path: Path) -> None:
+    """反：continue 结论行内附注提及 stop_partial（如「已排除」）不得被误判豁免。"""
+    _init_workspace(tmp_path)
+    st.set_field(tmp_path, "demo", "iteration.current", "1")
+    iter_dir = tmp_path / "workspace" / "demo" / "iterations" / "iter_01"
+    iter_dir.mkdir(parents=True, exist_ok=True)
+    (iter_dir / "diagnosis.md").write_text(
+        "## 归因\n锁定修改点。\n\n结论: continue（此前怀疑应为 stop_partial 但已排除）\n",
+        encoding="utf-8",
+    )
+    (iter_dir / "comparison.json").write_text("{}", encoding="utf-8")
+    # 故意不写 changes.md
+
+    results = cg.check_iterate(tmp_path, "demo")
+    by_id = {r.id: r for r in results}
+    assert by_id["G-IT-1"].passed is False
+    assert "changes.md" in by_id["G-IT-1"].detail
+
+
+def test_check_iterate_stop_partial_with_trailing_note_still_exempt(tmp_path: Path) -> None:
+    """正：结论值后带附注（「结论: stop_partial（同指标3轮红线）」）仍应豁免 changes.md。"""
+    _init_workspace(tmp_path)
+    st.set_field(tmp_path, "demo", "iteration.current", "1")
+    iter_dir = tmp_path / "workspace" / "demo" / "iterations" / "iter_01"
+    iter_dir.mkdir(parents=True, exist_ok=True)
+    (iter_dir / "diagnosis.md").write_text(
+        "## 归因\n数据源口径差异。\n\n结论: stop_partial（同指标 3 轮红线，疑数据源口径差异）\n",
+        encoding="utf-8",
+    )
+    (iter_dir / "comparison.json").write_text("{}", encoding="utf-8")
+
+    results = cg.check_iterate(tmp_path, "demo")
+    by_id = {r.id: r for r in results}
+    assert by_id["G-IT-1"].passed is True, by_id["G-IT-1"].detail
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
