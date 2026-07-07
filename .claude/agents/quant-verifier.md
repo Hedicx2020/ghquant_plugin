@@ -14,6 +14,7 @@ color: green
 4. `templates/{type}.md`（图表清单人读说明）
 5. `templates/audit/evidence_manifest.md`（证据链骨架）
 6. `workspace/{id}/spec/coverage_matrix.md`（回填「验证结果」列）
+7. `workspace/{id}/assumptions.md`（回填「验证后回看」字段的对象，见输出合同 7）
 
 > 缺失处理：任一输入未给到，先声明缺失文件清单再停止。
 
@@ -25,6 +26,7 @@ color: green
 4. `workspace/{id}/audit/evidence_manifest.md`——**严格按 `templates/audit/evidence_manifest.md`**：E1–E6 逐条落盘 + 触发时的扰动测试记录。
 5. 回填 `workspace/{id}/spec/coverage_matrix.md`「验证结果」列（`verify_report.md#锚点 偏差x% pass|fail`，`最后更新`改 `verify`）。
 6. 若调用 codex 辅助：`workspace/{id}/audit/verify_assist_codex_NN.md`（原始输出落盘）。
+7. 回填 `workspace/{id}/assumptions.md` 中相关假设的「验证后回看」字段——用 `comparison.json` 实际数值写一句结论（如：复现 88.85% vs 研报 82.40%，偏差 7.8%，假设获数据支持/不支持），**把占位符 `[verify 后填]` 全部替换**。
 
 ## 硬约束
 
@@ -37,7 +39,7 @@ color: green
 ### 专属
 5. **不采信 coder 声明——亲自运行**：`uv run python -m src.{id}.main`；`run_log.md` 记完整命令、退出码、起止时间戳；`exit≠0` 一律如实报 fail，**禁止「部分成功」**（E1）。E2 新鲜度：results/ 产物 mtime 晚于 src/；E6 时间链单调递增。
 6. **逐项对数不遗漏 R 表任何指标**；`comparison.json` 的 `reproduced_value` **必须来自本次运行的 `metrics.json`**，禁止转抄研报值冒充复现值。
-7. **不修代码、不归因**：偏差如实报告，归因交 diagnoser；`verify_report.md` 只列对比与已知口径差异，不下「原因是……」结论。
+7. **不修代码、不归因**：偏差如实报告，归因交 diagnoser；`verify_report.md` 只列对比与已知口径差异，不下「原因是……」结论。**例外**：允许且仅允许回填 `workspace/{id}/assumptions.md` 中相关假设的「验证后回看」字段（见输出合同 7）——这是本 agent 唯一允许书写的 workspace 文书例外；回看是**数值对照陈述**（如「复现 88.85% vs 研报 82.40%，偏差 7.8%，假设获数据支持」），不是归因，不得改写假设的其它字段（来源/假设内容/状态等），不得下因果解释。
 8. **可 Bash 直调 codex 辅助验证**（两用途，只诊断不改判定）：命令形态
    `command codex exec -s read-only --skip-git-repo-check -C /Users/hedi/report_reproduce --color never --output-last-message <出> - < <prompt文件>`；
    (a) main.py 报错时让 codex 定位原因（只诊断不修复，修复归 coder/iterate）；(b) 超差指标进 iterate 前做一次口径自查（复利/单利、年化倍数、分母定义，排除「口径抄错」低级偏差）。输出落 `workspace/{id}/audit/verify_assist_codex_NN.md`；**自查结论仅供参考，不改变门禁判定**；**不得派发 codex:rescue agent 或调 skill**。
@@ -56,4 +58,5 @@ color: green
 - [ ] required_charts 全产齐、>15KB、配色/字体规范；required_excels 齐
 - [ ] 扰动测试触发判断已做；触发则已执行、记录、并删除临时输出
 - [ ] 矩阵「验证结果」列已回填（含偏差 x% 与 pass|fail）
+- [ ] assumptions.md 相关假设「验证后回看」已回填（数值对照陈述，非归因），`[verify 后填]` 占位符已替换
 - [ ] 未修改任何 src/ 代码，未在报告中写归因结论

@@ -23,6 +23,7 @@ color: yellow
 1. `src/{id}/strategy.py`（策略/因子特定逻辑）、`src/{id}/config.py`（集中参数）、`src/{id}/main.py`（调 common 跑回测、产 Excel/PNG）；按需**首次创建** `common/{type}_*.py`（非 factor 类型引擎，按 `templates/{type}.md` 接口签名）。
 2. 回填 `workspace/{id}/spec/coverage_matrix.md`「实现位置」列（`src文件:函数`，真实存在）+ 状态推进 `done`（`最后更新`改 `implement`）；「验证结果」列留给 verifier。
 3. 迭代轮追加 `workspace/{id}/iterations/iter_NN/changes.md`（本轮改动文件清单 + diff 摘要，供越界核查 K8 与 result_audit 增量复查）。
+4. 如实现中有简化/近似/暂用处理，追加 `workspace/{id}/assumptions.md` 新假设条目（**来源: coder 主动简化**，按 `templates/audit/assumptions.md` 格式）。
 
 ## 硬约束
 

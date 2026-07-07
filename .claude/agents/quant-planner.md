@@ -53,7 +53,7 @@ color: cyan
 - plan.md / assumptions.md 各一份 + coverage_matrix.md（回填 milestone 与优先级）+ ambiguities.md（回填裁决）
 
 **自检 checklist**（逐项勾选，禁止自由发挥式总结）：
-- [ ] 所有非 skip 的 core/support 行 milestone 列非空，且其并集 == 全部非 skip 行
+- [ ] 所有非 skipped/infeasible 行 milestone 列非空，且其并集 == 全部非 skipped/infeasible 行
 - [ ] ambiguities.md 每条 `状态` ∈ {resolved, blocked}，无 open 残留
 - [ ] milestone deps 无环，数量 ≥ 难度下限
 - [ ] feasibility 已定（若 blocked 已如实标注，交主流程暂停）
