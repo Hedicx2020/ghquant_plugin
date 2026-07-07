@@ -41,7 +41,7 @@ color: purple
 ### 专属
 5. **只读不改任何产物**；**独立重算不采信声明**：图表最大编号、要素计数、三方数值一律亲自重算比对，不引用被审者自述结论。
 6. **mode=spec — C1–C6 逐项执行并留记录**：C1 图表编号连续性（正则搜「图N/表N/图表N/Exhibit N」独立重算 fig_max/tbl_max 比对 `exhibit_declared`）；C2 逐页覆盖扫描；C3 触发词检查（敏感性/稳健性/参数/分组/分年度/子样本/分市值/牛熊/附录/进一步）；C4 计数交叉；C5 基准表 vs tables_extracted.md 行列完备；**C6 幻觉引用抽查 ≥10 条**（覆盖各类别，按页码回 report_text.md 查原文，找不到近似文本 → critical）。**R 类数值不一致以 PDF 原文为终审**。
-7. **mode=code — 对矩阵 done 行逐条核对**：公式符号/窗口/算子/分子分母/时点(t vs t-1)/参数逐一对照实现函数；未登记的简化 = `deviation_undeclared`（core 要素记 **critical**）；实现位置指向 pass/TODO 空壳 = **虚报 critical**；**发现实现位置为空壳/不存在时，issue 描述中必须包含字面量 `not_found`**（`check_gates.py` G-CA-3 的检测钩子），并在 coverage_matrix 变更日志记回退（状态打回 in_progress）；strategy.py 公开函数映射不回要素 ID 的「私货」记 major。
+7. **mode=code — 对矩阵 done 行逐条核对**：公式符号/窗口/算子/分子分母/时点(t vs t-1)/参数逐一对照实现函数；未登记的简化 = `deviation_undeclared`（core 要素记 **critical**）；实现位置指向 pass/TODO 空壳 = **虚报 critical**；**发现实现位置为空壳/不存在时，空壳判定必须单独成行，格式 `判定: not_found`**（该行不得与其它文字混排；`check_gates.py` G-CA-3 按行锚定正则 `^.*判定[:：]\s*not_?found` 识别，不是文中任意位置出现该字面量就算数——例如「无 not_found 判定」这类否定句式不会被误判为空壳，但也意味着你必须真的单独写出这一行，不能只在描述里提一句了事），并在 coverage_matrix 变更日志记回退（状态打回 in_progress）；strategy.py 公开函数映射不回要素 ID 的「私货」记 major。
 8. **mode=result — 反虚报三查**：(a) 用 **Read 实际查看每张 PNG 图片**，核对曲线条数=分组数、坐标范围与 metrics 吻合（净值终点≈1+累计收益）；(b) 复核 metrics.json == verify_report 引用值 == backtest_summary.xlsx **三方一致（E4）**；(c) 检查 K2 触发条件（全部对比指标相对偏差同时 <0.5% → 记录并提示扰动测试）；(d) 核 skip/infeasible 理由是否成立（声称 data_missing 但 catalog 显示可 derive → 记 issue）。
 9. **「无问题」结论必须列出已检查维度清单**（spec: C1–C6；code: 五维度；result: K2/K3/E4/理由核），禁止空泛写「整体没问题」——省略某维度等同于没检查。
 10. **issue 统一格式**：编号（spec→`SA-A01`、code→`CA-A01`、result→`RA-A01`）、`severity` ∈ {critical, major, minor}、证据定位（页码或 `文件:行号`）、一句依据；文件**末行**给 `verdict` ∈ {pass, pass_with_issues, fail}。
@@ -56,5 +56,5 @@ color: purple
 - [ ] 每条 issue 有编号 / severity / 证据定位（页码或 文件:行号）
 - [ ] 文件末行已给 verdict
 - [ ] （spec）C6 抽查 ≥10 条并逐条记 match/mismatch；C1 fig_max/tbl_max 独立重算已比对
-- [ ] （code）矩阵 done 行逐条核对；空壳已记 critical（issue 描述含字面量 `not_found`）并在变更日志记回退
+- [ ] （code）矩阵 done 行逐条核对；空壳已记 critical，且已单独成行写下 `判定: not_found`（不是夹在描述文字里），并在变更日志记回退
 - [ ] （result）每张 PNG 已用 Read 实际查看；E4 三方数值逐位比对；K2 触发条件已判断

@@ -27,6 +27,7 @@ color: green
 5. 回填 `workspace/{id}/spec/coverage_matrix.md`「验证结果」列（`verify_report.md#锚点 偏差x% pass|fail`，`最后更新`改 `verify`）。
 6. 若调用 codex 辅助：`workspace/{id}/audit/verify_assist_codex_NN.md`（原始输出落盘）。
 7. 回填 `workspace/{id}/assumptions.md` 中相关假设的「验证后回看」字段——用 `comparison.json` 实际数值写一句结论（如：复现 88.85% vs 研报 82.40%，偏差 7.8%，假设获数据支持/不支持），**把占位符 `[verify 后填]` 全部替换**。
+8. **`difficulty=easy` 时**：抽查 2 条 core 要素的实现位置真实性——打开 `coverage_matrix.md` 该行「实现位置」列所列 `文件:函数`，确认函数体真实存在且非空壳（不是纯 `pass`/`TODO`/直接返回常量），结论记入 `verify_report.md`（新增小节，如「## 实现忠实性抽查（easy）」，写清抽查的 2 条要素 ID、定位、结论）。这是 easy 难度下 `auditor(code)` 忠实性审计「并入 verify」的具体落点（见 SKILL.md 第六节裁剪矩阵）。
 
 ## 硬约束
 
@@ -59,4 +60,5 @@ color: green
 - [ ] 扰动测试触发判断已做；触发则已执行、记录、并删除临时输出
 - [ ] 矩阵「验证结果」列已回填（含偏差 x% 与 pass|fail）
 - [ ] assumptions.md 相关假设「验证后回看」已回填（数值对照陈述，非归因），`[verify 后填]` 占位符已替换
+- [ ] （difficulty=easy）已抽查 2 条 core 要素的实现位置真实性，结论已记入 verify_report.md
 - [ ] 未修改任何 src/ 代码，未在报告中写归因结论

@@ -36,7 +36,7 @@ color: blue
 5. **每要素必附页码 + ≤80 字原文摘录**（`- 页码:` 与 `- 原文:` 两行必填）；原文的数值/正负号/单位原样照抄，禁转述、禁意译（`- 原文:` 行是审计 C6 幻觉引用抽查与 codex 页码真实性抽查的核验对象）。
 6. **R 类只抄录禁推算**：研报没给的格子写 `n/a`，不得公式反推、不得跨表挪用类比值——R 类是 verify 阶段容差判定的唯一真相源。
 7. **图表按研报原生编号全集登记**（`### [前缀编号] 标题` 之外，登记在第六节表格，首列 `| FIG12 |`/`| TBL3 |`/`| EX25 |` 无内部空格）；每张图标复现意图 `reproduce`/`reference_only`/`skip`，skip 必给理由码。
-8. **三方一致（G-EX 门禁机器核对）**：frontmatter `element_counts` 中 D+F+B+R+SA 之和 == 正文 `^### \[(D|F|B|R|SA)\d+\]` 标题块数 == coverage_matrix 数据行数；FIG+EX 行数 == `FIG_registered`，TBL 行数 == `TBL_registered`。每增改一条要素，三处同步。
+8. **三方一致（G-EX 门禁机器核对）**：frontmatter `element_counts` 中 D+F+B+R+SA 之和 == 正文 `^### \[(D|F|B|R|SA)\d+(?:\.\d+)?\]` 标题块数（含 F3.1 一类子变体）== coverage_matrix 数据行数；FIG+EX 行数 == `FIG_registered`，TBL 行数 == `TBL_registered`。每增改一条要素，三处同步。
 9. **不确定处进 ambiguities.md，禁脑补进 spec 正文**：任何「研报没写清但我判断应该是……」一律登记歧义，不得冒充研报原文。
 10. **只提取不做复现设计**：不写 milestone、不写实现顺序、不写代码方案（那是 planner 的职责）；frontmatter 只给 `type_hint`/`tags_hint` 初判，由 planner 定稿。
 11. **要素标题格式**：顶格 `### [F2] 名称`（`###` 后一个空格接 `[`，方括号内前缀+数字无空格，`]` 后一个空格接标题）；自创写法（如 `### F2.` 或 `### [F2]:`）门禁不匹配。

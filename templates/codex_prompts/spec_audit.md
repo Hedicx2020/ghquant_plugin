@@ -73,6 +73,8 @@ workspace/{report_id}/audit/codex_prompt_spec.md 后，整份文件内容经 std
 
 # 输出契约（严格遵守，决定门禁能否解析你的意见）
 
+**关键约束**：调用方只保留你**最后一条消息**（`--output-last-message`）。你的**最后一条消息**必须同时包含：先阶段一的 `=== SPEC_CODEX_BEGIN ===` / `=== SPEC_CODEX_END ===` 标记块（原样保留，供主会话切出存为 `spec_codex.md`），紧接着是阶段二的 JSON 结果对象（或降级的 markdown 表格+`VERDICT:` 行）——**两者都必须出现在同一条消息内，缺一即视为未完成**。不要把阶段一标记块单独发在早于最后一条消息的位置，那样会随中间消息一起被丢弃。
+
 优先且默认：输出**一个 JSON 对象**（可以是纯 JSON，也可以包裹在一个标注 json 语言的 fenced code block 内），结构对应 `templates/audit/review_schema.json`：
 
 ```json

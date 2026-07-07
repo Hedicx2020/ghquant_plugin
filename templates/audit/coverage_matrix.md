@@ -2,6 +2,7 @@
 
 > `quant-extractor` 在 `workspace/{report_id}/spec/coverage_matrix.md` 初始化本文件（每个 spec.md 要素一行），后续各阶段只改状态列、不删行。
 > 与 spec.md 的要素 ID 体系一一对应；三方一致性（正文正则统计 == spec.md frontmatter `element_counts` 汇总 == 本表数据行数）由 `tools/check_gates.py` G-EX-4 机器核验。
+> **生成的矩阵文件只含 frontmatter + 主表 + 变更日志节；列说明等文档性表格不得带入生成物**——本骨架文件下方的「列说明」「状态机」「要素守恒五规则」等节是给人/agent 看的规程说明，不是要抄进 `workspace/{id}/spec/coverage_matrix.md` 的内容（`tools/check_gates.py` 的 `load_matrix_rows()` 会按「要素ID」列过滤非要素表格行，但生成物本身仍应保持干净，不依赖门禁兜底）。
 
 ---
 
