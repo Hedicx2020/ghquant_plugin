@@ -58,11 +58,13 @@ extraction_date: <本次提取日期 YYYY-MM-DD>
 ```markdown
 ### [F2] 趋势动量因子 MA_60
 - 页码: p9-p10
-- 原文: > "MA_{j,t,L} = (P_{j,d-L+1} + ... + P_{j,d}) / L……"   # ≤80字关键句，数值/单位/正负号原样，禁止转述
+- 原文: > "MA_{j,t,L} = (P_{j,d-L+1} + ... + P_{j,d}) / L……"
 - 公式（转写）: MA_bar = mean(close, L=60) / close_d
 - 参数: L=60；取值日=月末最后交易日
 - 依赖数据: D1 / 关联基准: R2.2 / 关联歧义: A3（如有）
 ```
+
+> `原文` 行书写要求：≤80 字关键句，数值/单位/正负号原样照抄，禁止转述、禁止在值后追加说明性文字（示例块本身即可直接复制的干净写法）。
 
 ### D 类示例（数据要求）——**每条须对照 `templates/data_catalog.md` 标注数据状态**
 
@@ -70,10 +72,12 @@ extraction_date: <本次提取日期 YYYY-MM-DD>
 ### [D1] 中信一级行业分类（中性化用）
 - 页码: p5
 - 原文: > "……按中信一级行业进行行业中性化处理……"
-- 数据状态: available            # available / derive / missing，对照 data_catalog.md 判定
+- 数据状态: available
 - 说明: ashare_stock_industry.parquet, standard_code=37
 - 关联要素: F2 / 关联歧义: （如有）
 ```
+
+> `数据状态` ∈ `{available, derive, missing}`，对照 `data_catalog.md` 判定。
 
 ### B 类示例（回测设置）
 
