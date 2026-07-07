@@ -21,7 +21,7 @@
 3. **点收输出合同**（逐一 `ls -la`，图表 >15KB / Excel 非零由门禁兜底）：
    - `output/<id>/results/`：required_charts 的 PNG、`backtest_summary.xlsx` 等 Excel、`metrics.json`、`run_log.md`（含命令/退出码/起止时间戳）
    - `output/<id>/results/comparison.json`
-   - `output/<id>/verify_report.md`（**不含归因结论**）
+   - `output/<id>/verify_report.md`（**不含归因结论**；**medium/hard** 含各 milestone 的验证小节；**difficulty=easy 时须含「实现忠实性抽查」小节**：2 条 core 要素的实现位置真实性核对结论——该难度下 `auditor(code)` 并入 verify，见 SKILL.md 第六节裁剪矩阵）
    - `workspace/<id>/audit/evidence_manifest.md`（E1–E6 + 触发的扰动测试记录）
    - 回填后的 `coverage_matrix.md`「验证结果」列
    - `assumptions.md` 的「验证后回看」字段（占位符 `[verify 后填]` 必须全部替换）
@@ -32,7 +32,7 @@
 ```
 uv run python tools/check_gates.py <id> --stage verify --record
 ```
-原样贴输出。G-VF：G-VF-1 run_log 含 exit=0 / G-VF-2 comparison.json 可解析 / **G-VF-3 按 standards.json 重算每条 metric 的 rel_dev 与 pass（不信任文件内 pass）** / G-VF-4 required_charts 全存在且 >15KB / G-VF-5 required_excels 全存在且非零 / G-VF-6 产物 mtime 晚于 src（E2 新鲜度）/ G-VF-7 矩阵验证结果列对 core/support 无空。
+原样贴输出。G-VF：G-VF-1 run_log 含 exit=0 / G-VF-2 comparison.json 可解析 / **G-VF-3 按 standards.json 重算每条 metric 的 rel_dev 与 pass（不信任文件内 pass）** / G-VF-4 required_charts 全存在且 >15KB / G-VF-5 required_excels 全存在且非零 / G-VF-6 产物 mtime 晚于 src（E2 新鲜度）/ G-VF-7 矩阵验证结果列对**非 skipped/infeasible** 的 core/support 行无空。
 
 ## 达标分支（读 G-VF 逐条结果决定走向）
 
@@ -40,8 +40,8 @@ uv run python tools/check_gates.py <id> --stage verify --record
   ```
   uv run python tools/state.py set <id> verdict.result pass
   uv run python tools/state.py set <id> verdict.comparison_file output/<id>/results/comparison.json
-  uv run python tools/state.py set <id> verdict.metrics_pass <pass_count>
-  uv run python tools/state.py set <id> verdict.metrics_total <total>
+  uv run python tools/state.py set <id> verdict.metrics_pass <pass_count>   # 按 G-VF-3 重算结果统计（recalc_metric 判 True 的条数），非 comparison.json 自述的 pass_count 字段
+  uv run python tools/state.py set <id> verdict.metrics_total <total>       # 同上，取 G-VF-3 重算覆盖的指标总数
   uv run python tools/state.py set-stage <id> verify done
   uv run python tools/state.py set-stage <id> iterate skipped    # 首轮即达标，整段迭代不发生
   ```

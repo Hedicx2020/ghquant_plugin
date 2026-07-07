@@ -41,12 +41,12 @@
 ```
 uv run python tools/check_gates.py <id> --stage iterate --record
 ```
-G-IT：G-IT-1 每轮 iter_NN/ 三件套齐（diagnosis.md/changes.md/comparison.json）/ G-IT-2 iteration.current ≤ max_iter / G-IT-3 N≥2 时 diagnosis.md 含「已排除假设」字样。
+G-IT：G-IT-1 每轮 iter_NN/ 三件套齐（diagnosis.md/changes.md/comparison.json；diagnosis.md 结论行匹配 `结论[:：].*(stop_partial|blocked)` 的轮次豁免 changes.md，diagnosis.md 与 comparison.json 仍必须齐）/ G-IT-2 iteration.current ≤ max_iter / G-IT-3 N≥2 时 diagnosis.md 含「已排除假设」字样。
 
 VERDICT PASS → `set-stage <id> iterate done` → 进 result_audit。
 
 ## 失败处理
 
 - **防兜圈**由 diagnoser（五规则：历史强制回顾 / 假设唯一性 / 连续 2 轮无改善升级调 codex / 小步修改 / 同指标 3 轮红线自动 stop_partial）+ G-IT 共同保证；主会话不得越过 diagnoser 自行改代码。
-- G-IT-1 三件套缺（如 continue 轮缺 changes.md）→ 补齐对应产物（缺 changes 回 coder，缺 comparison 回 verifier）。
+- G-IT-1 三件套缺（如 continue 轮缺 changes.md）→ 补齐对应产物（**缺 changes 回 coder，仅 continue 轮适用**——stop_partial/blocked 轮本就豁免 changes.md，缺失不算失败，见上「G-IT-1」与「三出口」；缺 diagnosis 回 diagnoser，缺 comparison 回 verifier）。
 - 断点续跑：读最大 iter_NN 三件套完整性决定从诊断/修正/重跑续起（见 SKILL.md 3.2）。

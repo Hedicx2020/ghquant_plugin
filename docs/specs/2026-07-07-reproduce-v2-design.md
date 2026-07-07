@@ -455,7 +455,7 @@ command codex exec \
 工程要点：
 1. **`command codex`**：用户 zsh 对 codex 有 alias 追加 `--dangerously-bypass-approvals-and-sandbox`；显式 `command` + 显式 `-s read-only` 双保险——审查进程只读，不许 codex 改仓库
 2. **prompt 经 stdin**（`-` 占位），避免长中文 prompt 的 shell 转义问题；prompt 由主会话按 `templates/codex_prompts/{point}.md` 骨架填充路径后写盘归档（可追溯，防临场编 prompt 导致审查强度漂移）
-3. **结构化输出**：优先 `--output-schema templates/audit/review_schema.json` 强制 JSON（checkpoint/verdict/findings[]{id,severity,category,location,description,suggestion,confidence}）；schema 模式异常则退回「markdown 表格+末行 verdict」约定
+3. **结构化输出**：优先 `--output-schema templates/audit/review_schema.json` 强制 JSON（checkpoint/verdict/findings[]{id,severity,category,location,description,suggestion,confidence}）；schema 模式异常则退回「markdown 表格+末行 verdict」约定（**实现取舍**：spec_audit 因需标记块+JSON 混合输出不适用 schema 模式，统一采用 prompt 内契约+末尾 verdict json；`--output-schema` 保留为未来选项）
 4. **模型**：默认用 codex 配置的默认模型；可通过 skill 参数显式指定 `-m`
 5. **超时**：Bash timeout 10 分钟；超时/非零退出/输出为空 → 重试 1 次（重试缩减输入：spec 审只喂 R 类章节+图表清单；代码审只喂 strategy.py）
 6. **两级降级**：一级——派全新 Claude 子 agent 作「外审替身」（同样材料同样 prompt，禁止读任何过程性文件），state 记 `engine: claude_fallback`；二级——记 `engine: skipped`，final_report 显著标注「该审查点外审缺失」，hard 报告缺外审时可信度评级封顶 B

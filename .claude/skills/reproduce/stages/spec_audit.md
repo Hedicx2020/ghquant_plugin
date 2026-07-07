@@ -10,18 +10,20 @@
 
 1. **状态先行**：`uv run python tools/state.py set-stage <id> spec_audit running`
 2. **填 codex prompt**：读 `templates/codex_prompts/spec_audit.md`，按其文件头占位符清单填充（`{report_id}`=<id>、`{market}`、`{type_hint}`、`{difficulty}` 取自 state/spec.md，`{workspace}`=`workspace/<id>`），把「传给 codex 的正文开始」之后的正文落盘为 `workspace/<id>/audit/codex_prompt_spec.md`。
-3. **调 codex**（Bash，`timeout` 设 `600000`；medium+ 可与第 6 步 auditor **并行**同一消息发起）：
+3. **调 codex**（Bash，`timeout` 设 `600000`；medium+ 可与第 5 步 auditor **并行**同一消息发起）：
    ```
    command codex exec -s read-only --skip-git-repo-check -C /Users/hedi/report_reproduce --color never --output-last-message "workspace/<id>/audit/spec_audit_codex.md" - < "workspace/<id>/audit/codex_prompt_spec.md"
    ```
 4. **切出盲提取清单**：从 `spec_audit_codex.md` 中把 `=== SPEC_CODEX_BEGIN ===` 与 `=== SPEC_CODEX_END ===` 之间的内容原样存为 `workspace/<id>/spec/spec_codex.md`。
-5. **记账产 `extract_diff.md`**（主会话审计记账，非内容生产；落盘 `workspace/<id>/spec/extract_diff.md`）：逐条比对 spec_codex.md 与 spec.md，每条 diff 回 `report_text.md`/PDF 核对后裁决。表头逐字：
-   `| DIF-01 | 类别 | 描述 | 页码 | 裁决(adopted/dismissed/corrected) | 依据 |`
-   - 仅 codex 有 → 核对：确有=Claude 遗漏（adopted，派回 extractor 补 spec，日志记来源）；没有=codex 幻觉（dismissed 留记录）。
-   - 仅 Claude 有 → 确有保留（dismissed 对 spec 无碍，可提示补 tables_extracted）；没有=Claude 幻觉（critical）。
-   - R 类数值不一致 → 以 PDF 原文为终审（corrected）。
+5. **（medium+）派 `quant-auditor mode=spec`**（subagent_type=`quant-auditor`，prompt 里写明 `mode=spec`；可与第 3 步 codex 同一消息并行发起，**两者都返回后**再做第 6 步记账）。输入合同（**不含 extractor/planner 的完成汇报**）：PDF `reports/<id>.pdf`、`report_text.md`、`tables_extracted.md`、`spec.md`、`coverage_matrix.md`、`ambiguities.md`、`plan.md`、`templates/audit/extract_audit.md`。产出 `workspace/<id>/audit/extract_audit.md`（C1–C6 + 遗漏清单 + C6 抽查 ≥10 条 + 末行 verdict）。**easy 跳过内审。**
+6. **记账产 `extract_diff.md`**（主会话审计记账登记，**不属内容生产**——裁决结论取自 codex/auditor 的审计产物，主会话只登记与路由；落盘 `workspace/<id>/spec/extract_diff.md`）：逐条列出 spec_codex.md 与 spec.md 的差异项，「裁决」列**照录审计结论**，来源按难度区分：
+   - **medium/hard**：优先取第 5 步 `quant-auditor mode=spec` 产出的 `extract_audit.md`「遗漏清单」/findings 结论（该项已由 auditor 独立核实）；`extract_audit.md` 未覆盖到的 DIF 项，退而取 `spec_audit_codex.md` 阶段二「盲提取 diff」分析结论（codex 自审的诊断，见 `templates/codex_prompts/spec_audit.md` 阶段二步骤 1）。两者都未覆盖的极少数剩余 DIF 项 → 派回 `quant-extractor` 定向复核，不由主会话自行判定。
+   - **easy**（无 auditor mode=spec 内审，不适用上述区分）：裁决直接取 `spec_audit_codex.md` 阶段二「盲提取 diff」分析结论。
+   表头逐字：`| DIF-01 | 类别 | 描述 | 页码 | 裁决(adopted/dismissed/corrected) | 依据 |`（「依据」列注明结论来源，如「依据 extract_audit.md GAP-03」/「依据 spec_audit_codex.md 阶段二diff」）。
+   - 仅 codex 有 → 审计结论确有 = Claude 遗漏（adopted，派回 extractor 补 spec，日志记来源）；审计结论系 codex 幻觉（dismissed 留记录）。
+   - 仅 Claude 有 → 审计结论对 spec 无碍（dismissed，可提示补 tables_extracted）；审计结论系 Claude 幻觉（critical）。
+   - R 类数值不一致 → 以 PDF 原文为终审（corrected，该终审判断属 codex/auditor 审计范围，主会话只登记）。
    **每条 DIF 行「裁决」列必须非空**（G-SA-3）。
-6. **（medium+）派 `quant-auditor mode=spec`**（subagent_type=`quant-auditor`，prompt 里写明 `mode=spec`）。输入合同（**不含 extractor/planner 的完成汇报**）：PDF `reports/<id>.pdf`、`report_text.md`、`tables_extracted.md`、`spec.md`、`coverage_matrix.md`、`ambiguities.md`、`plan.md`、`templates/audit/extract_audit.md`。产出 `workspace/<id>/audit/extract_audit.md`（C1–C6 + C6 抽查 ≥10 条 + 末行 verdict）。**easy 跳过内审。**
 7. **意见入 responses**：把 `spec_audit_codex.md` 的每条 `CDX-S-` finding 逐条录入 `workspace/<id>/audit/audit_responses.md`（表头：`意见ID | severity | 摘要 | 处置(accepted/rejected/deferred) | 回应（修复位置 文件:行号 或技术理由） | 复核`）。一条意见一行，不合并不省略；adopted 遗漏 → 派回 `quant-extractor`（或 planner）定向修复，复核列写 `pass`；rejected 给技术理由。extract_audit 的内审 issue 一并处置。
 8. **记外审台账**（读改写三步；**警告**：`state.py set` 是整体覆盖字段，直接 `set` 单条数组会把此前已写入的审查记录全部抹掉，三步缺一不可）：
    1. **读**：`state.py show` 无 `--json` 参数，不能取结构化字段，故直接 `Read workspace/<id>/state.json`，取出其中 `external_reviews` 数组的现有内容。

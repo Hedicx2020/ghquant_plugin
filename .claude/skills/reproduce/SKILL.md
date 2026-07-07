@@ -15,7 +15,7 @@ argument-hint: "<pdf_path> | continue <id> | status [id] | revise <id> ... | acc
 ## 一、六条硬规则（置顶，最高优先级，任何 stage 不得违背）
 
 1. **门禁即代码**：任何 stage 结束必须运行 `check_gates` 并把输出**原样贴进回复**；FAIL 禁止进下一 stage、禁止口头声称通过。（唯一例外：verify 阶段仅 G-VF-3 达标项 FAIL 时按 `stages/verify.md` 的说明进入 iterate，属设计内路径）
-2. **编排与生产分离**：主会话只派发、审门禁、调 codex、写编排记录；**严禁亲自撰写 spec / plan / 代码 / 验证结论 / 最终报告**。
+2. **编排与生产分离**：主会话只派发、审门禁、调 codex、写编排记录；**严禁亲自撰写 spec / plan / 代码 / 验证结论 / 最终报告**（extract_diff/audit_responses 等记账表由主会话按审计结论登记，不属内容生产）。
 3. **产物合同逐一点收**：agent 返回后逐一 `ls` 验证其输出合同文件，缺一即该步失败（不看 agent 自述，看文件是否真的在）。
 4. **状态先行**：stage 开始/结束先写 state（`set-stage running` / `set-stage done`），杜绝"跑完再补账"。
 5. **审计逐条回应**：issue 全量编号入 `audit_responses.md`，gate 校验回应行数与 codex issues 数一致且 critical/major 闭环；不允许"总体没问题"式含糊回应。
@@ -70,7 +70,7 @@ argument-hint: "<pdf_path> | continue <id> | status [id] | revise <id> ... | acc
 1. `uv run python tools/state.py show <id>` 读态。
 2. 按 `status` 分派：
    - `done` / `done_partial`：报告已出，提示 `revise`（定向改假设重跑）或 `accept`（确认收尾）；不再自动推进。
-   - `paused_blocked`：读 `pending_question`，用 `AskUserQuestion` 把候选解释与影响说明呈给用户；据答复解除阻塞（如补数据/降级复现/放弃），写回 state 后继续。**驱动器不得自行冲过此闸门。**
+   - `paused_blocked`：读 `pending_question`，用 `AskUserQuestion` 把候选解释与影响说明呈给用户；据答复解除阻塞（如补数据/降级复现/放弃）并处理完 blocker 后，执行 `uv run python tools/state.py set <id> status running` 写回 state 再继续推进。**驱动器不得自行冲过此闸门。**
    - `awaiting_review`：最终报告等人工 review，提示 `accept` / `revise`；**不自行 accept**。
    - `aborted`：提示需显式重启。
    - `running`：进入续跑（下一步）。
