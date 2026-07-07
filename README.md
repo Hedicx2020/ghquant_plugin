@@ -29,3 +29,7 @@
 ## 已归档案例
 
 `test`（新流程验收用例）、`momentum_factor`、`long_term_momentum` 三案例已用 `--legacy` 归档，详见对应 `workspace/{id}/state.json`。
+
+## 变更记录
+
+- 2026-07-08：内部修复——收紧 check_gates 的 G-IT 豁免正则（防结论行同行提及 stop_partial 被误判豁免），附正反测试；不影响使用方式。
