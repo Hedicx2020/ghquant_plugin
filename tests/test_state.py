@@ -61,6 +61,17 @@ def test_init_legacy_all_stages_skipped_and_status_done(tmp_path: Path) -> None:
     assert state["current_stage"] == st.STAGE_ORDER[-1]
 
 
+def test_init_legacy_accepts_missing_pdf_path(tmp_path: Path) -> None:
+    """T5 迁移场景回归用例：momentum_factor/long_term_momentum 等旧案例的原始 PDF
+    已不在 reports/ 下，init --legacy 不得做存在性校验，只需如实记录传入路径。"""
+    pdf_path = "reports/momentum_factor.pdf"
+    assert not (tmp_path / pdf_path).exists()
+    state = st.init_state(tmp_path, "momentum_factor", pdf_path, legacy=True)
+    assert st.validate_state(state) == []
+    assert state["pdf_path"] == pdf_path
+    assert state["status"] == "done"
+
+
 def test_init_invalid_mode_rejected(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         st.init_state(tmp_path, "demo", "reports/demo.pdf", mode="bogus")

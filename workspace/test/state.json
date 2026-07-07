@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "report_id": "test",
+  "pdf_path": "reports/test.pdf",
+  "paths": {
+    "workspace": "workspace/test",
+    "src": "src/test",
+    "output": "output/test"
+  },
+  "mode": "auto",
+  "max_iter": null,
+  "type": null,
+  "tags": [],
+  "difficulty": null,
+  "difficulty_override": null,
+  "feasibility": null,
+  "pdf_pages": null,
+  "current_stage": "review",
+  "status": "done",
+  "stages": {
+    "init": {
+      "status": "skipped",
+      "attempts": 0,
+      "updated_at": "2026-07-08T04:36:05+08:00",
+      "issues": 0
+    },
+    "extract": {
+      "status": "skipped",
+      "attempts": 0,
+      "updated_at": "2026-07-08T04:36:05+08:00",
+      "issues": 0
+    },
+    "plan": {
+      "status": "skipped",
+      "attempts": 0,
+      "updated_at": "2026-07-08T04:36:05+08:00",
+      "issues": 0
+    },
+    "spec_audit": {
+      "status": "skipped",
+      "attempts": 0,
+      "updated_at": "2026-07-08T04:36:05+08:00",
+      "issues": 0
+    },
+    "implement": {
+      "status": "skipped",
+      "attempts": 0,
+      "updated_at": "2026-07-08T04:36:05+08:00",
+      "issues": 0
+    },
+    "code_audit": {
+      "status": "skipped",
+      "attempts": 0,
+      "updated_at": "2026-07-08T04:36:05+08:00",
+      "issues": 0
+    },
+    "verify": {
+      "status": "skipped",
+      "attempts": 0,
+      "updated_at": "2026-07-08T04:36:05+08:00",
+      "issues": 0
+    },
+    "iterate": {
+      "status": "skipped",
+      "attempts": 0,
+      "updated_at": "2026-07-08T04:36:05+08:00",
+      "issues": 0
+    },
+    "result_audit": {
+      "status": "skipped",
+      "attempts": 0,
+      "updated_at": "2026-07-08T04:36:05+08:00",
+      "issues": 0
+    },
+    "report": {
+      "status": "skipped",
+      "attempts": 0,
+      "updated_at": "2026-07-08T04:36:05+08:00",
+      "issues": 0
+    },
+    "review": {
+      "status": "skipped",
+      "attempts": 0,
+      "updated_at": "2026-07-08T04:36:05+08:00",
+      "issues": 0
+    }
+  },
+  "gates": [],
+  "external_reviews": [],
+  "milestones": [],
+  "iteration": {
+    "current": 0,
+    "max": null,
+    "history": []
+  },
+  "verdict": {
+    "result": "pass",
+    "comparison_file": null,
+    "metrics_pass": null,
+    "metrics_total": null,
+    "decided_at": null
+  },
+  "coverage_stats": {
+    "total": 0,
+    "done": 0,
+    "skipped": 0,
+    "infeasible": 0,
+    "pending": 0
+  },
+  "assumptions": {
+    "total": 0,
+    "assumed": 0,
+    "confirmed": 0,
+    "revised": 0
+  },
+  "blockers": [],
+  "pending_question": null,
+  "events": [
+    {
+      "event": "state:init",
+      "timestamp": "2026-07-08T04:36:05+08:00",
+      "payload": null
+    },
+    {
+      "event": "state:init_legacy",
+      "timestamp": "2026-07-08T04:36:05+08:00",
+      "payload": null
+    },
+    {
+      "event": "set:verdict.result",
+      "timestamp": "2026-07-08T04:36:09+08:00",
+      "payload": {
+        "value": "pass"
+      }
+    }
+  ],
+  "created_at": "2026-07-08T04:36:05+08:00",
+  "updated_at": "2026-07-08T04:36:09+08:00"
+}
