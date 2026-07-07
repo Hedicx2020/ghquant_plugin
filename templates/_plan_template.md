@@ -89,4 +89,4 @@ milestones:
 | 方法复杂度 | 标准公式 | 回归/中性化/参数优化 | 训练模型/优化求解/多资产联动 |
 | milestone 数 | 1 | 2–3 | ≥3 |
 
-> 主流程据 difficulty 选编排：easy 直接串行；medium 单 coder 逐 milestone；hard 按 milestone 派发独立 coder 子实例（独立模块可并行）+ 每 milestone 独立复核。详见 `Command/reproduce.md`。
+> 主流程据 difficulty 选编排：easy 直接串行；medium 单 coder 逐 milestone；hard 按 milestone 派发独立 coder 子实例（独立模块可并行）+ 每 milestone 独立复核。详见 `.claude/skills/reproduce/SKILL.md`。
