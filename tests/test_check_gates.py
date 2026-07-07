@@ -65,14 +65,11 @@ SPEC_BODY_CONSISTENT = """
 - 原文: > "测试原文 R1"
 
 ## 六、图表登记清单
-### [FIG1] 测试图1
-- 页码: p1
-
-### [FIG2] 测试图2
-- 页码: p2
-
-### [TBL1] 测试表1
-- 页码: p3
+| ID | 标题 | 页码 | 摘要 | 复现意图 | 理由/关联要素 |
+| --- | --- | --- | --- | --- | --- |
+| FIG1 | 测试图1 | p1 | 测试摘要1 | reproduce |  |
+| FIG2 | 测试图2 | p2 | 测试摘要2 | reproduce |  |
+| TBL1 | 测试表1 | p3 | 测试摘要3 | reproduce |  |
 """
 
 MATRIX_CONSISTENT = """| 要素ID | 类别 | 描述(短) | 页码 | 优先级 | milestone | 状态 | 状态理由 | 实现位置 | 验证结果 | 最后更新 |
@@ -188,6 +185,60 @@ def test_check_extract_fails_when_spec_missing(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# G-EX-8：图表登记清单改按「图表登记」H2 节内的 markdown 表格解析（非 ### [ID] 块）
+# ---------------------------------------------------------------------------
+
+
+def test_check_extract_g_ex_8_passes_when_exhibit_registry_consistent(tmp_path: Path) -> None:
+    _init_workspace(tmp_path)
+    _write_spec_files(tmp_path, "demo", SPEC_BODY_CONSISTENT, MATRIX_CONSISTENT)
+
+    results = cg.check_extract(tmp_path, "demo")
+    by_id = {r.id: r for r in results}
+    assert by_id["G-EX-8"].passed is True, by_id["G-EX-8"].detail
+
+
+def test_check_extract_g_ex_8_fails_when_row_count_missing(tmp_path: Path) -> None:
+    _init_workspace(tmp_path)
+    # 少一行 FIG2，登记清单表格只剩 2 行（FIG 桶从 2 掉到 1），制造行数缺失
+    body = SPEC_BODY_CONSISTENT.replace("| FIG2 | 测试图2 | p2 | 测试摘要2 | reproduce |  |\n", "")
+    _write_spec_files(tmp_path, "demo", body, MATRIX_CONSISTENT)
+
+    results = cg.check_extract(tmp_path, "demo")
+    by_id = {r.id: r for r in results}
+    assert by_id["G-EX-8"].passed is False
+    assert "FIG+EX行数=1" in by_id["G-EX-8"].detail
+    assert "FIG_registered=2" in by_id["G-EX-8"].detail
+
+
+def test_check_extract_g_ex_8_fails_when_number_exceeds_declared_max(tmp_path: Path) -> None:
+    _init_workspace(tmp_path)
+    # 行数仍是 2（FIG1 + FIG5），计数断言仍过，但编号 5 超出 exhibit_declared.fig_max=2
+    body = SPEC_BODY_CONSISTENT.replace(
+        "| FIG2 | 测试图2 | p2 | 测试摘要2 | reproduce |  |", "| FIG5 | 测试图5 | p2 | 测试摘要2 | reproduce |  |"
+    )
+    _write_spec_files(tmp_path, "demo", body, MATRIX_CONSISTENT)
+
+    results = cg.check_extract(tmp_path, "demo")
+    by_id = {r.id: r for r in results}
+    assert by_id["G-EX-8"].passed is False
+    assert "FIG/EX最大编号=5>exhibit_declared.fig_max=2" in by_id["G-EX-8"].detail
+
+
+def test_check_extract_g_ex_8_ex_prefix_counts_into_fig_bucket(tmp_path: Path) -> None:
+    """研报用「图表N」统一编号时，EX 前缀替代 TBL/FIG，计入 FIG 桶（FIG_registered/fig_max）。"""
+    _init_workspace(tmp_path)
+    body = SPEC_BODY_CONSISTENT.replace(
+        "| FIG2 | 测试图2 | p2 | 测试摘要2 | reproduce |  |", "| EX2 | 统一编号图表2 | p2 | 测试摘要2 | reproduce |  |"
+    )
+    _write_spec_files(tmp_path, "demo", body, MATRIX_CONSISTENT)
+
+    results = cg.check_extract(tmp_path, "demo")
+    by_id = {r.id: r for r in results}
+    assert by_id["G-EX-8"].passed is True, by_id["G-EX-8"].detail
+
+
+# ---------------------------------------------------------------------------
 # recalc_metric：容差语义（同号违规 / 超容差 / abs_eps 近零 / default 兜底 / 数量级）
 # ---------------------------------------------------------------------------
 
@@ -223,6 +274,26 @@ def test_recalc_metric_abs_eps_near_zero_pass_and_fail() -> None:
 
     failing = cg.recalc_metric({"key": "rank_ic_mean", "report_value": 0.003, "reproduced_value": 0.02}, spec)
     assert failing.passed is False
+
+
+def test_recalc_metric_near_zero_takes_priority_over_same_sign_veto() -> None:
+    """require_same_sign 与 abs_eps 同时出现时，近零判定优先：符号在近零区间是噪声，
+    不应因反号被同号否决一票判负；改用绝对偏差判定。"""
+    spec = {"max_rel_dev": 0.20, "require_same_sign": True, "abs_eps": 0.005}
+
+    near_zero_opposite_sign = cg.recalc_metric({"key": "rank_ic_mean", "report_value": 0.003, "reproduced_value": -0.002}, spec)
+    assert near_zero_opposite_sign.passed is True
+    assert "同号要求违反" not in near_zero_opposite_sign.reason  # 不应因符号被一票否决
+    assert "近零" in near_zero_opposite_sign.reason
+
+
+def test_recalc_metric_same_sign_veto_still_applies_when_not_near_zero() -> None:
+    """|report_value| >= abs_eps（非近零）时，同号否决逻辑照常生效。"""
+    spec = {"max_rel_dev": 0.20, "require_same_sign": True, "abs_eps": 0.005}
+
+    not_near_zero_opposite_sign = cg.recalc_metric({"key": "ls_annual_return", "report_value": 0.08, "reproduced_value": -0.07}, spec)
+    assert not_near_zero_opposite_sign.passed is False
+    assert "同号" in not_near_zero_opposite_sign.reason
 
 
 def test_recalc_metric_default_fallback() -> None:
@@ -338,6 +409,55 @@ def test_check_verify_fails_without_run_log_exit0(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# G-RA：result_audit 回应行数一致性（与 G-SA-4/G-CA-4 相同的三审查点回应协议）
+# ---------------------------------------------------------------------------
+
+RESULT_AUDIT_CODEX_TWO_ISSUES = """# result audit（codex）
+
+| ID | 描述 | severity |
+| --- | --- | --- |
+| CDX-R-1 | 数字与原始产物不符 | critical |
+| CDX-R-2 | 归因造假疑点 | major |
+"""
+
+
+def _write_result_audit(tmp_path: Path, report_id: str, response_rows: str) -> None:
+    audit_dir = tmp_path / "workspace" / report_id / "audit"
+    audit_dir.mkdir(parents=True, exist_ok=True)
+    (audit_dir / "result_audit_codex.md").write_text(RESULT_AUDIT_CODEX_TWO_ISSUES, encoding="utf-8")
+    (audit_dir / "audit_responses.md").write_text(
+        "| 编号 | severity | 处置 | 复核 |\n| --- | --- | --- | --- |\n" + response_rows, encoding="utf-8"
+    )
+
+
+def test_check_result_audit_response_count_matches_issues_passes(tmp_path: Path) -> None:
+    _init_workspace(tmp_path)
+    _write_result_audit(
+        tmp_path,
+        "demo",
+        "| CDX-R-1 | critical | accepted | pass |\n| CDX-R-2 | major | accepted | pass |\n",
+    )
+
+    results = cg.check_result_audit(tmp_path, "demo")
+    by_id = {r.id: r for r in results}
+    assert by_id["G-RA-5"].passed is True, by_id["G-RA-5"].detail
+    assert "回应=2" in by_id["G-RA-5"].detail
+    assert "issues=2" in by_id["G-RA-5"].detail
+
+
+def test_check_result_audit_response_count_mismatch_fails(tmp_path: Path) -> None:
+    _init_workspace(tmp_path)
+    # codex 提了 2 条意见（CDX-R-1/CDX-R-2），回应表漏了 CDX-R-2
+    _write_result_audit(tmp_path, "demo", "| CDX-R-1 | critical | accepted | pass |\n")
+
+    results = cg.check_result_audit(tmp_path, "demo")
+    by_id = {r.id: r for r in results}
+    assert by_id["G-RA-5"].passed is False
+    assert "回应=1" in by_id["G-RA-5"].detail
+    assert "issues=2" in by_id["G-RA-5"].detail
+
+
+# ---------------------------------------------------------------------------
 # 必跑 stage 被标 skipped -> --assert-done 判 FAIL；iterate 允许 skipped
 # ---------------------------------------------------------------------------
 
@@ -443,6 +563,22 @@ def test_check_report_detects_missing_sections(tmp_path: Path) -> None:
     by_id = {r.id: r for r in results}
     assert by_id["G-FN-2"].passed is False
     assert "指标对比" in by_id["G-FN-2"].detail
+
+
+def test_check_report_requires_coverage_stats_total_positive(tmp_path: Path) -> None:
+    """coverage_stats 是可信度评级依赖的字段：state.json 里必须写入且 total > 0。"""
+    _init_workspace(tmp_path)
+    (tmp_path / "workspace" / "demo" / "final_report.md").write_text("## 结论\n通过\n", encoding="utf-8")
+
+    # init_state 的默认 coverage_stats.total 是 0（尚未写入真实统计），应判 FAIL
+    results = cg.check_report(tmp_path, "demo")
+    by_id = {r.id: r for r in results}
+    assert by_id["G-FN-6"].passed is False
+
+    st.set_field(tmp_path, "demo", "coverage_stats.total", "12")
+    results = cg.check_report(tmp_path, "demo")
+    by_id = {r.id: r for r in results}
+    assert by_id["G-FN-6"].passed is True
 
 
 # ---------------------------------------------------------------------------

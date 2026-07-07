@@ -197,6 +197,28 @@ def _row_id(row: dict[str, str], pattern: str) -> str:
     return ""
 
 
+_H2_HEADING_RE = re.compile(r"^##\s+.*$", re.MULTILINE)
+
+
+def _extract_h2_section(body: str, heading_keyword: str) -> str:
+    """按标题关键词定位正文中的 H2 节，返回该节正文（不含标题行本身，至下一个 H2 或文末）。
+
+    用于图表登记清单等按 H2 分节、节内为 markdown 表格（而非 [ID] 标题块）的场景。
+    """
+    headings = list(_H2_HEADING_RE.finditer(body))
+    for i, m in enumerate(headings):
+        if heading_keyword in m.group(0):
+            start = m.end()
+            end = headings[i + 1].start() if i + 1 < len(headings) else len(body)
+            return body[start:end]
+    return ""
+
+
+# 图表登记清单表格的数据行：| FIG12 | ... | / | TBL3 | ... | / | EX25 | ... |
+# EX 前缀用于研报以「图表N」统一编号、不区分 TBL/FIG 的情形（替代 TBL/FIG）。
+_EXHIBIT_ROW_RE = re.compile(r"^\|\s*(FIG|TBL|EX)(\d+)\s*\|", re.MULTILINE)
+
+
 def _safe_load_state(root: Path, report_id: str) -> Optional[dict]:
     try:
         return st.load_state(root, report_id)
@@ -352,19 +374,38 @@ def check_extract(root: Path, report_id: str) -> list[CheckResult]:
     ambiguities_path = spec_dir / "ambiguities.md"
     results.append(CheckResult(f"{gid}-7", "ambiguities.md 存在", ambiguities_path.is_file()))
 
+    # 图表登记清单是「图表登记」H2 节内的 markdown 表格（非 ### [ID] 标题块），
+    # 数据行形如 `| FIG12 | 标题 | 页码 | 摘要 | 复现意图 | 理由/关联要素 |`；
+    # EX 前缀用于研报以「图表N」统一编号、替代 TBL/FIG 的情形，计入 FIG 桶。
+    # 严格的编号连续性校验属于 spec_audit 阶段审计 agent 的 C1 职责，这里只做
+    # 计数一致与「不超过声明上限」两项机器可核的弱校验。
     exhibit_declared = frontmatter.get("exhibit_declared") or {}
-    fig_ids = {int(n) for n in re.findall(r"\[FIG(\d+)\]", body)}
-    tbl_ids = {int(n) for n in re.findall(r"\[TBL(\d+)\]", body)}
+    exhibit_section = _extract_h2_section(body, "图表登记")
+    exhibit_rows = _EXHIBIT_ROW_RE.findall(exhibit_section)
+    fig_ex_numbers = [int(n) for prefix, n in exhibit_rows if prefix in ("FIG", "EX")]
+    tbl_numbers = [int(n) for prefix, n in exhibit_rows if prefix == "TBL"]
+
+    fig_registered_decl = element_counts.get("FIG_registered")
+    tbl_registered_decl = element_counts.get("TBL_registered")
     fig_max_decl = exhibit_declared.get("fig_max")
     tbl_max_decl = exhibit_declared.get("tbl_max")
-    fig_ok = True if fig_max_decl is None else (max(fig_ids, default=0) == fig_max_decl)
-    tbl_ok = True if tbl_max_decl is None else (max(tbl_ids, default=0) == tbl_max_decl)
+
+    problems: list[str] = []
+    if fig_registered_decl is not None and len(fig_ex_numbers) != fig_registered_decl:
+        problems.append(f"FIG+EX行数={len(fig_ex_numbers)}!=element_counts.FIG_registered={fig_registered_decl}")
+    if tbl_registered_decl is not None and len(tbl_numbers) != tbl_registered_decl:
+        problems.append(f"TBL行数={len(tbl_numbers)}!=element_counts.TBL_registered={tbl_registered_decl}")
+    if fig_max_decl is not None and max(fig_ex_numbers, default=0) > fig_max_decl:
+        problems.append(f"FIG/EX最大编号={max(fig_ex_numbers, default=0)}>exhibit_declared.fig_max={fig_max_decl}")
+    if tbl_max_decl is not None and max(tbl_numbers, default=0) > tbl_max_decl:
+        problems.append(f"TBL最大编号={max(tbl_numbers, default=0)}>exhibit_declared.tbl_max={tbl_max_decl}")
+
     results.append(
         CheckResult(
             f"{gid}-8",
-            "FIG/TBL 登记最大编号与 exhibit_declared 一致（编号连续性）",
-            fig_ok and tbl_ok,
-            f"FIG实际={max(fig_ids, default=0)}/声明={fig_max_decl} TBL实际={max(tbl_ids, default=0)}/声明={tbl_max_decl}",
+            "图表登记清单表格：FIG+EX/TBL 行数与 element_counts 一致，最大编号不超过 exhibit_declared 声明",
+            not problems,
+            "; ".join(problems),
         )
     )
 
@@ -695,6 +736,22 @@ def check_result_audit(root: Path, report_id: str) -> list[CheckResult]:
     else:
         results.append(CheckResult(f"{gid}-4", "扰动测试有记录（仅触发时要求，本难度未强制）", True, "非 hard 难度，仅 K2 触发时要求"))
 
+    # 三审查点（G-SA/G-CA/G-RA）回应协议统一：audit_responses.md 中该审查点的回应
+    # 行数必须与 codex 输出 verdict json（或降级的 markdown 表格）的 issues 数一致，
+    # 防止 codex 提了 N 条意见、回应表只写了 M < N 条却蒙混过关。
+    issues_count, _verdict = _parse_codex_output(result_audit_codex)
+    if issues_count is None:
+        results.append(CheckResult(f"{gid}-5", "audit_responses.md 回应行数 == result 审查 issues 数", False, "result_audit_codex.md 无法解析"))
+    else:
+        results.append(
+            CheckResult(
+                f"{gid}-5",
+                "audit_responses.md 回应行数 == result 审查 issues 数",
+                len(response_rows) == issues_count,
+                f"回应={len(response_rows)} issues={issues_count}",
+            )
+        )
+
     return results
 
 
@@ -789,6 +846,11 @@ def recalc_metric(metric: dict, spec: dict) -> MetricRecalc:
         order_of_magnitude_only  数量级一致（比值落在 [0.1, 10] 视为同量级）
         direction_only           （ml model 层）仅方向性判定，不算数值偏差
         未收录 -> default        由调用方 _tolerance_spec_for_metric 兜底
+
+    优先级（require_same_sign 与 abs_eps 同时出现时）：近零判定优先于同号否决——
+    |report_value| < abs_eps 时符号是噪声，直接改用绝对偏差判定，不再执行同号否决；
+    只有 |report_value| >= abs_eps（不满足近零条件，含未设置 abs_eps 的情形）才落回
+    同号否决逻辑。
     """
     key = metric.get("key", "?")
     try:
@@ -808,6 +870,16 @@ def recalc_metric(metric: dict, spec: dict) -> MetricRecalc:
     if direction_only:
         return MetricRecalc(key, None, sign_ok, "direction_only：仅校验同号/方向")
 
+    near_zero = abs_eps is not None and abs(report_value) < abs_eps
+    if near_zero:
+        abs_dev = abs(reproduced_value - report_value)
+        return MetricRecalc(
+            key,
+            abs_dev,
+            abs_dev <= abs_eps,
+            f"研报值近零（|{report_value}|<{abs_eps}），改用绝对偏差判定，不执行同号否决",
+        )
+
     if require_same_sign and not sign_ok:
         rel_dev = abs(reproduced_value - report_value) / abs(report_value) if report_value != 0 else None
         return MetricRecalc(key, rel_dev, False, "同号要求违反（符号不一致），不论幅度直接判负")
@@ -820,10 +892,6 @@ def recalc_metric(metric: dict, spec: dict) -> MetricRecalc:
             passed = 0.1 <= ratio <= 10
         rel_dev = abs(reproduced_value - report_value) / abs(report_value) if report_value != 0 else None
         return MetricRecalc(key, rel_dev, passed, "数量级一致性判定（比值落在 [0.1,10]）")
-
-    if abs_eps is not None and abs(report_value) < abs_eps:
-        abs_dev = abs(reproduced_value - report_value)
-        return MetricRecalc(key, abs_dev, abs_dev <= abs_eps, f"研报值近零（|{report_value}|<{abs_eps}），改用绝对偏差判定")
 
     if report_value == 0:
         return MetricRecalc(key, None, reproduced_value == 0, "研报值为 0 且未声明 abs_eps，要求复现值同为 0")
@@ -1022,6 +1090,19 @@ def check_report(root: Path, report_id: str) -> list[CheckResult]:
         results.append(CheckResult(f"{gid}-5", "所有 rejected 意见出现在报告", not missing_in_report, f"缺失: {missing_in_report}" if missing_in_report else ""))
     else:
         results.append(CheckResult(f"{gid}-5", "所有 rejected 意见出现在报告", True, "audit_responses.md 不存在，视为无 rejected 项"))
+
+    state = _safe_load_state(root, report_id) or {}
+    coverage_stats = state.get("coverage_stats") or {}
+    total = coverage_stats.get("total")
+    coverage_stats_ok = isinstance(total, (int, float)) and not isinstance(total, bool) and total > 0
+    results.append(
+        CheckResult(
+            f"{gid}-6",
+            "state.json coverage_stats 已写入且 total 字段 > 0（可信度评级依赖它）",
+            coverage_stats_ok,
+            f"coverage_stats={coverage_stats}",
+        )
+    )
 
     return results
 

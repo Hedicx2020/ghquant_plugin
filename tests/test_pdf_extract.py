@@ -6,6 +6,8 @@ import re
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tools import pdf_extract  # noqa: E402
@@ -63,6 +65,22 @@ def test_engine_field_is_reported(tmp_path: Path) -> None:
     out_dir = tmp_path / "extract_engine"
     result = pdf_extract.run_extract(TEST_PDF, out_dir)
     assert result.engine in {"pdftotext(-layout)", "pypdf(降级)"}
+
+
+def test_run_extract_falls_back_to_pypdf_when_pdftotext_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """强制 shutil.which 探测不到 pdftotext，走 pypdf 降级分支；PAGE 标记数须与
+    pdftotext 路径一致（22）且文本非空——降级不应改变分页数或产出空文本。"""
+    monkeypatch.setattr(pdf_extract.shutil, "which", lambda *_a, **_kw: None)
+
+    out_dir = tmp_path / "extract_fallback"
+    result = pdf_extract.run_extract(TEST_PDF, out_dir)
+
+    assert result.engine == "pypdf(降级)"
+    report_text = result.report_text_path.read_text(encoding="utf-8")
+    assert report_text.strip() != ""
+    marks = PAGE_MARK_RE.findall(report_text)
+    assert len(marks) == 22
+    assert len(marks) == result.n_pages
 
 
 def test_missing_pdf_raises_unparseable(tmp_path: Path) -> None:
