@@ -23,7 +23,10 @@
    **每条 DIF 行「裁决」列必须非空**（G-SA-3）。
 6. **（medium+）派 `quant-auditor mode=spec`**（subagent_type=`quant-auditor`，prompt 里写明 `mode=spec`）。输入合同（**不含 extractor/planner 的完成汇报**）：PDF `reports/<id>.pdf`、`report_text.md`、`tables_extracted.md`、`spec.md`、`coverage_matrix.md`、`ambiguities.md`、`plan.md`、`templates/audit/extract_audit.md`。产出 `workspace/<id>/audit/extract_audit.md`（C1–C6 + C6 抽查 ≥10 条 + 末行 verdict）。**easy 跳过内审。**
 7. **意见入 responses**：把 `spec_audit_codex.md` 的每条 `CDX-S-` finding 逐条录入 `workspace/<id>/audit/audit_responses.md`（表头：`意见ID | severity | 摘要 | 处置(accepted/rejected/deferred) | 回应（修复位置 文件:行号 或技术理由） | 复核`）。一条意见一行，不合并不省略；adopted 遗漏 → 派回 `quant-extractor`（或 planner）定向修复，复核列写 `pass`；rejected 给技术理由。extract_audit 的内审 issue 一并处置。
-8. **记外审台账**：`uv run python tools/state.py set <id> external_reviews '[{"checkpoint":"spec","engine":"codex","verdict":"<pass|pass_with_issues|fail>","critical":<n>,"major":<n>,"minor":<n>,"raw":"workspace/<id>/audit/spec_audit_codex.md"}]'`（reporter 的 A.3 靠它；累积追加，后续 code/result 审查各追一条）。
+8. **记外审台账**（读改写三步；**警告**：`state.py set` 是整体覆盖字段，直接 `set` 单条数组会把此前已写入的审查记录全部抹掉，三步缺一不可）：
+   1. **读**：`state.py show` 无 `--json` 参数，不能取结构化字段，故直接 `Read workspace/<id>/state.json`，取出其中 `external_reviews` 数组的现有内容。
+   2. **追加**：在该数组**末尾**追加本 checkpoint 一条：`{"checkpoint":"spec","engine":"codex","verdict":"<pass|pass_with_issues|fail>","critical":<n>,"major":<n>,"minor":<n>,"raw":"workspace/<id>/audit/spec_audit_codex.md"}`。
+   3. **整体写回**：`uv run python tools/state.py set <id> external_reviews '<①读出的旧数组与②新条目合并后的完整 JSON 数组>'`（reporter 的 A.3 靠它；后续 code/result 审查复用同一读改写三步各追一条）。
 
 ## 出口门禁
 
@@ -39,5 +42,5 @@ VERDICT PASS → `set-stage <id> spec_audit done` → 进 implement。
 - **critical / 未回应 major** → 回派 extractor（提取问题）或 planner（计划问题）定向修复后复审，修复意见复核列写 `pass`；**同一审查点审→修→复审最多 3 轮，仍有 critical → paused_blocked**（brief：修复轮 >2 即停）。
 - **codex 调用失败**（非零退出/超时/输出为空）→ **重试 1 次并缩减输入**（spec 审只喂 R 类章节 + 图表清单）。
 - **重试仍失败 → 两级降级**：
-  1. 一级：派**全新 Claude 子 agent 作外审替身**（同材料同 prompt，禁止读任何过程性文件），把结论写入 `spec_audit_codex.md`，`external_reviews` 该条 `engine` 记 `claude_fallback`。
+  1. 一级：派**全新 Claude 子 agent 作外审替身**（同材料同 prompt，禁止读任何过程性文件），把结论写入 `spec_audit_codex.md`，`external_reviews` 该条 `engine` 记 `claude_fallback`。**替身输出同样必须包含 `=== SPEC_CODEX_BEGIN ===` / `=== SPEC_CODEX_END ===` 标记块**（G-SA-1 需要靠它切出 `spec_codex.md`，替身若漏写此标记则本步骤第 4 步无法切出盲提取清单，直接导致 G-SA-1 FAIL）。
   2. 二级：替身也不可行 → `engine` 记 `skipped`，final_report 显著标注「该审查点外审缺失」，**hard 报告可信度评级封顶 B**。

@@ -23,7 +23,10 @@
    - **easy 非 ml**：auditor(code) 并入 verify（抽 2 条核心要素），本 stage 不单独产 impl_audit。
    - 提速可选：本步 auditor 与第 4 步 codex 并行发起。
 6. **意见入 responses**：`code_audit_codex.md` 每条 `CDX-C-` finding 逐条录入 `workspace/<id>/audit/audit_responses.md`（同一张表追加）。impl_audit 若出现 `not_found`（空壳虚报）→ auditor 已在 coverage_matrix 变更日志记回退（状态打回 in_progress），主会话据此回 coder 重做该要素。
-7. **记外审台账**：`external_reviews` 追加一条 `checkpoint:"code"`（engine/verdict/critical-major-minor/raw=code_audit_codex.md）。
+7. **记外审台账**（读改写三步，同 `spec_audit.md` 步骤 8；**警告**：`state.py set` 是整体覆盖字段，直接 `set` 单条数组会把 spec 审查已写入的记录抹掉）：
+   1. **读**：`Read workspace/<id>/state.json`，取出现有 `external_reviews` 数组。
+   2. **追加**：数组末尾追加 `{"checkpoint":"code","engine":"codex","verdict":"<pass|pass_with_issues|fail>","critical":<n>,"major":<n>,"minor":<n>,"raw":"workspace/<id>/audit/code_audit_codex.md"}`。
+   3. **整体写回**：`uv run python tools/state.py set <id> external_reviews '<合并后完整 JSON 数组>'`。
 
 ## 出口门禁
 

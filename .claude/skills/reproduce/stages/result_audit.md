@@ -16,7 +16,10 @@
    ```
 4. **auditor mode=result**（**hard 必跑**；medium/easy 仅 K2 触发时）：派 `quant-auditor mode=result`。输入合同：`output/<id>/results/comparison.json`、`output/<id>/results/`（PNG 图片、metrics.json、backtest_summary.xlsx）、`workspace/<id>/audit/evidence_manifest.md`（输出对象）、`output/<id>/verify_report.md`、`assumptions.md`、`ambiguities.md`、`coverage_matrix.md`。产出：在 `evidence_manifest.md` 追加「反虚报复核」节（K2/K3/E4 复核 + skip/infeasible 理由核实 + 扰动测试触发判断 + 末行 verdict）。可与第 3 步 codex 并行。
 5. **意见入 responses**：`result_audit_codex.md` 每条 `CDX-R-` finding 逐条录入 `audit_responses.md`（同表追加）。
-6. **记外审台账**：`external_reviews` 追加 `checkpoint:"result"`（engine/verdict/counts/raw=result_audit_codex.md）。
+6. **记外审台账**（读改写三步，同 `spec_audit.md` 步骤 8；**警告**：`state.py set` 是整体覆盖字段，直接 `set` 单条数组会把 spec/code 两条已有记录抹掉）：
+   1. **读**：`Read workspace/<id>/state.json`，取出现有 `external_reviews` 数组。
+   2. **追加**：数组末尾追加 `{"checkpoint":"result","engine":"codex","verdict":"<pass|pass_with_issues|fail>","critical":<n>,"major":<n>,"minor":<n>,"raw":"workspace/<id>/audit/result_audit_codex.md"}`。
+   3. **整体写回**：`uv run python tools/state.py set <id> external_reviews '<合并后完整 JSON 数组>'`。
 
 ## 出口门禁
 

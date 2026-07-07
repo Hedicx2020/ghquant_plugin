@@ -53,10 +53,11 @@ uv run python tools/check_gates.py <id> --stage verify --record
   ```
   → 进 iterate（见 `stages/iterate.md`）。
 - **结构项 FAIL**（G-VF-1 run_log 无 exit=0 / G-VF-2 comparison 不可解析 / G-VF-4/5 图表 Excel 缺 / G-VF-6 新鲜度倒挂 / G-VF-7 矩阵未回填）→ **verify 未 done，禁止推进**（硬规则1）：
-  - 运行报错（G-VF-1/2）→ 回 `quant-coder` 修复（**计 1 次迭代**：`set <id> iteration.current 1`），修好回本 stage 重跑 verifier。
+  - 运行报错（G-VF-1/2）→ 回 `quant-coder` 修复（`uv run python tools/state.py record-event <id> verify_run_error_fix --json '{"attempt": N}'` 记第 N 次重试，**不改 `iteration.current`、不占迭代轮**——迭代轮计数完全交给 `iterate.md` 的 `iter_NN` 机制），修好回本 stage 重跑 verifier；重试上限见下方「失败处理」同一 gate 连续 3 次 FAIL 的兜圈断路器。
   - 新鲜度/图表/矩阵问题 → 回 `quant-verifier` 重跑补齐（拿旧结果冒充 = E2 失败，必须重跑）。
 
 ## 失败处理
 
 - 同一 gate 连续 3 次 FAIL → `paused_blocked` + `pending_question`。
-- 扰动测试完全不变（核心指标相对变化 ≤0.1%）→ 输出与输入解耦、硬编码实锤，verifier 记 critical 进 evidence_manifest → 回 code_audit/coder（走迭代账）。
+- 扰动测试完全不变（核心指标相对变化 ≤0.1%）→ 输出与输入解耦、硬编码实锤，verifier 记 critical 进 evidence_manifest → 回 code_audit/coder 修复，**计入迭代轮**（由 `iterate.md` 的 `iter_NN` 机制正式计数；触发源见 `iterate.md` 入口条件的「code_audit critical 修复」一项）。
+- **运行报错修复不占迭代轮**：上文「运行报错（G-VF-1/2）」分支的 coder 修复只用 `record-event` 记重试次数，不推进 `iteration.current`、不建 `iter_NN` 目录；只有指标超容差正式进入 `iterate` 阶段后的诊断-修正-重跑，才按 `iterate.md` 的 `iter_NN` 机制计为一次正式迭代轮。

@@ -14,7 +14,7 @@ argument-hint: "<pdf_path> | continue <id> | status [id] | revise <id> ... | acc
 
 ## 一、六条硬规则（置顶，最高优先级，任何 stage 不得违背）
 
-1. **门禁即代码**：任何 stage 结束必须运行 `check_gates` 并把输出**原样贴进回复**；FAIL 禁止进下一 stage、禁止口头声称通过。
+1. **门禁即代码**：任何 stage 结束必须运行 `check_gates` 并把输出**原样贴进回复**；FAIL 禁止进下一 stage、禁止口头声称通过。（唯一例外：verify 阶段仅 G-VF-3 达标项 FAIL 时按 `stages/verify.md` 的说明进入 iterate，属设计内路径）
 2. **编排与生产分离**：主会话只派发、审门禁、调 codex、写编排记录；**严禁亲自撰写 spec / plan / 代码 / 验证结论 / 最终报告**。
 3. **产物合同逐一点收**：agent 返回后逐一 `ls` 验证其输出合同文件，缺一即该步失败（不看 agent 自述，看文件是否真的在）。
 4. **状态先行**：stage 开始/结束先写 state（`set-stage running` / `set-stage done`），杜绝"跑完再补账"。
@@ -75,8 +75,8 @@ argument-hint: "<pdf_path> | continue <id> | status [id] | revise <id> ... | acc
    - `aborted`：提示需显式重启。
    - `running`：进入续跑（下一步）。
 3. 续跑定位：沿 STAGE_ORDER 找**第一个非 done/skipped** 的 stage 作为 `current`。
-4. **进入前幂等自愈**：对 `current` 跑 `check_gates --stage <current>`（默认模式全量重算）——若已 PASS（产物齐全且合规），直接 `set-stage <current> done` 跳过，前进到下一个；否则 `set-stage <current> running`（attempts 自增）按该 stage 执行卡重跑覆盖写。
-5. **iterate 的特殊续跑**：读 `iterations/` 下最大的 `iter_NN`，按三件套（`diagnosis.md` / `changes.md` / `comparison.json`）的完整性判断从哪一步续起——缺 diagnosis 从诊断起，缺 changes 从修正起，缺 comparison 从重跑起。
+4. **进入前幂等自愈**：对 `current` 跑 `check_gates --stage <current>`（默认模式全量重算）——若已 PASS（产物齐全且合规），直接 `set-stage <current> done` 跳过，前进到下一个；否则 `set-stage <current> running`（attempts 自增）按该 stage 执行卡重跑覆盖写。**豁免**：iterate 阶段不适用真空 PASS 跳过——`current_stage` 为 `iterate`，或（`verify` 已 `done` 且 `check_gates verify` 曾记录 G-VF-3 FAIL 且尚无任何完成轮）时，一律走步骤 5 的 iterate 专用续跑，不走本步骤的 PASS-跳过快速路径（原因：G-IT-1 只按已记的 `iteration.current` 检查到对应 `iter_NN`，尚未开始记数的轮次天然不会被查到，会被误判为「产物齐全」的真空 PASS）。
+5. **iterate 的特殊续跑**：读 `iterations/` 下最大的 `iter_NN`，按三件套（`diagnosis.md` / `changes.md` / `comparison.json`）的完整性判断从哪一步续起——缺 diagnosis 从诊断起，缺 changes 从修正起，缺 comparison 从重跑起。**零轮次情形**：`verify` done 且指标超差但 `iterations/` 下无任何 `iter_NN` → 从第 1 轮进入 `iterate` 执行卡（即 `stages/iterate.md` 步骤 1 起）。
 
 ### 3.3 `status [id]`
 
@@ -115,7 +115,7 @@ review 通过收尾：`set-stage <id> review done` → 按 verdict 定终态：`
 4. **动作序列**：按执行卡派 agent / 调 codex / 跑工具（并行只按第五节规则）。
 5. **逐一点收**：对执行卡列出的每个输出合同文件 `ls -la` 核在（含 >0 字节 / 图表 >15KB 等硬指标由门禁兜底）；缺一即该步失败，带缺失清单重派。
 6. **出口门禁**：`uv run python tools/check_gates.py <id> --stage {current} --record`，**把完整输出（每行 [PASS|FAIL] 与末行 VERDICT）原样贴进回复**。
-7. **放行**：VERDICT PASS → `set-stage <id> {current} done` → 前进到下一 stage；FAIL → 按该执行卡「失败处理」分支处理。
+7. **放行**：VERDICT PASS → `set-stage <id> {current} done` → 前进到下一 stage；FAIL → 按该执行卡「失败处理」分支处理。（唯一例外同硬规则1：verify 阶段仅 G-VF-3 达标项 FAIL 时的「FAIL → 进 iterate」按 `stages/verify.md` 处理，属设计内路径，不算违反本条）
 8. **兜圈断路器**：同一 stage 的**同一 gate 连续 3 次 FAIL** → `set <id> status paused_blocked` + `set <id> pending_question "<卡在哪、缺什么、需人工做什么>"` + `record-event`，停下汇报，不再重试。
 
 > 门禁的 `--assert-done`（前置，只读 state 状态，成本低）与默认模式（出口，全量重算产物）是两种用途，不要混用。

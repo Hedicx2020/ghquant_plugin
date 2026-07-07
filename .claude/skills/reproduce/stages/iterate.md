@@ -10,9 +10,9 @@
 ## 动作序列（每轮严格按序）
 
 1. **状态先行**：`uv run python tools/state.py set-stage <id> iterate running`
-2. **建轮次目录**：`N = state.iteration.current + 1`，建 `workspace/<id>/iterations/iter_<NN>/`（两位补零，如 iter_01）。
+2. **推进轮次计数 + 建目录**：`N = state.iteration.current + 1` → **先** `uv run python tools/state.py set <id> iteration.current <N>` **后**建 `workspace/<id>/iterations/iter_<NN>/`（两位补零，如 iter_01）——顺序不可颠倒：唯有先记数，本轮才对 `check_gates` 的 G-IT-1（按 `iteration.current` 决定检查到哪个 `iter_NN`）可见，避免中途中断续跑时被误判为「真空 PASS」（见 SKILL.md 3.2 的 iterate 豁免条款）。**全卡 N 统一定义为「自增后的 `iteration.current`」**，即本轮（进行中或已完成）的轮次号，下述步骤 3–8 均在此定义下使用 N。
 3. **快照 comparison**：把当前 `output/<id>/results/comparison.json` 拷进 `iter_<NN>/comparison.json`。
-4. **（N≥2）后台 codex 第二意见**：填 `templates/codex_prompts/second_opinion.md`（占位符 `{report_id}/{type}/{iteration_current}/{iteration_max}/{trigger_reason}/{NN}/{workspace}`）→ 落盘 `iter_<NN>/codex_prompt_second_opinion.md` → 调 codex（Bash，`timeout` 600000，可 `run_in_background`）：
+4. **（N≥2）后台 codex 第二意见**：填 `templates/codex_prompts/second_opinion.md`（占位符 `{report_id}/{type}/{iteration_current}/{iteration_max}/{trigger_reason}/{comparison_path}/{failing_metrics_summary}/{iteration_history_paths}/{NN}/{workspace}`）→ 落盘 `iter_<NN>/codex_prompt_second_opinion.md` → 调 codex（Bash，`timeout` 600000，可 `run_in_background`）：
    ```
    command codex exec -s read-only --skip-git-repo-check -C /Users/hedi/report_reproduce --color never --output-last-message "workspace/<id>/iterations/iter_<NN>/codex_opinion.md" - < "workspace/<id>/iterations/iter_<NN>/codex_prompt_second_opinion.md"
    ```
@@ -21,9 +21,8 @@
    - **continue** → 派 `quant-coder`（迭代轮输入含 `iter_<NN>/diagnosis.md`，**只改 diagnosis 列明的文件范围**），产 `iter_<NN>/changes.md` → 派 `quant-verifier` 重跑 → 覆盖 `output/<id>/results/comparison.json`，并把重跑后的拷进 `iter_<NN>/comparison.json`。
    - **stop_partial** → diagnoser 已为每条 pass=false 指标写入 `attribution_status`（accepted/assumption_linked），进「超限 partial 出口」。
    - **blocked** → 「blocked 出口」。
-7. **推进轮次计数**：`uv run python tools/state.py set <id> iteration.current <N>`。
-8. **追加总账**：向 `workspace/<id>/iterations/iteration_log.md` 追加本轮行（触发 / 失败指标(偏差) / 采纳假设 / 修改摘要 / 结果(偏差变化) / 状态）+ 本轮明细。
-9. **重算达标**（continue 重跑后）：`uv run python tools/check_gates.py <id> --stage verify --record` 原样贴出：
+7. **追加 iteration_log 与 history**：向 `workspace/<id>/iterations/iteration_log.md` 追加本轮行（触发 / 失败指标(偏差) / 采纳假设 / 修改摘要 / 结果(偏差变化) / 状态）+ 本轮明细（history）。（`iteration.current` 已在步骤 2 记过，本步不再重复推进计数。）
+8. **重算达标**（continue 重跑后）：`uv run python tools/check_gates.py <id> --stage verify --record` 原样贴出：
    - PASS → 「达标出口」。
    - FAIL 且 `N < max_iter` → 回步骤 2 下一轮。
    - FAIL 且 `N == max_iter` → 「超限 partial 出口」。
