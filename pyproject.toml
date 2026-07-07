@@ -11,6 +11,9 @@ dependencies = [
     "seaborn>=0.12",
     "openpyxl>=3.1",
     "pyarrow>=14.0",
+    "pypdf>=4.0",
+    "pdfplumber>=0.11",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -20,6 +23,9 @@ ml = [
     "lightgbm>=4.0",
     "torch>=2.0",
 ]
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
 
 [tool.uv]
 # 纯环境管理，本项目不作为可安装包构建
