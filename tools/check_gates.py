@@ -197,6 +197,29 @@ def _row_id(row: dict[str, str], pattern: str) -> str:
     return ""
 
 
+# 要素 ID：D/F/B/R/SA 前缀 + 数字，含 F3.1 一类子变体（与 quant-extractor.md 的
+# 自查正则、ELEMENT_HEADING_RE 保持一致）。
+_MATRIX_ELEMENT_ID_RE = re.compile(r"^(D|F|B|R|SA)\d+(\.\d+)?$")
+
+
+def load_matrix_rows(path: Path) -> list[dict[str, str]]:
+    """解析 coverage_matrix.md 并只保留真正的「要素行」，过滤变更日志等其它表格。
+
+    coverage_matrix.md 除 11 列主表外，文末固定还有一个「变更日志」表格（表头
+    「时间/事件/来源/说明」），且不排除未来出现其它文档性表格（如模板里的
+    「列说明」）；`parse_markdown_table_rows` 对整份文件逐表拼接返回全部表格的
+    数据行，若不过滤会把这些表的行也计入「要素行」，污染依赖行数/遍历的门禁
+    （G-EX-4 计数、G-PL-6/G-IM-5/G-VF-7/G-FN-3 遍历要素行判缺失）。
+
+    这里按「要素ID」列值是否匹配 D/F/B/R/SA 前缀+数字（含子变体）过滤——这是
+    全部五处门禁读取 coverage_matrix.md 的唯一入口，杜绝各门禁各写各的过滤逻辑。
+    """
+    if not path.is_file():
+        return []
+    rows = parse_markdown_table_rows(path.read_text(encoding="utf-8"))
+    return [r for r in rows if _MATRIX_ELEMENT_ID_RE.match(_row_get(r, "要素ID"))]
+
+
 _H2_HEADING_RE = re.compile(r"^##\s+.*$", re.MULTILINE)
 
 
@@ -343,7 +366,7 @@ def check_extract(root: Path, report_id: str) -> list[CheckResult]:
     fm_sum = sum(v for k, v in element_counts.items() if k in ("D", "F", "B", "R", "SA") and isinstance(v, (int, float)))
 
     matrix_path = spec_dir / "coverage_matrix.md"
-    matrix_rows = parse_markdown_table_rows(matrix_path.read_text(encoding="utf-8")) if matrix_path.is_file() else []
+    matrix_rows = load_matrix_rows(matrix_path)
     matrix_count = len(matrix_rows)
 
     three_way_ok = regex_count == fm_sum == matrix_count
@@ -481,7 +504,7 @@ def check_plan(root: Path, report_id: str) -> list[CheckResult]:
     results.append(CheckResult(f"{gid}-5", "milestone deps 无环", not has_cycle))
 
     matrix_path = root / "workspace" / report_id / "spec" / "coverage_matrix.md"
-    matrix_rows = parse_markdown_table_rows(matrix_path.read_text(encoding="utf-8")) if matrix_path.is_file() else []
+    matrix_rows = load_matrix_rows(matrix_path)
     missing_milestone_rows = [
         _row_get(r, "要素ID")
         for r in matrix_rows
@@ -531,7 +554,9 @@ def _parse_codex_output(path: Path) -> tuple[Optional[int], Optional[str]]:
 
     约定（供 templates/codex_prompts 与 review_schema.json 对齐）：优先整份 JSON
     或文中 ```json 代码块，形如 {"verdict": ..., "findings": [...]}；否则退化为
-    markdown 表格行数 + 文中 `VERDICT: xxx` 行。
+    markdown 表格行数 + 文中 `VERDICT: xxx` 行。降级路径只统计首格匹配 `^CDX-`
+    的表格行（与 `_parse_audit_responses` 按 CDX- ID 识别行的语义对称），不是文中
+    出现的任意表格（如「已检查维度」汇总表）都算一条 issue。
     """
     if not path.is_file():
         return None, None
@@ -546,9 +571,10 @@ def _parse_codex_output(path: Path) -> tuple[Optional[int], Optional[str]]:
             findings = data.get("findings") or []
             return len(findings), data.get("verdict")
 
-    rows = [r for r in parse_markdown_table_rows(text) if any((v or "").strip() for v in r.values())]
+    rows = parse_markdown_table_rows(text)
+    cdx_rows = [r for r in rows if re.match(r"^CDX-", next(iter(r.values()), "") or "")]
     verdict_match = re.search(r"VERDICT:\s*(\w+)", text, re.IGNORECASE)
-    return len(rows), (verdict_match.group(1) if verdict_match else None)
+    return len(cdx_rows), (verdict_match.group(1) if verdict_match else None)
 
 
 def _parse_audit_responses(path: Path, prefix: str) -> list[dict[str, str]]:
@@ -634,6 +660,11 @@ def check_spec_audit(root: Path, report_id: str) -> list[CheckResult]:
 # G-CA：code_audit
 # ---------------------------------------------------------------------------
 
+# 空壳判定必须单独成行、格式 `判定: not_found`（quant-auditor.md mode=code 硬约束 7）；
+# 行锚定结构化匹配，不再对全文做 `not[_ ]found` 子串 grep——否定句式（如「无 not_found
+# 判定」「未见 not_found」）不会因为文中出现该字面量就被误判为空壳。
+_NOT_FOUND_VERDICT_RE = re.compile(r"^.*判定[:：]\s*not_?found", re.MULTILINE | re.IGNORECASE)
+
 
 def check_code_audit(root: Path, report_id: str) -> list[CheckResult]:
     gid = "G-CA"
@@ -659,8 +690,15 @@ def check_code_audit(root: Path, report_id: str) -> list[CheckResult]:
     else:
         results.append(CheckResult(f"{gid}-2", "impl_audit_m{X}.md（easy 且非 ml，可并入 verify）", True, "该难度下非本 stage 必需"))
 
-    not_found_hits = [p.name for p in impl_audit_files if re.search(r"not[_ ]found", p.read_text(encoding="utf-8"), re.IGNORECASE)]
-    results.append(CheckResult(f"{gid}-3", "impl_audit 文件中无 not_found 判定", not not_found_hits, f"命中: {not_found_hits}" if not_found_hits else ""))
+    not_found_hits = [p.name for p in impl_audit_files if _NOT_FOUND_VERDICT_RE.search(p.read_text(encoding="utf-8"))]
+    results.append(
+        CheckResult(
+            f"{gid}-3",
+            "impl_audit 文件中无结构化空壳判定「判定: not_found」（行锚定，非全文子串匹配）",
+            not not_found_hits,
+            f"命中: {not_found_hits}" if not_found_hits else "",
+        )
+    )
 
     issues_count, _verdict = _parse_codex_output(code_audit_codex)
     response_rows = _parse_audit_responses(responses_path, "CDX-C-")
@@ -695,6 +733,8 @@ def check_result_audit(root: Path, report_id: str) -> list[CheckResult]:
     results: list[CheckResult] = []
     state = _safe_load_state(root, report_id) or {}
     difficulty = state.get("difficulty") or "medium"
+    report_type = state.get("type")
+    standards = load_standards(root)
 
     audit_dir = root / "workspace" / report_id / "audit"
     result_audit_codex = audit_dir / "result_audit_codex.md"
@@ -716,14 +756,19 @@ def check_result_audit(root: Path, report_id: str) -> list[CheckResult]:
         try:
             comparison = json.loads(comparison_path.read_text(encoding="utf-8"))
             for m in comparison.get("metrics", []):
-                if m.get("pass") is False and m.get("attribution_status") not in ("accepted", "assumption_linked"):
+                # 不信任文件自述的 pass 字段（K8：声称已通过实际未改）：与 G-VF-3 同一套
+                # standards.json 容差重算圈定"超差"集合，只有重算结果不为 True 才要求
+                # 归因，防止 comparison.json 谎称 pass=true 却无 attribution_status 蒙混过关。
+                spec = _tolerance_spec_for_metric(standards, report_type, m)
+                r = recalc_metric(m, spec)
+                if r.passed is not True and m.get("attribution_status") not in ("accepted", "assumption_linked"):
                     attribution_issue.append(m.get("key", "?"))
         except json.JSONDecodeError:
             attribution_issue.append("<comparison.json 解析失败>")
     results.append(
         CheckResult(
             f"{gid}-3",
-            "超差指标归因状态 ∈ {accepted, assumption_linked}",
+            "超差指标（按 standards.json 重算圈定，不信任文件自述 pass）归因状态 ∈ {accepted, assumption_linked}",
             not attribution_issue,
             f"未归因: {attribution_issue}" if attribution_issue else "",
         )
@@ -785,7 +830,7 @@ def check_implement(root: Path, report_id: str) -> list[CheckResult]:
     )
 
     matrix_path = root / "workspace" / report_id / "spec" / "coverage_matrix.md"
-    matrix_rows = parse_markdown_table_rows(matrix_path.read_text(encoding="utf-8")) if matrix_path.is_file() else []
+    matrix_rows = load_matrix_rows(matrix_path)
     missing_impl_loc = [
         _row_get(r, "要素ID") for r in matrix_rows if _row_get(r, "状态") not in ("skipped", "infeasible") and not _row_get(r, "实现位置")
     ]
@@ -985,12 +1030,23 @@ def check_verify(root: Path, report_id: str) -> list[CheckResult]:
     results.append(CheckResult(f"{gid}-6", "产物 mtime 晚于 src/ 最新 mtime（E2 新鲜度）", freshness_ok, freshness_detail))
 
     matrix_path = root / "workspace" / report_id / "spec" / "coverage_matrix.md"
-    matrix_rows = parse_markdown_table_rows(matrix_path.read_text(encoding="utf-8")) if matrix_path.is_file() else []
+    matrix_rows = load_matrix_rows(matrix_path)
+    # 与 G-IM-5 一致：skipped/infeasible 行本就不需要「验证结果」（核对/实现均已豁免），
+    # 否则 core 行一旦被标 skipped/infeasible 会因验证结果列必然空白而永久卡在本门禁。
     missing_verify = [
-        _row_get(r, "要素ID") for r in matrix_rows if _row_get(r, "优先级") in ("core", "support") and not _row_get(r, "验证结果")
+        _row_get(r, "要素ID")
+        for r in matrix_rows
+        if _row_get(r, "状态") not in ("skipped", "infeasible")
+        and _row_get(r, "优先级") in ("core", "support")
+        and not _row_get(r, "验证结果")
     ]
     results.append(
-        CheckResult(f"{gid}-7", "矩阵验证结果列对 core/support 行无空", not missing_verify, f"缺失: {missing_verify}" if missing_verify else "")
+        CheckResult(
+            f"{gid}-7",
+            "矩阵验证结果列对非 skipped/infeasible 的 core/support 行无空",
+            not missing_verify,
+            f"缺失: {missing_verify}" if missing_verify else "",
+        )
     )
 
     return results
@@ -999,6 +1055,12 @@ def check_verify(root: Path, report_id: str) -> list[CheckResult]:
 # ---------------------------------------------------------------------------
 # G-IT：iterate
 # ---------------------------------------------------------------------------
+
+# stop_partial/blocked 轮：diagnoser 判定不再需要 coder 出手（stop_partial 是「归因
+# 接受残差」、blocked 是「缺外部输入」），该轮天然不会产出 changes.md——若仍要求
+# changes.md，这类轮次会被 G-IT-1 永久判 FAIL，构成死锁。按「结论: stop_partial」
+# 一类行豁免 changes.md（diagnosis.md 与 comparison.json 仍必须齐）。
+_ITER_EXEMPT_CONCLUSION_RE = re.compile(r"结论[:：].*(stop_partial|blocked)")
 
 
 def check_iterate(root: Path, report_id: str) -> list[CheckResult]:
@@ -1014,17 +1076,24 @@ def check_iterate(root: Path, report_id: str) -> list[CheckResult]:
     missing_excluded_hint = []
     for n in range(1, current + 1):
         iter_dir = iterations_dir / f"iter_{n:02d}"
-        required = ["diagnosis.md", "changes.md", "comparison.json"]
+        diagnosis_path = iter_dir / "diagnosis.md"
+        diagnosis_text = diagnosis_path.read_text(encoding="utf-8") if diagnosis_path.is_file() else ""
+        exempt_changes = bool(_ITER_EXEMPT_CONCLUSION_RE.search(diagnosis_text))
+        required = ["diagnosis.md", "comparison.json"] if exempt_changes else ["diagnosis.md", "changes.md", "comparison.json"]
         missing = [f for f in required if not (iter_dir / f).is_file()]
         if missing:
             missing_sets.append(f"iter_{n:02d}缺{missing}")
         if n >= 2:
-            diag = iter_dir / "diagnosis.md"
-            if not (diag.is_file() and "已排除假设" in diag.read_text(encoding="utf-8")):
+            if not (diagnosis_path.is_file() and "已排除假设" in diagnosis_text):
                 missing_excluded_hint.append(f"iter_{n:02d}")
 
     results.append(
-        CheckResult(f"{gid}-1", "每轮 iter_NN/ 三件套齐（diagnosis.md/changes.md/comparison.json）", not missing_sets, "; ".join(missing_sets))
+        CheckResult(
+            f"{gid}-1",
+            "每轮 iter_NN/ 三件套齐（diagnosis.md/changes.md/comparison.json；结论 stop_partial/blocked 豁免 changes.md）",
+            not missing_sets,
+            "; ".join(missing_sets),
+        )
     )
 
     max_ok = max_iter is None or current <= max_iter
@@ -1070,7 +1139,7 @@ def check_report(root: Path, report_id: str) -> list[CheckResult]:
     )
 
     matrix_path = root / "workspace" / report_id / "spec" / "coverage_matrix.md"
-    matrix_rows = parse_markdown_table_rows(matrix_path.read_text(encoding="utf-8")) if matrix_path.is_file() else []
+    matrix_rows = load_matrix_rows(matrix_path)
     pending_rows = [_row_get(r, "要素ID") for r in matrix_rows if _row_get(r, "状态") in ("pending", "in_progress")]
     results.append(CheckResult(f"{gid}-3", "coverage_matrix 无 pending/in_progress 行", not pending_rows, f"仍未终态: {pending_rows}" if pending_rows else ""))
 
