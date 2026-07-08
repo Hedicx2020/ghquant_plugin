@@ -109,18 +109,17 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/state.py" ...
 
 形态 A 时 `$PWD` 与推导结果相同（无害），形态 B 时纠正指向用户项目。check_gates.py 经 `st.default_root()` 同一入口，自动生效。
 
-### 6.2 工具文件定位：`$REPRODUCE_TOOLS` 三级兜底
+### 6.2 工具文件定位：skill base directory 首选 + Bash 双兜底（2026-07-09 真实安装实测后修订）
 
-SKILL.md「工具与路径」节新增定位协议（编排会话开始时执行一次并复用）：
+**实测结论（headless 插件会话两连测）**：skill 正文中 `${CLAUDE_PLUGIN_ROOT}` **不做**文本替换（字面量原样进上下文）；Bash 工具环境中 `CLAUDE_PLUGIN_ROOT` 环境变量**未注入**。原设计的一级兜底整体失效。但 skill 加载时系统提示注入的 *Base directory for this skill*（实测两形态均指向实际加载位置的 `<根>/skills/reproduce`）是始终可靠的锚点。
 
-```bash
-if [ -n "$CLAUDE_PLUGIN_ROOT" ]; then REPRODUCE_TOOLS="$CLAUDE_PLUGIN_ROOT/tools"      # 形态 B（插件运行时变量）
-elif [ -f tools/state.py ]; then REPRODUCE_TOOLS="$PWD/tools"                          # 形态 A（本仓库直跑）
-else REPRODUCE_TOOLS="$(python3 -c 'import json;print(json.load(open(".reproduce.json"))["plugin_root"])')/tools"  # 兜底（配置记录）
-fi
-```
+修订后的定位协议（SKILL.md「二、工具与路径」）：
 
-> 注意：`${CLAUDE_PLUGIN_ROOT}` 在插件的 skill 正文中由 Claude Code 做文本替换；若某运行时不替换，Bash 环境变量与 `.reproduce.json.plugin_root` 双兜底仍可定位。实施时以实测为准（验收项 V3）。
+- **第 0 级（首选）**：skill base directory 上两级 = 插件根/仓库根，`REPRODUCE_TOOLS=<根>/tools`。编排者直接从 skill 加载信息读取，无需探测；`setup` 首跑（cwd 尚无任何落地物）也由此定位 `setup_workspace.py`，解决鸡生蛋。
+- **Bash 兜底 1**：`[ -f tools/state.py ]` → 形态 A cwd。
+- **Bash 兜底 2**：`.reproduce.json.plugin_root`（setup 落地后可用）。
+
+`REPORT_REPRODUCE_ROOT="$PWD"` 前缀协议（6.1）不变，实测有效（V3 通过）。
 
 ### 6.3 资产种子化：templates/ 与 common/ 拷贝到用户项目
 
@@ -171,7 +170,9 @@ fi
 
 ## 十一、风险与开放问题
 
-1. `${CLAUDE_PLUGIN_ROOT}` 在 skill 正文的替换行为需实测（S8 覆盖）；不成立时依赖 Bash 环境变量或配置兜底。
-2. Windows symlink（形态 A 单一事实源）：当前用户全 macOS，遇到再议。
+1. ~~`${CLAUDE_PLUGIN_ROOT}` 在 skill 正文的替换行为需实测~~ **已实测钉死（2026-07-09 真实安装）**：不替换、环境变量也不注入；协议已修订为 skill base directory 首选（见 §6.2）。
+2. Windows symlink（形态 A 单一事实源）：当前用户全 macOS，遇到再议。插件安装实测中 symlink 被原样保留、无害。
 3. 子 agent 定义中若存在对仓库绝对/相对路径的隐含假设（如「读 templates/xxx」相对 cwd），形态 B 下 cwd=用户项目且有种子拷贝，预期成立；S8 端到端时逐 agent 抽验。
 4. 插件升级与用户侧种子漂移：首版用「跳过+清单提示」策略，不做三方合并。
+5. **本地路径 marketplace 的拷贝语义（真实安装实测发现）**：`claude plugin marketplace add <本地路径>` 会全量文件系统拷贝（含 `.venv` 385M、`output/` 39M 等 gitignore 内容，实测缓存 431M）。git URL 分发只含 git 跟踪内容、不受影响。对策：正式分发一律用 git URL；本地路径仅限维护者自测（知悉体积开销）。
+6. **分发必需 `.claude-plugin/marketplace.json`**（真实安装实测发现）：单插件仓库作为 marketplace 源时该清单是硬前置（`plugins[].source="./"`），已补齐入库。

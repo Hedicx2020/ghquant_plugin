@@ -25,13 +25,16 @@ argument-hint: "<pdf_path> | continue <id> | status [id] | revise <id> ... | acc
 
 ## 二、工具与路径（逐字使用，不要发明新命令）
 
-**工具定位协议（双形态，会话内先执行一次再复用）**：本系统可作为项目仓库直跑（形态 A），也可作为插件安装后在任意用户目录使用（形态 B）。所有工具命令按下面协议定位与调用：
+**工具定位协议（双形态，会话内定位一次再复用）**：本系统可作为项目仓库直跑（形态 A），也可作为插件安装后在任意用户目录使用（形态 B）。
+
+**第 0 级（首选，直接可得）**：本 skill 加载时系统提示中标注了 *Base directory for this skill*（形如 `<根>/skills/reproduce`）。**其上两级目录即插件根/仓库根**，`REPRODUCE_TOOLS=<根>/tools`。此来源在两种形态下都成立（实测：skill 正文不做 `${CLAUDE_PLUGIN_ROOT}` 文本替换、Bash 环境变量 `CLAUDE_PLUGIN_ROOT` 也不注入，故 base directory 是唯一始终可靠的锚点），并且不依赖 cwd 已初始化——`setup` 首跑（尚无 `.reproduce.json` 与 `tools/`）也由此定位 `setup_workspace.py`。
+
+Bash 侧兜底（第 0 级信息缺失时按序）：
 
 ```bash
-# 定位工具目录（三级兜底）
-if [ -n "$CLAUDE_PLUGIN_ROOT" ]; then REPRODUCE_TOOLS="$CLAUDE_PLUGIN_ROOT/tools"        # 形态 B：插件运行时变量
-elif [ -f tools/state.py ]; then REPRODUCE_TOOLS="$PWD/tools"                             # 形态 A：本仓库直跑
-else REPRODUCE_TOOLS="$(python3 -c 'import json;print(json.load(open(".reproduce.json"))["plugin_root"])')/tools"   # 兜底：setup 记录
+if [ -f tools/state.py ]; then REPRODUCE_TOOLS="$PWD/tools"                               # 形态 A：本仓库直跑
+elif [ -f .reproduce.json ]; then REPRODUCE_TOOLS="$(python3 -c 'import json;print(json.load(open(".reproduce.json"))["plugin_root"])')/tools"   # 形态 B：setup 记录
+else echo "无法定位工具目录：请先运行 /reproduce setup" >&2
 fi
 ```
 

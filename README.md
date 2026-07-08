@@ -56,6 +56,8 @@
 
 > 形态 B（插件安装）下，`templates/ common/ reports/ workspace/ src/ output/` 全部位于**用户自己的工作目录**（setup 生成），插件安装目录只读；工具通过 `REPORT_REPRODUCE_ROOT` 环境变量把产物根定向到用户目录。
 
+**维护者分发说明**：`.claude-plugin/marketplace.json` 是分发硬前置（单插件仓库亦然）。正式分发一律用 **git URL**（marketplace add 只取 git 跟踪内容）；`marketplace add <本地路径>` 会全量拷贝目录（含 `.venv`/`output` 等 gitignore 内容，实测 400M+），仅限维护者自测。已实测结论：skill 正文不替换 `${CLAUDE_PLUGIN_ROOT}`、Bash 也不注入该环境变量——工具定位依赖 SKILL.md 协议第 0 级（skill base directory 上两级），勿在 skill/stages 中引入对该变量的新依赖。
+
 ## 已归档案例
 
 `test`（新流程验收用例）、`momentum_factor`、`long_term_momentum` 三案例已用 `--legacy` 归档，详见对应 `workspace/{id}/state.json`。
