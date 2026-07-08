@@ -571,6 +571,19 @@ def _parse_codex_output(path: Path) -> tuple[Optional[int], Optional[str]]:
             findings = data.get("findings") or []
             return len(findings), data.get("verdict")
 
+    # 裸 JSON：prompt 契约允许「纯 JSON（不 fence）」，实际输出常为混合文本
+    # （盲提取标记块等）尾随一个 JSON 对象——整文件 loads 会失败，fenced 扫描
+    # 也扫不到。从后往前找行首 "{" 逐个 raw_decode，取最后一个含 findings 的对象。
+    decoder = json.JSONDecoder()
+    for m in reversed(list(re.finditer(r"^[ \t]*\{", text, re.MULTILINE))):
+        try:
+            data, _end = decoder.raw_decode(text, m.end() - 1)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if isinstance(data, dict) and "findings" in data:
+            findings = data.get("findings") or []
+            return len(findings), data.get("verdict")
+
     rows = parse_markdown_table_rows(text)
     cdx_rows = [r for r in rows if re.match(r"^CDX-", next(iter(r.values()), "") or "")]
     verdict_match = re.search(r"VERDICT:\s*(\w+)", text, re.IGNORECASE)

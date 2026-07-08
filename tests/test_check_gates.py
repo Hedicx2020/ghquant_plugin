@@ -165,6 +165,50 @@ def test_parse_codex_output_fallback_returns_zero_when_no_cdx_rows(tmp_path: Pat
     assert verdict == "pass"
 
 
+def test_parse_codex_output_bare_json_after_marker_block(tmp_path: Path) -> None:
+    """裸 JSON（未 fence）尾随在盲提取标记块之后——prompt 契约允许，解析必须命中。
+
+    形状取自 test_v2 端到端验收中 codex 的真实输出：整文件 loads 失败、无 fenced
+    块、无 CDX- 表格行，旧实现返回 (0, None) 导致 G-SA-4 计数错配。
+    """
+    codex_path = tmp_path / "spec_audit_codex.md"
+    codex_path.write_text(
+        """=== SPEC_CODEX_BEGIN ===
+要素A | F | p9 | 参数x=1
+要素B | R | p12 | 7.65%
+=== SPEC_CODEX_END ===
+
+{
+  "checkpoint": "spec",
+  "verdict": "pass_with_issues",
+  "dimensions_checked": [
+    {"dimension": "盲提取diff", "result": "CDX-S-01"}
+  ],
+  "findings": [
+    {"id": "CDX-S-01", "severity": "major", "category": "回测设置错误",
+     "location": "spec.md 第四节B1", "description": "区间登记不精确", "suggestion": "拆开登记"}
+  ]
+}
+""",
+        encoding="utf-8",
+    )
+    issues_count, verdict = cg._parse_codex_output(codex_path)
+    assert issues_count == 1
+    assert verdict == "pass_with_issues"
+
+
+def test_parse_codex_output_bare_json_zero_findings(tmp_path: Path) -> None:
+    """裸 JSON 空 findings 合法（代表无意见），应返回 (0, pass) 而非落入降级路径。"""
+    codex_path = tmp_path / "result_audit_codex.md"
+    codex_path.write_text(
+        '前置说明文字。\n\n{"checkpoint": "result", "verdict": "pass", "dimensions_checked": [], "findings": []}\n',
+        encoding="utf-8",
+    )
+    issues_count, verdict = cg._parse_codex_output(codex_path)
+    assert issues_count == 0
+    assert verdict == "pass"
+
+
 # ---------------------------------------------------------------------------
 # G-EX：计数一致 / 不一致
 # ---------------------------------------------------------------------------
