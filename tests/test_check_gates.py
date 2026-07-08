@@ -1031,6 +1031,26 @@ def test_check_iterate_continue_mentioning_stop_partial_not_exempt(tmp_path: Pat
     assert "changes.md" in by_id["G-IT-1"].detail
 
 
+def test_check_iterate_stop_partial_bold_markdown_still_exempt(tmp_path: Path) -> None:
+    """正：结论值带 Markdown 加粗（「本轮结论: **stop_partial**（说明）」）仍应豁免 changes.md。
+
+    真实案例：test_v2 iter_03 诊断以加粗写结论，收紧后的正则曾误判不豁免（假阴性）。
+    """
+    _init_workspace(tmp_path)
+    st.set_field(tmp_path, "demo", "iteration.current", "1")
+    iter_dir = tmp_path / "workspace" / "demo" / "iterations" / "iter_01"
+    iter_dir.mkdir(parents=True, exist_ok=True)
+    (iter_dir / "diagnosis.md").write_text(
+        "## 概要\n- 本轮结论: **stop_partial**（残余项已归因）\n",
+        encoding="utf-8",
+    )
+    (iter_dir / "comparison.json").write_text("{}", encoding="utf-8")
+
+    results = cg.check_iterate(tmp_path, "demo")
+    by_id = {r.id: r for r in results}
+    assert by_id["G-IT-1"].passed is True, by_id["G-IT-1"].detail
+
+
 def test_check_iterate_stop_partial_with_trailing_note_still_exempt(tmp_path: Path) -> None:
     """正：结论值后带附注（「结论: stop_partial（同指标3轮红线）」）仍应豁免 changes.md。"""
     _init_workspace(tmp_path)
@@ -1083,3 +1103,59 @@ def test_cli_assert_done_flag(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c
     assert rc == 0
     captured = capsys.readouterr()
     assert "VERDICT: PASS" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# _check_freshness：__pycache__/*.pyc 派生产物不计入源码 mtime（G-VF-6）
+# ---------------------------------------------------------------------------
+
+
+def _touch(path: Path, mtime: float) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("x", encoding="utf-8")
+    import os
+
+    os.utime(path, (mtime, mtime))
+
+
+def test_freshness_ignores_pycache(tmp_path):
+    """compileall 生成的 pyc 比产物新时不得误判过期（重放 G-IM 后查 G-VF 的合法顺序）。"""
+    src = tmp_path / "src" / "demo"
+    out = tmp_path / "output" / "demo" / "results"
+    _touch(src / "strategy.py", 1_000.0)
+    _touch(out / "comparison.json", 2_000.0)
+    _touch(src / "__pycache__" / "strategy.cpython-312.pyc", 3_000.0)  # 派生物最新
+    ok, detail = cg._check_freshness(src, out)
+    assert ok, detail
+
+
+def test_freshness_real_source_newer_still_fails(tmp_path):
+    """真实源码晚于产物仍必须 FAIL（排除逻辑不放水）。"""
+    src = tmp_path / "src" / "demo"
+    out = tmp_path / "output" / "demo" / "results"
+    _touch(src / "strategy.py", 3_000.0)
+    _touch(out / "comparison.json", 2_000.0)
+    ok, _ = cg._check_freshness(src, out)
+    assert not ok
+
+
+def test_freshness_pycache_only_src_reports_no_files(tmp_path):
+    """src 下只剩派生物（无真实源码）时按无文件处理，不得拿 pyc 充数。"""
+    src = tmp_path / "src" / "demo"
+    out = tmp_path / "output" / "demo" / "results"
+    _touch(src / "__pycache__" / "strategy.cpython-312.pyc", 1_000.0)
+    _touch(out / "comparison.json", 2_000.0)
+    ok, detail = cg._check_freshness(src, out)
+    assert not ok
+    assert "没有文件" in detail
+
+
+def test_freshness_ignores_pycache_on_output_side(tmp_path):
+    """results 内脚本的旧 pyc 缓存不得把产物最早时间拉早（对称排除）。"""
+    src = tmp_path / "src" / "demo"
+    out = tmp_path / "output" / "demo" / "results"
+    _touch(src / "strategy.py", 2_000.0)
+    _touch(out / "comparison.json", 3_000.0)
+    _touch(out / "__pycache__" / "build_final_artifacts.cpython-312.pyc", 1_000.0)  # 旧缓存最早
+    ok, detail = cg._check_freshness(src, out)
+    assert ok, detail

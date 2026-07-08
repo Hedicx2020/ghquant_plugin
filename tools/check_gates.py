@@ -964,8 +964,18 @@ def recalc_metric(metric: dict, spec: dict) -> MetricRecalc:
 def _check_freshness(src: Path, output_results: Path) -> tuple[bool, str]:
     if not src.is_dir() or not output_results.is_dir():
         return False, "src 或 output/{id}/results 目录不存在"
-    src_files = [p for p in src.rglob("*") if p.is_file()]
-    out_files = [p for p in output_results.rglob("*") if p.is_file()]
+    # 两侧都排除 __pycache__/*.pyc：它们是派生物，不是源码也不是产物。
+    # src 侧计入会使「先重放 G-IM（compileall）再查 G-VF」的合法顺序被误判为产物过期；
+    # out 侧计入会让 results 内脚本（如 build_final_artifacts.py）的旧字节码缓存把
+    # 「产物最早时间」拉早，同样造成误判。
+    def _real_files(d: Path) -> list[Path]:
+        return [
+            p for p in d.rglob("*")
+            if p.is_file() and "__pycache__" not in p.parts and p.suffix != ".pyc"
+        ]
+
+    src_files = _real_files(src)
+    out_files = _real_files(output_results)
     if not src_files or not out_files:
         return False, "src 或 results 下没有文件可比较"
     latest_src_mtime = max(p.stat().st_mtime for p in src_files)
@@ -1075,7 +1085,7 @@ def check_verify(root: Path, report_id: str) -> list[CheckResult]:
 # 一类行豁免 changes.md（diagnosis.md 与 comparison.json 仍必须齐）。
 # 枚举值必须紧跟冒号（允许尾随附注）：防止「结论: continue（已排除 stop_partial 假设）」
 # 这类同行提及被否决枚举值的写法被误判豁免。
-_ITER_EXEMPT_CONCLUSION_RE = re.compile(r"结论[:：]\s*(stop_partial|blocked)\b")
+_ITER_EXEMPT_CONCLUSION_RE = re.compile(r"结论[:：]\s*[*_`]*(stop_partial|blocked)\b")
 
 
 def check_iterate(root: Path, report_id: str) -> list[CheckResult]:
