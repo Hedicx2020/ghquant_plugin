@@ -25,6 +25,25 @@ argument-hint: "<pdf_path> | continue <id> | status [id] | revise <id> ... | acc
 
 ## 二、工具与路径（逐字使用，不要发明新命令）
 
+**工具定位协议（双形态，会话内先执行一次再复用）**：本系统可作为项目仓库直跑（形态 A），也可作为插件安装后在任意用户目录使用（形态 B）。所有工具命令按下面协议定位与调用：
+
+```bash
+# 定位工具目录（三级兜底）
+if [ -n "$CLAUDE_PLUGIN_ROOT" ]; then REPRODUCE_TOOLS="$CLAUDE_PLUGIN_ROOT/tools"        # 形态 B：插件运行时变量
+elif [ -f tools/state.py ]; then REPRODUCE_TOOLS="$PWD/tools"                             # 形态 A：本仓库直跑
+else REPRODUCE_TOOLS="$(python3 -c 'import json;print(json.load(open(".reproduce.json"))["plugin_root"])')/tools"   # 兜底：setup 记录
+fi
+```
+
+**命令模板（本文件与全部 stages/*.md 中出现的 `uv run python tools/<x>.py ...` 一律按此展开执行）**：
+
+```bash
+REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/<x>.py" ...
+```
+
+`REPORT_REPRODUCE_ROOT="$PWD"` 前缀把工具的仓库根重定向到用户当前目录（形态 A 下与默认推导相同、无害；形态 B 下保证 workspace/src/output 落用户目录而非插件目录），**任何工具调用不得省略**。
+
+- 首次使用初始化：`uv run python tools/setup_workspace.py --target . --data-root <路径> --mode <auto|interactive> --max-iter <N|留空>`（见 3.0 setup 分支）
 - 状态写入口（唯一）：`uv run python tools/state.py {init|show|set-stage|set|record-event|milestone|gate} ...`
 - 门禁判定：`uv run python tools/check_gates.py <id> --stage <stage> [--assert-done] [--record]`
 - PDF 转文本：`uv run python tools/pdf_extract.py <pdf_path> <out_dir>`
@@ -55,15 +74,21 @@ argument-hint: "<pdf_path> | continue <id> | status [id] | revise <id> ... | acc
 
 ## 三、子命令路由
 
-进入时先判断第一个参数：`continue` / `status` / `revise` / `accept` 命中对应分支；否则视为 `<pdf_path>` 走新跑分支。
+进入时先判断第一个参数：`setup` / `continue` / `status` / `revise` / `accept` 命中对应分支；否则视为 `<pdf_path>` 走新跑分支。
+
+### 3.0 `setup`（首次使用配置向导，幂等可重跑）
+
+按 `stages/setup.md` 执行卡走：AskUserQuestion 收三项配置（数据路径 / auto 或 interactive 执行模式 / 最大迭代次数）→ 调 `setup_workspace.py` 一次完成落地（.reproduce.json + templates/common 种子 + pyproject + 目录树）→ 转述环境检测报告（uv / Python 依赖 / codex CLI）→ 引导用户维护 `templates/data_catalog.md`。
 
 ### 3.1 `<pdf_path> [--mode auto|interactive] [--max-iter N] [--id name] [--difficulty easy|medium|hard]`
 
 新跑，从 init 开始。
+0. **未初始化引导**（形态 B）：cwd 无 `.reproduce.json` 且无 `tools/state.py`（即不是本仓库直跑）→ 先走 3.0 setup 再回本分支。
 1. 定 `<id>`：`--id` 给定则用之，否则由 pdf 文件名取 snake_case。
-2. 走 **init 执行卡**（`stages/init.md`）：`state.py init` → `pdf_extract` → 回填 `pdf_pages` → 若给了 `--difficulty` 则 `set <id> difficulty_override <d>` → 过 G-IN。
-3. init 完成后**打印可复制的 /goal 无人值守命令**（见第七节）。
-4. 之后按第四节主循环协议逐 stage 推进（本次会话即可继续跑，或让用户粘贴 /goal 无人值守）。
+2. **参数默认值**：`--mode` / `--max-iter` 未显式给出时，读 cwd `.reproduce.json` 的 `default_mode` / `default_max_iter` 作默认；配置也缺（或形态 A 无配置文件）时维持既有默认（mode=auto，max_iter=难度矩阵 3/5/6）。优先级固定：**显式参数 > .reproduce.json > 内置默认**。
+3. 走 **init 执行卡**（`stages/init.md`）：`state.py init` → `pdf_extract` → 回填 `pdf_pages` → 若给了 `--difficulty` 则 `set <id> difficulty_override <d>` → 过 G-IN。
+4. init 完成后**打印可复制的 /goal 无人值守命令**（见第七节）。
+5. 之后按第四节主循环协议逐 stage 推进（本次会话即可继续跑，或让用户粘贴 /goal 无人值守）。
 
 ### 3.2 `continue <id>`（断点续跑，所有驱动器的统一接入点）
 
@@ -82,6 +107,7 @@ argument-hint: "<pdf_path> | continue <id> | status [id] | revise <id> ... | acc
 
 - 有 `id`：`uv run python tools/state.py show <id>`。
 - 无 `id`：`ls workspace/` 列出全部 report_id，对每个跑一次 `state.py show` 摘要（current_stage / status / verdict）。
+- **呈现约定（面向用户的可读性）**：show 原始输出之外，用中文进度摘要转述——11 阶段用人话（初始化→研报提取→复现规划→规格审计→代码实现→代码审计→运行验证→迭代修正→结果审计→报告汇总→人工评审），标注当前所处位置与完成比例；门禁/意见代号（G-XX、CDX/CA/RA-XX）只括注不打头，正文讲清楚它是什么检查、结论如何。此约定适用于全部子命令对用户的汇报措辞：**对用户讲人话，代号进文书**。
 
 ### 3.4 `revise <id> --assumption <ASid> "<新口径>" | --instruction "<指令>"`
 
