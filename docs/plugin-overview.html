@@ -1,0 +1,532 @@
+<title>quant-report-reproduce 插件总览与使用手册</title>
+<style>
+  :root {
+    --ink: #1a2332;
+    --paper: #fbfbf9;
+    --card: #ffffff;
+    --accent: #1f77b4;
+    --accent-deep: #14507a;
+    --accent-wash: #eaf2f8;
+    --pass: #2e7d4f;
+    --pass-wash: #e8f3ec;
+    --fail: #c0392b;
+    --fail-wash: #faece9;
+    --warn: #9a6b1f;
+    --warn-wash: #f7f0e0;
+    --line: #d8dde3;
+    --dim: #5b6673;
+    --code-bg: #f1f4f7;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    line-height: 1.75;
+    font-size: 16px;
+  }
+  .wrap { display: flex; max-width: 1200px; margin: 0 auto; }
+
+  /* ---------- 侧栏目录 ---------- */
+  nav.toc {
+    width: 232px; flex-shrink: 0;
+    position: sticky; top: 0; align-self: flex-start;
+    max-height: 100vh; overflow-y: auto;
+    padding: 40px 20px 40px 28px;
+    border-right: 1px solid var(--line);
+  }
+  nav.toc .toc-title {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em;
+    color: var(--dim); text-transform: uppercase; margin-bottom: 14px;
+  }
+  nav.toc a {
+    display: block; color: var(--dim); text-decoration: none;
+    font-size: 13.5px; padding: 5px 0; border-left: 2px solid transparent;
+    padding-left: 10px; margin-left: -12px;
+  }
+  nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent-deep); border-left-color: var(--accent); }
+  nav.toc a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  nav.toc a.lv2 { padding-left: 24px; font-size: 12.5px; }
+
+  main { flex: 1; min-width: 0; padding: 48px 48px 96px; }
+
+  /* ---------- 排版 ---------- */
+  h1 { font-size: 30px; font-weight: 800; letter-spacing: -0.01em; line-height: 1.3; text-wrap: balance; }
+  h2 {
+    font-size: 21px; font-weight: 800; margin: 64px 0 18px;
+    padding-top: 22px; border-top: 1px solid var(--line);
+    letter-spacing: -0.005em;
+  }
+  h3 { font-size: 16.5px; font-weight: 700; margin: 30px 0 10px; color: var(--accent-deep); }
+  p { margin: 10px 0; max-width: 72ch; }
+  ul, ol { margin: 10px 0 10px 22px; max-width: 70ch; }
+  li { margin: 5px 0; }
+  strong { font-weight: 700; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 8px;
+  }
+  .lede { font-size: 17px; color: var(--dim); max-width: 66ch; margin-top: 12px; }
+
+  /* ---------- 代码与代号 ---------- */
+  code {
+    font-family: var(--mono); font-size: 0.86em;
+    background: var(--code-bg); border-radius: 3px; padding: 1.5px 5px;
+    font-variant-numeric: tabular-nums;
+  }
+  pre {
+    background: #10202e; color: #dce8f2; border-radius: 6px;
+    padding: 14px 18px; overflow-x: auto; margin: 14px 0;
+    font-size: 13.5px; line-height: 1.65; max-width: 100%;
+  }
+  pre code { background: none; color: inherit; padding: 0; font-size: inherit; }
+  pre .cmt { color: #7d95a8; }
+
+  /* ---------- 徽章（门禁母题） ---------- */
+  .pill {
+    display: inline-block; font-family: var(--mono); font-size: 11px;
+    letter-spacing: 0.06em; border-radius: 999px; padding: 1px 9px;
+    vertical-align: 1px; white-space: nowrap;
+  }
+  .pill.pass { background: var(--pass-wash); color: var(--pass); border: 1px solid #bcd9c6; }
+  .pill.fail { background: var(--fail-wash); color: var(--fail); border: 1px solid #ecc4bc; }
+  .pill.gate { background: var(--accent-wash); color: var(--accent-deep); border: 1px solid #c2d8ea; }
+  .pill.dim  { background: #eef0f2; color: var(--dim); border: 1px solid var(--line); }
+  .pill.warn { background: var(--warn-wash); color: var(--warn); border: 1px solid #e3d3ac; }
+
+  /* ---------- 表格 ---------- */
+  .tbl-scroll { overflow-x: auto; margin: 14px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th {
+    text-align: left; font-weight: 700; font-size: 12.5px;
+    color: var(--dim); letter-spacing: 0.04em;
+    border-bottom: 2px solid var(--ink); padding: 7px 12px 7px 0; white-space: nowrap;
+  }
+  td { border-bottom: 1px solid var(--line); padding: 8px 12px 8px 0; vertical-align: top; }
+  td:first-child, th:first-child { padding-left: 2px; }
+  tr:last-child td { border-bottom: none; }
+  td code, th code { white-space: nowrap; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ---------- Hero ---------- */
+  header.hero { padding-bottom: 8px; }
+  .hero-meta { display: flex; gap: 10px; flex-wrap: wrap; margin: 16px 0 4px; align-items: center; }
+
+  /* ---------- 状态机轨道 ---------- */
+  .track-scroll { overflow-x: auto; margin: 22px 0 6px; padding-bottom: 8px; }
+  .track { display: flex; align-items: stretch; min-width: 1110px; }
+  .stage {
+    flex: 1; min-width: 84px; position: relative;
+    padding: 10px 6px 12px; text-align: center;
+    border-top: 3px solid var(--accent);
+    background: linear-gradient(to bottom, var(--accent-wash), transparent 70%);
+  }
+  .stage + .stage { margin-left: 4px; }
+  .stage.human { border-top-color: var(--warn); background: linear-gradient(to bottom, var(--warn-wash), transparent 70%); }
+  .stage.cond  { border-top-style: dashed; }
+  .stage .s-num { font-family: var(--mono); font-size: 10px; color: var(--dim); letter-spacing: 0.08em; }
+  .stage .s-name { font-weight: 700; font-size: 13px; margin: 2px 0; }
+  .stage .s-cn { font-size: 11.5px; color: var(--dim); }
+  .stage .s-gate { margin-top: 7px; }
+  .track-legend { display: flex; gap: 18px; font-size: 12.5px; color: var(--dim); margin-top: 8px; flex-wrap: wrap; }
+  .track-legend .k { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; }
+
+  /* ---------- Agent 卡片 ---------- */
+  .agents { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; margin: 16px 0; }
+  .agent {
+    background: var(--card); border: 1px solid var(--line); border-radius: 6px;
+    padding: 14px 16px;
+  }
+  .agent .a-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .agent .a-name { font-family: var(--mono); font-weight: 700; font-size: 13.5px; color: var(--accent-deep); }
+  .agent .a-role { font-weight: 700; font-size: 14px; margin: 6px 0 4px; }
+  .agent p { font-size: 13px; color: var(--dim); margin: 4px 0 0; line-height: 1.65; }
+
+  /* ---------- 提示框 ---------- */
+  .note {
+    border-left: 3px solid var(--accent); background: var(--accent-wash);
+    padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 16px 0;
+    font-size: 14.5px; max-width: 76ch;
+  }
+  .note.red { border-left-color: var(--fail); background: var(--fail-wash); }
+  .note.amber { border-left-color: var(--warn); background: var(--warn-wash); }
+
+  /* ---------- 目录树 ---------- */
+  .tree { font-family: var(--mono); font-size: 13px; line-height: 1.9; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 16px 20px; overflow-x: auto; margin: 14px 0; }
+  .tree .c { color: var(--dim); }
+
+  /* ---------- FAQ ---------- */
+  details {
+    border: 1px solid var(--line); border-radius: 6px; background: var(--card);
+    margin: 10px 0; max-width: 80ch;
+  }
+  summary {
+    cursor: pointer; font-weight: 700; font-size: 14.5px; padding: 12px 16px;
+    list-style-position: inside;
+  }
+  summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 6px; }
+  details > div { padding: 0 16px 14px 16px; font-size: 14px; color: #333d49; }
+  details > div p { margin: 6px 0; }
+
+  footer {
+    margin-top: 72px; padding-top: 18px; border-top: 1px solid var(--line);
+    font-size: 13px; color: var(--dim); display: flex; gap: 18px; flex-wrap: wrap;
+  }
+  a { color: var(--accent-deep); }
+
+  @media (max-width: 900px) {
+    .wrap { flex-direction: column; }
+    nav.toc {
+      position: static; width: 100%; max-height: none;
+      border-right: none; border-bottom: 1px solid var(--line);
+      padding: 18px 24px; display: flex; flex-wrap: wrap; gap: 2px 16px;
+    }
+    nav.toc .toc-title { width: 100%; }
+    nav.toc a { border-left: none; padding-left: 0; margin-left: 0; }
+    nav.toc a.lv2 { display: none; }
+    main { padding: 32px 22px 72px; }
+  }
+</style>
+
+<div class="wrap">
+<nav class="toc" aria-label="目录">
+  <div class="toc-title">目录</div>
+  <a href="#overview">这是什么</a>
+  <a href="#pipeline">复现流水线全景</a>
+  <a href="#install">安装与首次配置</a>
+  <a class="lv2" href="#setup5">五项配置详解</a>
+  <a class="lv2" href="#catalog">数据目录维护</a>
+  <a href="#how">运作方式</a>
+  <a class="lv2" href="#rules">六条硬规则</a>
+  <a class="lv2" href="#stages">十一阶段与门禁</a>
+  <a class="lv2" href="#agents">七个子 agent</a>
+  <a class="lv2" href="#audit">三层审计体系</a>
+  <a class="lv2" href="#iterate">迭代引擎与人工闸门</a>
+  <a class="lv2" href="#verdict">达标判定与可信度评级</a>
+  <a href="#manual">使用手册</a>
+  <a class="lv2" href="#commands">子命令速查</a>
+  <a class="lv2" href="#scenarios">三个典型场景</a>
+  <a class="lv2" href="#artifacts">产物地图</a>
+  <a href="#faq">常见问题</a>
+  <a href="#maintainer">维护者说明</a>
+  <a href="#glossary">术语速查</a>
+</nav>
+
+<main>
+<header class="hero" id="overview">
+  <div class="eyebrow">Claude Code Plugin · Quant Research</div>
+  <h1>quant-report-reproduce<br>量化研报复现流水线</h1>
+  <p class="lede">给它一份量化研报 PDF，它产出与原文逐项对齐的策略代码、回测结果，和一份带可信度评级的复现报告——中间的提取、规划、实现、验证、审计、迭代，全部由带门禁的多 agent 流水线自动完成。</p>
+  <div class="hero-meta">
+    <span class="pill gate">v2.4.0</span>
+    <span class="pill dim">1 skill + 8 agents</span>
+    <span class="pill dim">12 阶段门禁状态机</span>
+    <span class="pill dim">codex 三审查点外审</span>
+  </div>
+  <pre><code><span class="cmt"># 安装（Claude Code 内执行）</span>
+/plugin marketplace add https://github.com/Hedicx2020/ghquant_plugin
+
+<span class="cmt"># 进入你的工作目录，首次配置（五项问卷 + 自动落地骨架）</span>
+/reproduce setup
+
+<span class="cmt"># 把研报 PDF 放进 reports/，起跑</span>
+/reproduce reports/你的研报.pdf</code></pre>
+</header>
+
+<section id="pipeline">
+  <h2>复现流水线全景</h2>
+  <p>一份研报从 PDF 到最终报告要过 12 个阶段。每个阶段结束时由机器门禁（<code>check_gates</code>）逐项核验产物，<span class="pill pass">PASS</span> 才放行，<span class="pill fail">FAIL</span> 按预设分支修复重来——口头声称完成无效，判定只认文件和数字。</p>
+  <div class="track-scroll">
+    <div class="track">
+      <div class="stage"><div class="s-num">01</div><div class="s-name">init</div><div class="s-cn">初始化</div><div class="s-gate"><span class="pill gate">G-IN</span></div></div>
+      <div class="stage"><div class="s-num">02</div><div class="s-name">extract</div><div class="s-cn">研报提取</div><div class="s-gate"><span class="pill gate">G-EX</span></div></div>
+      <div class="stage"><div class="s-num">03</div><div class="s-name">plan</div><div class="s-cn">复现规划</div><div class="s-gate"><span class="pill gate">G-PL</span></div></div>
+      <div class="stage"><div class="s-num">04</div><div class="s-name">spec_audit</div><div class="s-cn">规格审计</div><div class="s-gate"><span class="pill gate">G-SA</span></div></div>
+      <div class="stage"><div class="s-num">05</div><div class="s-name">implement</div><div class="s-cn">代码实现</div><div class="s-gate"><span class="pill gate">G-IM</span></div></div>
+      <div class="stage"><div class="s-num">06</div><div class="s-name">code_audit</div><div class="s-cn">代码审计</div><div class="s-gate"><span class="pill gate">G-CA</span></div></div>
+      <div class="stage"><div class="s-num">07</div><div class="s-name">verify</div><div class="s-cn">运行验证</div><div class="s-gate"><span class="pill gate">G-VF</span></div></div>
+      <div class="stage cond"><div class="s-num">08</div><div class="s-name">iterate</div><div class="s-cn">迭代修正</div><div class="s-gate"><span class="pill gate">G-IT</span></div></div>
+      <div class="stage"><div class="s-num">09</div><div class="s-name">result_audit</div><div class="s-cn">结果审计</div><div class="s-gate"><span class="pill gate">G-RA</span></div></div>
+      <div class="stage cond"><div class="s-num">10</div><div class="s-name">oos</div><div class="s-cn">样本外分析</div><div class="s-gate"><span class="pill gate">G-OS</span></div></div>
+      <div class="stage"><div class="s-num">11</div><div class="s-name">report</div><div class="s-cn">报告汇总</div><div class="s-gate"><span class="pill gate">G-FN</span></div></div>
+      <div class="stage human"><div class="s-num">12</div><div class="s-name">review</div><div class="s-cn">人工评审</div><div class="s-gate"><span class="pill warn">人工闸门</span></div></div>
+    </div>
+  </div>
+  <div class="track-legend">
+    <span><span class="k" style="background:var(--accent)"></span>机器门禁阶段</span>
+    <span><span class="k" style="background:var(--warn)"></span>人工裁决阶段</span>
+    <span><span class="k" style="background:repeating-linear-gradient(90deg,var(--accent) 0 4px,transparent 4px 7px)"></span>条件阶段（iterate：首轮达标即跳过；oos：复现达标才跑）</span>
+  </div>
+  <p>支持五类研报——选股因子（factor）、择时（timing）、资产配置（allocation）、固定收益（fixed_income）、机器学习（ml）——并按 easy / medium / hard 三档难度自动分诊，差异化投入：难度越高，审计越密、迭代额度越多、无依赖模块并行实现。</p>
+</section>
+
+<section id="install">
+  <h2>安装与首次配置</h2>
+  <h3>环境要求</h3>
+  <ul>
+    <li><strong>uv</strong>（硬前置）：所有工具经 <code>uv run</code> 调用；依赖缺失时在工作目录执行 <code>uv sync</code>。</li>
+    <li><strong>Claude 订阅档位</strong>：7 个子 agent 中 6 个使用 opus，建议 Max 档位。可自行编辑安装副本 <code>agents/*.md</code> 的 model 字段下调（复现质量自负）。</li>
+    <li><strong>codex CLI</strong>（软前置）：外部三审查点使用。未安装不会卡死——自动降级并在最终报告标注，可信度评级封顶 B。</li>
+  </ul>
+  <h3>三步开始</h3>
+  <ol>
+    <li>安装插件：<code>/plugin marketplace add https://github.com/Hedicx2020/ghquant_plugin</code></li>
+    <li>进入你自己的工作目录（任意空目录），运行 <code>/reproduce setup</code>——一次问卷收五项配置，随后自动落地：<code>.reproduce.json</code> 配置、<code>templates/</code>（数据目录模板与达标标准）、<code>common/</code>（内置回测库）、<code>pyproject.toml</code>、目录树，并检测 uv / Python 依赖 / codex。</li>
+    <li>维护 <code>templates/data_catalog.md</code>（见下），把 PDF 放进 <code>reports/</code>，运行 <code>/reproduce reports/xxx.pdf</code>。</li>
+  </ol>
+  <p>setup 幂等可重跑：已有配置默认保留，你改过的模板文件永不被覆盖（插件侧更新只列清单提示，不动你的文件）。</p>
+
+  <h3 id="setup5">五项配置详解</h3>
+  <div class="tbl-scroll"><table>
+    <tr><th>配置项</th><th>字段</th><th>默认</th><th>含义与影响</th></tr>
+    <tr><td><strong>数据路径</strong></td><td><code>data_root</code></td><td><code>~/local_data</code></td><td>本地 parquet 数据库根目录。<code>common/data_loader.py</code> 从这里读行情、财务等数据。</td></tr>
+    <tr><td><strong>执行模式</strong></td><td><code>default_mode</code></td><td><code>auto</code></td><td><code>auto</code>：全自动优先——研报有歧义时按最合理假设放行并高亮登记，跑完统一人工 review，可事后定向重跑。<code>interactive</code>：遇关键（blocking 级）歧义暂停，人工裁决后继续。</td></tr>
+    <tr><td><strong>最大迭代次数</strong></td><td><code>default_max_iter</code></td><td>按难度自动</td><td>指标未达标时自动迭代修正的轮数上限。默认 easy 3 / medium 5 / hard 6，可用 1–10 的整数全局覆盖。轮次越多复现越充分，耗时与成本越高。</td></tr>
+    <tr><td><strong>回测框架</strong></td><td><code>backtest_framework</code></td><td>内置 <code>common/</code></td><td>可指定你自有回测框架的目录路径（工具校验存在性）。指定后，复现代码的回测执行层<strong>优先调用你的框架</strong>，内置库仅补缺口；输出产物与门禁要求不变。</td></tr>
+    <tr><td><strong>偏差容忍</strong></td><td><code>default_max_rel_dev</code></td><td>按内置标准</td><td>你能接受的复现值与原报告的偏差。默认走 <code>standards.json</code> 分类型精细容差；自定义（0.5%–50%）后，所有按<strong>相对偏差</strong>判定的指标统一用该容忍度，达标门禁与最终报告一致生效。</td></tr>
+  </table></div>
+  <div class="note">
+    <strong>偏差是「相对偏差」</strong>：判定式为 |复现值 − 研报值| ÷ |研报值|。研报年化 10%、容忍 5% ⇒ 允许区间 <span class="num">9.5% ~ 10.5%</span>（不是 5%~15%）。研报值越小同样容忍越苛刻，所以近零指标（如因子 IC）在内置标准里配有绝对偏差兜底（abs_eps），自定义容忍不改变这些特殊判定的语义。
+  </div>
+  <p>优先级固定：<strong>命令行显式参数 &gt; <code>.reproduce.json</code> &gt; 内置默认</strong>。配置文件可直接编辑，或重跑 <code>/reproduce setup</code> 选「重新配置」。</p>
+
+  <h3 id="catalog">数据目录维护（关键一步）</h3>
+  <p><code>templates/data_catalog.md</code> 是分诊阶段判断「研报所需数据是否可得」的<strong>唯一依据</strong>：写漏会被误判为数据缺失（对应支线降级不做），写多会引发运行期报错。建议每张表一节，写明文件名、关键列、时间范围、口径注意事项——尤其财务数据必须按披露日（<code>info_publ_date</code>）对齐，系统的代码审计会逐点核查未来函数。</p>
+</section>
+
+<section id="how">
+  <h2>运作方式</h2>
+  <p>主会话是<strong>编排大脑</strong>：只派发子 agent、审门禁、调 codex 外审、记状态账。所有内容产物（提取规格、复现计划、代码、验证结论、最终报告）一律出自子 agent；所有达标判定一律出自门禁工具按标准重算。这个分离是防偷懒设计的根基——生产者、验证者、判定者三方互不为师。</p>
+
+  <h3 id="rules">六条硬规则</h3>
+  <ol>
+    <li><strong>门禁即代码</strong>：每个阶段结束必须运行 <code>check_gates</code> 并原样呈现输出；FAIL 禁止进入下一阶段，口头声称通过无效。</li>
+    <li><strong>编排与生产分离</strong>：主会话严禁亲自撰写规格、计划、代码、验证结论、最终报告。</li>
+    <li><strong>产物合同逐一点收</strong>：agent 返回后逐一核验其输出文件是否真的存在——不看自述，看文件。</li>
+    <li><strong>状态先行</strong>：阶段开始/结束先写状态文件（<code>state.json</code>），杜绝「跑完再补账」。</li>
+    <li><strong>审计逐条回应</strong>：每条审计意见编号登记、逐条处置（采纳修复/说理拒绝/搁置备查），critical 必须修复并复审通过。</li>
+    <li><strong>达标判定唯一出口</strong>：pass / partial 只能由门禁工具按 <code>standards.json</code>（叠加你的偏差容忍）重算得出。</li>
+  </ol>
+
+  <h3 id="stages">十一阶段与门禁：每一关查什么</h3>
+  <div class="tbl-scroll"><table>
+    <tr><th>阶段</th><th>人话</th><th>谁干活</th><th>出口门禁核验（举要）</th></tr>
+    <tr><td><code>init</code></td><td>初始化</td><td>工具链</td><td>工作区骨架建立、PDF 转文本页数一致、状态文件就绪</td></tr>
+    <tr><td><code>extract</code></td><td>研报提取</td><td>quant-extractor</td><td>规格三件套齐全、要素带页码引用、覆盖矩阵行数与要素守恒</td></tr>
+    <tr><td><code>plan</code></td><td>复现规划</td><td>quant-planner</td><td>分诊字段合法、每条要素有数据映射与里程碑归属、歧义全登记</td></tr>
+    <tr><td><code>spec_audit</code></td><td>规格审计</td><td>codex 外审 + 内审</td><td>盲提取对照零漏抄、审计意见逐条回应闭环</td></tr>
+    <tr><td><code>implement</code></td><td>代码实现</td><td>quant-coder（可并行）</td><td>代码可编译、逐里程碑完成登记、矩阵回填真实实现位置</td></tr>
+    <tr><td><code>code_audit</code></td><td>代码审计</td><td>codex 外审 + 内审</td><td>公式逐要素对照、未来函数/数据对齐核查、意见闭环</td></tr>
+    <tr><td><code>verify</code></td><td>运行验证</td><td>quant-verifier</td><td>亲自跑通 <code>main.py</code>、逐项对数重算容差、图表/Excel 产物齐全新鲜</td></tr>
+    <tr><td><code>iterate</code></td><td>迭代修正</td><td>diagnoser + coder + verifier</td><td>每轮三件套（诊断/修改/复验对数）齐全、防兜圈规则、超差项全归因</td></tr>
+    <tr><td><code>result_audit</code></td><td>结果审计</td><td>codex 外审 + 反虚报核查</td><td>结论没有编：数字与产物一致、归因真实、无 open critical</td></tr>
+    <tr><td><code>oos</code></td><td>样本外分析</td><td>quant-oos-analyst</td><td>复现达标（pass/partial）才跑：策略原样延伸到研报区间之后的数据，样本外区间零重叠、结论枚举、短样本警示</td></tr>
+    <tr><td><code>report</code></td><td>报告汇总</td><td>quant-reporter</td><td>八大必需章节齐全、假设登记簿全收录、无遗留占位符</td></tr>
+    <tr><td><code>review</code></td><td>人工评审</td><td><strong>你</strong></td><td>唯一人工阶段：读报告后 <code>accept</code> 收尾或 <code>revise</code> 定向重跑</td></tr>
+  </table></div>
+
+  <h3 id="agents">七个子 agent：各司其职、互相制衡</h3>
+  <div class="agents">
+    <div class="agent">
+      <div class="a-head"><span class="a-name">quant-extractor</span><span class="pill dim">opus</span></div>
+      <div class="a-role">研报忠实提取者</div>
+      <p>只回答「研报说了什么」：产出规格书、覆盖矩阵、歧义清单三件套，每条要素带页码引用。只陈述不设计，防止提取阶段掺入主观发挥。</p>
+    </div>
+    <div class="agent">
+      <div class="a-head"><span class="a-name">quant-planner</span><span class="pill dim">opus</span></div>
+      <div class="a-role">复现设计者</div>
+      <p>只读规格书不读 PDF（信息隔离），做类型/难度分诊、数据可得性映射、里程碑拆分、歧义裁决，产出复现计划与假设登记簿。</p>
+    </div>
+    <div class="agent">
+      <div class="a-head"><span class="a-name">quant-coder</span><span class="pill dim">opus</span></div>
+      <div class="a-role">策略实现者</div>
+      <p>按计划切片实现策略代码并回填矩阵实现位置。只许冒烟运行，不得自行宣布验证结论——写代码的人不给自己打分。</p>
+    </div>
+    <div class="agent">
+      <div class="a-head"><span class="a-name">quant-verifier</span><span class="pill dim">opus</span></div>
+      <div class="a-role">运行验证者</div>
+      <p>亲自跑 <code>main.py</code>、逐项对数产出对比表与图表、随跑随记证据链；触发时做扰动测试（改数据截止日重跑，指标必须变化——抓硬编码造假）。不采信 coder 声明。</p>
+    </div>
+    <div class="agent">
+      <div class="a-head"><span class="a-name">quant-auditor</span><span class="pill dim">opus</span></div>
+      <div class="a-role">对照审计者（三模式）</div>
+      <p>spec / code / result 三种模式：查提取有没有漏、实现是否忠实原文、结论有没有编。只拿文件不拿被审者自述，关键数值独立重算。</p>
+    </div>
+    <div class="agent">
+      <div class="a-head"><span class="a-name">quant-diagnoser</span><span class="pill dim">opus</span></div>
+      <div class="a-role">迭代归因者</div>
+      <p>指标超差时读全部历史轮次做根因归因、下修正指令。防兜圈：同一指标连续多轮无改善触发红线，结论三选一——继续修 / 接受局部达标 / 上报阻塞。</p>
+    </div>
+    <div class="agent">
+      <div class="a-head"><span class="a-name">quant-oos-analyst</span><span class="pill dim">opus</span></div>
+      <div class="a-role">样本外表现分析者</div>
+      <p>复现达标后，把策略<strong>原样</strong>延伸到研报回测区间之后的数据上运行，评估效应延续/衰减/失效。红线：严禁改动策略逻辑与参数——任何为改善样本外表现的调整都是数据窥探。</p>
+    </div>
+    <div class="agent">
+      <div class="a-head"><span class="a-name">quant-reporter</span><span class="pill dim">sonnet</span></div>
+      <div class="a-role">报告汇总者</div>
+      <p>把全部管线产物汇总为最终报告（含可信度评级与全量假设登记簿）。只汇总不新增结论、不重算指标——数字一律引用验证产物。</p>
+    </div>
+  </div>
+  <p>硬约束：8 个子 agent 不得再派 agent、不碰状态文件；并行只由主会话在预设的三处发起（hard 难度无依赖里程碑多 coder、规格审计双通道、代码审计与验证可并发）。</p>
+
+  <h3 id="audit">三层审计体系：防偷懒、防遗漏、防虚报</h3>
+  <div class="tbl-scroll"><table>
+    <tr><th>层</th><th>执行者</th><th>防什么</th><th>手段</th></tr>
+    <tr><td><strong>外审三审查点</strong></td><td>codex CLI（read-only 沙箱，全难度必跑）</td><td>提取漏抄 / 实现走样 / 结论造假</td><td>规格审计（盲提取对照：codex 不看规格书独立抄一遍研报数值再逐格 diff）、代码审计（公式对照 + 未来函数）、结果审计（数字与产物一致性）。每条意见编号进回应总表，critical 必须修复 + 缩减复审通过。</td></tr>
+    <tr><td><strong>内审</strong></td><td>quant-auditor</td><td>同上，独立视角</td><td>三模式对照审计；hard 难度逐里程碑插入实现忠实性审计；ml 类无视难度必审（训练泄漏数值验证抓不到）。</td></tr>
+    <tr><td><strong>反虚报核查</strong></td><td>quant-auditor（result 模式）+ 机器检查项</td><td>「声称做了实际没做」</td><td>K 系列（K1–K8）：结果过于完美嫌疑、声称通过实际未改等；E 系列（E1–E6）证据链：运行日志、产物新鲜度、通过数亲自重数、图表逐张数值级核验。</td></tr>
+  </table></div>
+
+  <h3 id="iterate">迭代引擎与人工闸门</h3>
+  <p>首轮验证如有指标超差，进入迭代：每轮由 diagnoser 归因 → coder 定向修改 → verifier 全量重跑对数，三件套（诊断 / 修改记录 / 复验对比）落档留痕。迭代受两道约束：</p>
+  <ul>
+    <li><strong>轮数上限</strong>：难度默认 3/5/6 轮，或你在 setup 配置的全局值；</li>
+    <li><strong>防兜圈规则</strong>：同一指标连续三轮无实质改善触发红线，diagnoser 必须改判 <code>stop_partial</code>（接受局部达标，残余项逐条归因）或 <code>blocked</code>（上报阻塞），不许无限重试。</li>
+  </ul>
+  <p>整条流水线只有两个人工闸门，任何自动驱动（包括 <code>/goal</code> 无人值守）都不得冲过：</p>
+  <ul>
+    <li><span class="pill warn">paused_blocked</span> 遇到必须人工裁决的问题（如关键公式原文缺失、数据无法获取）时挂起，呈候选方案等你拍板；</li>
+    <li><span class="pill warn">awaiting_review</span> 最终报告完成后等你评审——<code>accept</code> 收尾或 <code>revise</code> 定向重跑，系统绝不自行验收。</li>
+  </ul>
+
+  <h3 id="verdict">达标判定与可信度评级</h3>
+  <p>每个量化指标按「研报值 vs 复现值」的相对偏差判定，容差来自 <code>templates/standards.json</code>（分类型精细配置，落地在你目录里可手工细调）叠加你的全局偏差容忍。特殊语义独立判定：近零指标走绝对偏差（abs_eps）、方向类指标查同号、成交笔数类查数量级、定性结论（如分组单调性）按预期字符串核对。</p>
+  <p>最终报告给出 A / B / C 可信度评级：</p>
+  <div class="tbl-scroll"><table>
+    <tr><th>评级</th><th>判据</th></tr>
+    <tr><td><strong>A</strong></td><td>覆盖率 ≥ 90%（核心要素 100%）＋ 三外审通过 ＋ 零 critical 遗留</td></tr>
+    <tr><td><strong>B</strong></td><td>核心要素覆盖 100%，但支线有缺，或外审有降级（如未装 codex）</td></tr>
+    <tr><td><strong>C</strong></td><td>存在核心要素未复现或 major 意见遗留未回应——报告结论区显著提示成因</td></tr>
+  </table></div>
+  <div class="note amber">评级 C 不一定意味着复现质量差：数据客观缺失（如某指数系列本地零覆盖，经穷尽核实）导致核心支线不可行时，字面判据同样触发 C——报告会写明成因与主线结论是否受影响，残余偏差 100% 归因后才能出报告。</div>
+</section>
+
+<section id="manual">
+  <h2>使用手册</h2>
+
+  <h3 id="commands">子命令速查</h3>
+  <div class="tbl-scroll"><table>
+    <tr><th>命令</th><th>作用</th></tr>
+    <tr><td><code>/reproduce setup</code></td><td>首次配置向导（五项问卷 + 骨架落地 + 环境检测），幂等可重跑</td></tr>
+    <tr><td><code>/reproduce reports/xxx.pdf</code></td><td>新起一份复现。可选参数：<code>--mode auto|interactive</code>、<code>--max-iter N</code>、<code>--id 自定义名</code>、<code>--difficulty easy|medium|hard</code>（覆盖自动分诊）</td></tr>
+    <tr><td><code>/reproduce continue &lt;id&gt;</code></td><td>断点续跑：从状态文件定位第一个未完成阶段，幂等自愈后继续推进</td></tr>
+    <tr><td><code>/reproduce status [id]</code></td><td>状态摘要（无参列出全部案例）：中文进度、当前阶段、达标情况</td></tr>
+    <tr><td><code>/reproduce revise &lt;id&gt; --assumption AS编号 "新口径"</code></td><td>评审后不认同某条假设时定向重跑：只重跑受影响链路，不占迭代额度</td></tr>
+    <tr><td><code>/reproduce accept &lt;id&gt;</code></td><td>评审通过收尾：状态转 done（全达标）或 done_partial（局部达标）</td></tr>
+  </table></div>
+
+  <h3 id="scenarios">三个典型场景</h3>
+  <p><strong>场景一：新起复现 + 无人值守。</strong>起跑后系统会打印一条可复制的 <code>/goal</code> 命令，粘贴即启用跨会话自主推进——推进到四个终态之一（等待评审 / 完成 / 局部完成 / 阻塞挂起）自动停下汇报。目标措辞被刻意设计成「到达终态即停」而非「复现成功」，防止驱动层为达标冲撞人工闸门。</p>
+  <pre><code>/reproduce reports/treasury_timing.pdf
+<span class="cmt"># → init 完成后照提示粘贴 /goal 命令，然后可以去干别的</span></code></pre>
+  <p><strong>场景二：评审后改假设。</strong>报告完成后系统挂起等你评审。假设登记簿里每条自动假设（尤其高亮的 major-auto 级）都附了一条现成的 revise 命令——不认同就复制改口径：</p>
+  <pre><code>/reproduce revise treasury_timing --assumption AS4 "涨跌幅采用结算价口径而非收盘价"
+<span class="cmt"># → planner 改假设 → 按影响面只重跑受影响链路 → 报告增量更新 → 回到评审</span></code></pre>
+  <p><strong>场景三：断点续跑。</strong>会话中断、机器重启都不丢进度——状态文件是唯一真相源：</p>
+  <pre><code>/reproduce status            <span class="cmt"># 看所有案例进行到哪</span>
+/reproduce continue treasury_timing</code></pre>
+
+  <h3 id="artifacts">产物地图：跑完后东西都在哪</h3>
+  <div class="tree">你的工作目录/
+├── .reproduce.json                <span class="c"># 五项配置</span>
+├── templates/                     <span class="c"># 达标标准 standards.json + 数据目录 data_catalog.md（可改）</span>
+├── common/                        <span class="c"># 内置回测库（复用，coder 按类型扩展）</span>
+├── reports/{id}.pdf               <span class="c"># PDF 收件箱</span>
+├── workspace/{id}/                <span class="c"># 管线文书（全程留痕，均为可读 markdown/json）</span>
+│   ├── state.json                 <span class="c"># 唯一状态源：阶段进度 / 门禁记录 / 达标判定</span>
+│   ├── spec/                      <span class="c"># 研报规格书 / 覆盖矩阵 / 歧义清单</span>
+│   ├── plan.md · assumptions.md   <span class="c"># 复现计划 / 假设登记簿（每条附 revise 指引）</span>
+│   ├── audit/                     <span class="c"># 三审查点意见 + 内审 + 反虚报核查 + 逐条回应总表</span>
+│   ├── iterations/iter_NN/        <span class="c"># 每轮迭代三件套 + 改前改后对数快照</span>
+│   └── final_report.md            <span class="c"># 最终复现报告（评审对象）</span>
+├── src/{id}/                      <span class="c"># 策略代码：strategy / config / main</span>
+└── output/{id}/
+    ├── results/                   <span class="c"># 回测对数表 comparison.json / 图表 PNG / Excel</span>
+    └── verify_report.md           <span class="c"># 验证过程记录（含证据链）</span></div>
+
+  <h3 id="faq-title"></h3>
+</section>
+
+<section id="faq">
+  <h2>常见问题</h2>
+  <details>
+    <summary>没装 codex CLI 会怎样？</summary>
+    <div><p>不会卡死。三处外审自动走两级降级（先尝试替代审查，再标记跳过），最终报告如实标注降级情况，可信度评级封顶 B。装好 codex 后无需重新配置，下次运行自动启用。</p></div>
+  </details>
+  <details>
+    <summary>偏差容忍 5% 到底是什么意思？研报年化 10%，容到 10.5% 还是 15%？</summary>
+    <div><p>是 <strong>10.5%</strong>。判定用相对偏差：|复现值 − 研报值| ÷ |研报值| ≤ 容忍度。研报 10%、容忍 5% ⇒ 区间 9.5%~10.5%；你自定义 10% ⇒ 9%~11%。</p><p>想要「±5 个百分点」这种绝对偏差语义的话，编辑你目录里的 <code>templates/standards.json</code> 给特定指标配 <code>abs_eps</code>。</p></div>
+  </details>
+  <details>
+    <summary>报告评级 C，是复现失败了吗？</summary>
+    <div><p>不一定。C 的字面判据是「存在核心要素未复现」——常见成因是研报依赖的某类数据你本地没有（系统会穷尽核实后正式降级，理由与证据落档）。看报告结论区：会写明 C 的成因、报告落脚点结论是否受影响、残余偏差的逐条归因。真正要警惕的是无归因的偏差——而那过不了结果审计门禁。</p></div>
+  </details>
+  <details>
+    <summary>样本外分析是什么时候做的？结论怎么读？</summary>
+    <div><p>复现达标（pass 或 partial）后自动触发：把复现好的策略<strong>原样</strong>（零参数改动）延伸到研报回测区间之后的数据上运行，产出样本内外指标对比、净值延伸图与四选一结论——延续 / 衰减 / 失效 / 样本不足（样本外不足 60 个交易日时强制标注统计意义有限）。判读阈值写在 oos_report.md 里。门禁会核验样本外区间与研报区间零重叠，防止样本内数据冒充样本外。若你本地数据还没超出研报区间，该阶段自动跳过并留痕。</p></div>
+  </details>
+  <details>
+    <summary>研报某处写得含糊，系统怎么处理？</summary>
+    <div><p>提取阶段登记为歧义（分级：blocking / major / minor）。auto 模式下按最合理解释设为假设、高亮登记（major-auto），跑完统一在报告里呈现，每条附 revise 命令供你改口径重跑；interactive 模式下 blocking 级歧义直接挂起（paused_blocked），把候选解释与影响呈给你裁决后继续。</p></div>
+  </details>
+  <details>
+    <summary>我有自己的回测框架，怎么让它用我的？</summary>
+    <div><p>setup 第四项填你框架的目录路径（或编辑 <code>.reproduce.json</code> 的 <code>backtest_framework</code>）。复现规划与实现合同会收到指令：回测执行层优先调用你的框架、内置 <code>common/</code> 只补缺口。输出产物格式与门禁要求不变，所以对数、审计、报告都照常。</p></div>
+  </details>
+  <details>
+    <summary>怎么调整某个特定指标的容差，而不是全局容忍度？</summary>
+    <div><p>直接编辑你目录里的 <code>templates/standards.json</code>——它在 setup 时作为种子拷贝到你目录，本来就是给你调的。按报告类型分节，每个指标可配 <code>max_rel_dev</code>（相对偏差上限）、<code>abs_eps</code>（近零绝对偏差）、<code>require_same_sign</code>（同号要求）、<code>order_of_magnitude_only</code>（仅量级）。全局偏差容忍与之的关系：非空时统一替换所有 <code>max_rel_dev</code>，其余语义保持。</p></div>
+  </details>
+  <details>
+    <summary>流水线跑一半会话断了 / 想换台机器继续？</summary>
+    <div><p><code>/reproduce continue &lt;id&gt;</code>。全部进度在 <code>workspace/{id}/state.json</code> 与产物文件里，续跑时逐阶段幂等自愈：产物齐全的阶段直接跳过，缺的从断点重做。换机器把工作目录同步过去即可。</p></div>
+  </details>
+  <details>
+    <summary>怎么更新插件？</summary>
+    <div><p><code>/plugin update quant-report-reproduce</code>（重启会话生效）。你目录里的 templates/common 不会被自动覆盖——setup 重跑时会列出「插件侧较新」的文件清单，由你决定是否手动同步。</p></div>
+  </details>
+</section>
+
+<section id="maintainer">
+  <h2>维护者说明</h2>
+  <p>面向插件维护者（仓库所有者）的分发与同步约定；普通使用者可跳过本节。</p>
+  <ul>
+    <li><strong>分发一律用 git URL</strong>：<code>marketplace add https://github.com/Hedicx2020/ghquant_plugin</code> 只取 git 跟踪内容（约 4.6M）。<code>marketplace add &lt;本地路径&gt;</code> 会全量拷贝目录——含 <code>.venv</code>、<code>output/</code> 等被 gitignore 的内容（实测 400M+），仅限本机自测。</li>
+    <li><strong>公开仓库是脱敏快照</strong>：远程 main 由 <code>pub_snapshot</code> 孤儿分支强推而来，不带开发历史，且剔除了验收案例文书（<code>workspace/test_v2</code>、<code>src/test_v2</code>）与研报原文 PDF。本地 main 保留完整历史，两者刻意不同源——不要在 main 上直接 <code>git push</code>。</li>
+    <li><strong>同步公开仓库的流程</strong>：切到 <code>pub_snapshot</code> → <code>git checkout main -- .</code> 铺最新内容 → <code>git rm -r --cached</code> 剔除脱敏项 → amend 重写快照提交 → 强推 <code>origin main</code> → 用 GitHub API 核查远程树零残留。（在维护者的 Claude Code 会话里说「同步公开仓库」即可自动执行。）</li>
+    <li><strong>路径定位机制</strong>：skill 正文不替换 <code>${CLAUDE_PLUGIN_ROOT}</code>、Bash 也不注入该环境变量（已实测）——工具定位依赖 SKILL.md 协议第 0 级（skill base directory 上两级即插件根），不要在 skill/stages 中引入对该变量的新依赖。</li>
+    <li><strong>版本与更新</strong>：功能变更时同步 <code>.claude-plugin/plugin.json</code> 的 version；使用者 <code>/plugin update quant-report-reproduce</code> 后重启会话生效。用户目录的 templates/common 种子永不被自动覆盖。</li>
+  </ul>
+</section>
+
+<section id="glossary">
+  <h2>术语速查</h2>
+  <p>系统的文书（审计意见、门禁输出、覆盖矩阵）使用编号体系保证每条记录可追溯、可机器判定。日常使用不需要记它们——汇报都用人话，代号只在留痕文书里出现。查阅文书时对照下表：</p>
+  <div class="tbl-scroll"><table>
+    <tr><th>代号</th><th>含义</th></tr>
+    <tr><td><code>G-IN / G-EX / G-PL / G-SA / G-IM / G-CA / G-VF / G-IT / G-RA / G-OS / G-FN</code></td><td>各阶段出口门禁（初始化/提取/规划/规格审计/实现/代码审计/验证/迭代/结果审计/样本外/报告），每个门禁含若干编号检查项（如 G-VF-3 = 验证门禁第 3 项：容差重算）</td></tr>
+    <tr><td><code>D# / F# / B# / R# / SA#</code></td><td>研报要素 ID：数据(Data) / 因子或信号(Factor) / 回测设定(Backtest) / 结果(Result) / 稳健性分析(Sensitivity)——覆盖矩阵逐行追踪每条要素从提取到验证的状态</td></tr>
+    <tr><td><code>CDX-S-## / CDX-C-## / CDX-R-##</code></td><td>codex 外审意见编号（三审查点：Spec / Code / Result）</td></tr>
+    <tr><td><code>SA-A## / CA-A## / RA-A##</code></td><td>内审意见编号（规格审计 / 代码审计 / 结果反虚报核查）</td></tr>
+    <tr><td><code>AS#</code></td><td>假设登记簿条目：研报歧义的决议口径，含依据、影响面与 revise 指引；major-auto 为自动模式下的高影响假设（报告中高亮）</td></tr>
+    <tr><td><code>A#</code></td><td>歧义清单条目（提取阶段登记，规划阶段裁决为对应 AS#）</td></tr>
+    <tr><td><code>K1–K8</code></td><td>反虚报检查项（如 K2 结果过于完美嫌疑、K8 声称已通过实际未改）</td></tr>
+    <tr><td><code>E1–E6</code></td><td>证据链检查项（运行日志、产物新鲜度、通过数重数、图表核验等）</td></tr>
+    <tr><td><code>m1, m2, …</code></td><td>复现计划的里程碑编号（按依赖关系拆分，hard 难度下无依赖里程碑并行实现）</td></tr>
+    <tr><td><code>iter_01, iter_02, …</code></td><td>迭代轮次目录，每轮三件套：diagnosis（归因）/ changes（修改）/ comparison（复验对数）</td></tr>
+    <tr><td><code>pass / partial / done_partial</code></td><td>达标判定：全指标过容差 = pass；有残余但全部归因且主线成立 = partial（收尾状态为 done_partial）</td></tr>
+    <tr><td><code>feasible / degraded / blocked</code></td><td>分诊可行性：数据齐全 / 部分缺失走降级方案 / 关键缺失无法复现</td></tr>
+  </table></div>
+</section>
+
+<footer>
+  <span>quant-report-reproduce v2.4.0</span>
+  <span><a href="https://github.com/Hedicx2020/ghquant_plugin">github.com/Hedicx2020/ghquant_plugin</a></span>
+  <span>12 阶段门禁状态机 · 8 子 agent · codex 三审查点 · 样本外延伸分析</span>
+</footer>
+</main>
+</div>
