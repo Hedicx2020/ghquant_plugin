@@ -1,0 +1,13 @@
+{
+  "name": "hedi-quant",
+  "owner": {
+    "name": "Hedi"
+  },
+  "plugins": [
+    {
+      "name": "quant-report-reproduce",
+      "source": "./",
+      "description": "量化研报复现流水线：11 阶段门禁状态机 + 7 子 agent + codex 三审查点。首次使用运行 /reproduce setup 配置数据路径、执行模式与最大迭代次数。"
+    }
+  ]
+}

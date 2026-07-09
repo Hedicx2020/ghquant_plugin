@@ -1,0 +1,70 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "codex 审查结构化输出 schema",
+  "description": "供 `codex exec --output-schema` 使用；spec_audit / code_audit / result_audit 三审查点统一遵循本 schema。tools/check_gates.py 的 _parse_codex_output 会优先尝试把 codex 输出整体（或文中首个 ```json 代码块）解析为本结构：存在 findings 字段即取其数组长度为 issues 数、取 verdict 字段为判定结果；解析失败时退化为「markdown 表格行数 + 文中 VERDICT: xxx 行」的宽松约定（见 templates/codex_prompts/*.md 的“输出契约”节）。",
+  "type": "object",
+  "required": ["checkpoint", "verdict", "findings"],
+  "additionalProperties": false,
+  "properties": {
+    "checkpoint": {
+      "type": "string",
+      "description": "本次审查所属审查点；second_opinion（迭代期第二意见）不在三审查点之列，不使用本 schema。",
+      "enum": ["spec", "code", "result"]
+    },
+    "verdict": {
+      "type": "string",
+      "description": "总体判定；check_gates 目前不直接按 verdict 值判门禁（判门禁靠 findings 数与 audit_responses.md 行数一致 + severity 闭环），但仍要求如实填写供人工与 final_report 引用。",
+      "enum": ["pass", "pass_with_issues", "fail"]
+    },
+    "dimensions_checked": {
+      "type": "array",
+      "description": "本次审查覆盖的检查维度清单（如「未来函数」「config vs B 类」）。每个维度必须出现在此列表，未发现问题的维度 result 写 no_findings，禁止因为没发现问题就完全不提该维度——省略等同于没检查（防偷懒条款）。",
+      "items": {
+        "type": "object",
+        "required": ["dimension", "result"],
+        "additionalProperties": false,
+        "properties": {
+          "dimension": {"type": "string"},
+          "result": {
+            "type": "string",
+            "description": "no_findings，或该维度关联的 finding id 列表（逗号分隔，如 CDX-C-01,CDX-C-03）"
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "description": "实际发现的问题清单；no_findings 的维度不进本数组（否则会污染 issues 计数，导致 audit_responses.md 需要为“无问题”凑行数）。",
+      "items": {
+        "type": "object",
+        "required": ["id", "severity", "category", "location", "description", "suggestion"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "意见 ID，前缀按审查点区分：spec=CDX-S-，code=CDX-C-，result=CDX-R-，编号从 01 起，如 CDX-S-01"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["critical", "major", "minor"]
+          },
+          "category": {
+            "type": "string",
+            "description": "检查维度，如：遗漏/数值抄错/未来函数/硬编码/config不符/归因造假"
+          },
+          "location": {
+            "type": "string",
+            "description": "必须可定位：页码（如 p9-p10）或 文件:行号（如 src/{report_id}/strategy.py:42），禁止空泛描述"
+          },
+          "description": {"type": "string", "description": "问题描述，需给出具体依据（引用原文/代码片段/数值）"},
+          "suggestion": {"type": "string", "description": "处置建议；no_findings 不适用（no_findings 不进本数组）"},
+          "confidence": {
+            "type": "string",
+            "enum": ["high", "medium", "low"],
+            "description": "不确定的意见必须显式标 low，禁止把猜测包装成确定结论；确定时可省略本字段"
+          }
+        }
+      }
+    }
+  }
+}
