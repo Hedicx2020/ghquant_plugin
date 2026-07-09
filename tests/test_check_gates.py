@@ -1212,3 +1212,75 @@ def test_user_tolerance_changes_recalc_verdict(tmp_path):
     std2 = cg.load_standards(tmp_path)
     spec2 = cg._tolerance_spec_for_metric(std2, "timing", metric)
     assert cg.recalc_metric(metric, spec2).passed is True
+
+
+# ---------------------------------------------------------------------------
+# G-OS：样本外表现分析门禁
+# ---------------------------------------------------------------------------
+
+
+def _oos_fixture(root: Path, *, oos_start="2024-01-02", oos_end="2025-06-30", days=350,
+                 conclusion="延续", report_text=None, nav_size=20_000) -> None:
+    res = root / "output" / "demo" / "results"
+    ws = root / "workspace" / "demo"
+    res.mkdir(parents=True, exist_ok=True)
+    ws.mkdir(parents=True, exist_ok=True)
+    (res / "oos_metrics.json").write_text(json.dumps({
+        "in_sample_end": "2023-12-29", "oos_start": oos_start, "oos_end": oos_end,
+        "oos_days": days, "baseline": "partial",
+        "metrics": [{"key": "annual_return", "in_sample_value": 0.05, "oos_value": 0.04, "change": -0.2}],
+        "conclusion": conclusion,
+    }, ensure_ascii=False), encoding="utf-8")
+    (ws / "oos_report.md").write_text(report_text if report_text is not None
+                                      else "## 样本外表现\n对比与判读。\n\nconclusion: 延续\n", encoding="utf-8")
+    (res / "oos_nav.png").write_bytes(b"\x89PNG" + b"0" * nav_size)
+
+
+def test_check_oos_all_pass(tmp_path):
+    _oos_fixture(tmp_path)
+    results = cg.check_oos(tmp_path, "demo")
+    assert all(r.passed for r in results), [(r.id, r.detail) for r in results if not r.passed]
+
+
+def test_check_oos_overlapping_interval_fails(tmp_path):
+    """样本外起点不晚于样本内末日 → G-OS-2 FAIL（防样本内数据冒充）。"""
+    _oos_fixture(tmp_path, oos_start="2023-12-29")
+    results = {r.id: r for r in cg.check_oos(tmp_path, "demo")}
+    assert results["G-OS-2"].passed is False
+
+
+def test_check_oos_short_sample_requires_warning(tmp_path):
+    _oos_fixture(tmp_path, days=30)  # 报告文本无「样本外过短」
+    results = {r.id: r for r in cg.check_oos(tmp_path, "demo")}
+    assert results["G-OS-4"].passed is False
+    _oos_fixture(tmp_path, days=30, report_text="## 样本外表现\n样本外过短，统计意义有限。\nconclusion: 样本不足\n")
+    results = {r.id: r for r in cg.check_oos(tmp_path, "demo")}
+    assert results["G-OS-4"].passed is True
+
+
+def test_check_oos_invalid_conclusion_fails(tmp_path):
+    _oos_fixture(tmp_path, conclusion="很不错")
+    results = {r.id: r for r in cg.check_oos(tmp_path, "demo")}
+    assert results["G-OS-3"].passed is False
+
+
+def test_oos_in_skippable_stages():
+    assert "oos" in cg.SKIPPABLE_STAGES
+
+
+def test_report_requires_oos_section_when_oos_done(tmp_path):
+    """oos=done 时 final_report 缺「样本外」章节 → G-FN-2 FAIL；补章节后 PASS。"""
+    ws = tmp_path / "workspace" / "demo"
+    (ws / "spec").mkdir(parents=True)
+    base = "\n".join(f"## {s}" for s in ["结论", "指标对比总表", "假设登记簿", "迭代历史摘要",
+                                          "审计回应汇总", "残余偏差与归因", "未复现清单", "复跑指引"])
+    (ws / "final_report.md").write_text(base, encoding="utf-8")
+    (ws / "spec" / "coverage_matrix.md").write_text("| 要素ID | 状态 |\n|---|---|\n", encoding="utf-8")
+    (ws / "assumptions.md").write_text("无占位符", encoding="utf-8")
+    state = {"stages": {"oos": {"status": "done"}}, "coverage_stats": {"total": 1}}
+    (ws / "state.json").write_text(json.dumps(state), encoding="utf-8")
+    rs = {r.id: r for r in cg.check_report(tmp_path, "demo")}
+    assert rs["G-FN-2"].passed is False and "样本外" in rs["G-FN-2"].detail
+    (ws / "final_report.md").write_text(base + "\n## 样本外表现", encoding="utf-8")
+    rs = {r.id: r for r in cg.check_report(tmp_path, "demo")}
+    assert rs["G-FN-2"].passed is True

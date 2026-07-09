@@ -2,7 +2,7 @@
 
 量化研报复现项目：给定一份量化研报 PDF，按报告类型（选股因子 factor / 择时 timing / 资产配置 allocation / 固收 fixed_income / 机器学习 ml）与难度差异化复现，产出与原文逐项对齐的策略代码、回测结果，以及带可信度评级的最终报告。所有回复和思考过程必须使用中文。
 
-> **工作流入口**：`/reproduce`（`.claude/skills/reproduce/SKILL.md`）。skill 驱动 `init → extract → plan → spec_audit → implement → code_audit → verify → iterate(条件) → result_audit → report → review` 十一阶段门禁状态机，主会话遵守六条硬规则（门禁即代码 / 编排与生产分离 / 产物合同逐一点收 / 状态先行 / 审计逐条回应 / 达标判定唯一出口），只派发子 agent、审门禁、调 codex、记账，不亲自撰写 spec / 代码 / 结论。完整设计（状态机明细、门禁定义、agent 契约、防偷懒审计体系 K1–K8）见 `docs/specs/2026-07-07-reproduce-v2-design.md`；本文件只收录编码与产出格式相关的落地约定。
+> **工作流入口**：`/reproduce`（`.claude/skills/reproduce/SKILL.md`）。skill 驱动 `init → extract → plan → spec_audit → implement → code_audit → verify → iterate(条件) → result_audit → oos(条件) → report → review` 十二阶段门禁状态机，主会话遵守六条硬规则（门禁即代码 / 编排与生产分离 / 产物合同逐一点收 / 状态先行 / 审计逐条回应 / 达标判定唯一出口），只派发子 agent、审门禁、调 codex、记账，不亲自撰写 spec / 代码 / 结论。完整设计（状态机明细、门禁定义、agent 契约、防偷懒审计体系 K1–K8）见 `docs/specs/2026-07-07-reproduce-v2-design.md`；本文件只收录编码与产出格式相关的落地约定。
 
 ## 快速开始
 
@@ -50,7 +50,7 @@
     └── skills/reproduce/         # SKILL.md + stages/*.md（11 张 stage 执行卡）
 ```
 
-## agent 清单（7 个，职责契约详见设计文档 §六）
+## agent 清单（8 个，职责契约详见设计文档 §六；oos-analyst 为 2026-07-09 增补）
 
 | agent | model | 一句话职责 |
 |-------|-------|-----------|
@@ -60,6 +60,7 @@
 | quant-coder | opus | 按 plan 切片实现 + 回填矩阵实现位置，只许冒烟运行不宣布验证结论 |
 | quant-verifier | opus | 亲自跑 main.py、出 comparison.json / 图表 / 证据链，触发时跑扰动测试 |
 | quant-diagnoser | opus | 迭代归因 + 修正指令，防兜圈，结论三选一 continue / stop_partial / blocked |
+| quant-oos-analyst | opus | 复现达标后把策略原样延伸到研报区间之后的数据，评估效应延续/衰减/失效；严禁改策略与参数 |
 | quant-reporter | sonnet | 汇总 final_report.md，只汇总不新增结论 |
 
 - 子 agent 不嵌套派发、不启动 Task tool；并行只由主会话发起。

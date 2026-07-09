@@ -46,10 +46,11 @@ from tools import state as st  # noqa: E402
 # 难度裁剪矩阵（设计文档 §三 stage × difficulty 表的机器化子集）
 # ---------------------------------------------------------------------------
 
-# --assert-done 允许"已跳过"放行的 stage：全表里唯一条件性跳过的整段 stage 是
-# iterate（首轮 verify 即达标则整段迭代不发生）；其余 stage 的"跳过"只发生在
-# stage 内部的子机制（如 easy 难度的 auditor 内审），不构成整段 stage 跳过。
-SKIPPABLE_STAGES = {"iterate"}
+# --assert-done 允许"已跳过"放行的 stage：条件性跳过的整段 stage 有两个——
+# iterate（首轮 verify 即达标则整段迭代不发生）与 oos（verdict 不满足触发条件
+# pass/partial，或本地数据未超出研报回测区间、无样本外可用时跳过）；其余 stage
+# 的"跳过"只发生在 stage 内部的子机制，不构成整段 stage 跳过。
+SKIPPABLE_STAGES = {"iterate", "oos"}
 
 REQUIRED_SPEC_FRONTMATTER_FIELDS = [
     "report_name",
@@ -1176,6 +1177,73 @@ def check_iterate(root: Path, report_id: str) -> list[CheckResult]:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# G-OS：oos（样本外表现分析，条件 stage）
+# ---------------------------------------------------------------------------
+
+OOS_CONCLUSIONS = {"延续", "衰减", "失效", "样本不足"}
+
+
+def check_oos(root: Path, report_id: str) -> list[CheckResult]:
+    gid = "G-OS"
+    results: list[CheckResult] = []
+    metrics_path = root / "output" / report_id / "results" / "oos_metrics.json"
+    report_path = root / "workspace" / report_id / "oos_report.md"
+    nav_path = root / "output" / report_id / "results" / "oos_nav.png"
+
+    data: dict = {}
+    if metrics_path.is_file():
+        try:
+            data = json.loads(metrics_path.read_text(encoding="utf-8"))
+            ok1, d1 = True, ""
+        except json.JSONDecodeError as exc:
+            ok1, d1 = False, f"JSON 解析失败: {exc}"
+    else:
+        ok1, d1 = False, "文件不存在"
+    required_keys = {"in_sample_end", "oos_start", "oos_end", "oos_days", "metrics", "conclusion"}
+    if ok1:
+        missing = sorted(required_keys - data.keys())
+        if missing:
+            ok1, d1 = False, f"缺字段: {missing}"
+    results.append(CheckResult(f"{gid}-1", "oos_metrics.json 存在且含区间/指标/结论字段", ok1, d1))
+
+    # 样本外区间合法性：与样本内零重叠且非空（字符串日期 ISO 格式可直接比大小）
+    if ok1:
+        ins_end, oos_start, oos_end = str(data["in_sample_end"]), str(data["oos_start"]), str(data["oos_end"])
+        ok2 = oos_start > ins_end and oos_end >= oos_start
+        d2 = f"in_sample_end={ins_end} oos=[{oos_start}, {oos_end}]"
+    else:
+        ok2, d2 = False, "依赖 G-OS-1"
+    results.append(CheckResult(f"{gid}-2", "样本外区间与样本内零重叠且非空（oos_start > in_sample_end）", ok2, d2))
+
+    # 结论枚举
+    if ok1:
+        concl = data.get("conclusion")
+        ok3 = concl in OOS_CONCLUSIONS
+        d3 = f"conclusion={concl!r}" if not ok3 else ""
+    else:
+        ok3, d3 = False, "依赖 G-OS-1"
+    results.append(CheckResult(f"{gid}-3", f"结论 ∈ {sorted(OOS_CONCLUSIONS)}", ok3, d3))
+
+    # oos_report.md 存在且短样本时带警示
+    if report_path.is_file():
+        text = report_path.read_text(encoding="utf-8")
+        ok4 = "样本外" in text
+        d4 = "" if ok4 else "缺「样本外」章节标识"
+        days = data.get("oos_days") if ok1 else None
+        if ok4 and isinstance(days, (int, float)) and not isinstance(days, bool) and days < 60:
+            ok4 = "样本外过短" in text
+            d4 = "" if ok4 else f"oos_days={days} < 60 但缺「样本外过短」统计意义警示"
+    else:
+        ok4, d4 = False, "oos_report.md 不存在"
+    results.append(CheckResult(f"{gid}-4", "oos_report.md 存在（短样本须带「样本外过短」警示）", ok4, d4))
+
+    ok5 = nav_path.is_file() and nav_path.stat().st_size > 15 * 1024
+    results.append(CheckResult(f"{gid}-5", "oos_nav.png 样本内外净值延伸图存在且 >15KB", ok5,
+                               "" if ok5 else "缺失或 <=15KB"))
+    return results
+
+
 def check_report(root: Path, report_id: str) -> list[CheckResult]:
     gid = "G-FN"
     results: list[CheckResult] = []
@@ -1188,7 +1256,11 @@ def check_report(root: Path, report_id: str) -> list[CheckResult]:
 
     text = report_path.read_text(encoding="utf-8")
     h2_lines = re.findall(r"^##\s+(.*)$", text, re.MULTILINE)
-    missing_sections = [s for s in REQUIRED_REPORT_SECTIONS if not any(s in line for line in h2_lines)]
+    required_sections = list(REQUIRED_REPORT_SECTIONS)
+    _st = _safe_load_state(root, report_id) or {}
+    if ((_st.get("stages") or {}).get("oos") or {}).get("status") == "done":
+        required_sections.append("样本外")  # oos 完成时最终报告必须收录样本外表现章节
+    missing_sections = [s for s in required_sections if not any(s in line for line in h2_lines)]
     results.append(
         CheckResult(
             f"{gid}-2",
@@ -1250,6 +1322,7 @@ STAGE_CHECK_FUNCS = {
     "verify": check_verify,
     "iterate": check_iterate,
     "result_audit": check_result_audit,
+    "oos": check_oos,
     "report": check_report,
 }
 

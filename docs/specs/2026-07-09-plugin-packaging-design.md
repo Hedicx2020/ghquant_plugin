@@ -182,3 +182,13 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/state.py" ...
 4. 插件升级与用户侧种子漂移：首版用「跳过+清单提示」策略，不做三方合并。
 5. **本地路径 marketplace 的拷贝语义（真实安装实测发现）**：`claude plugin marketplace add <本地路径>` 会全量文件系统拷贝（含 `.venv` 385M、`output/` 39M 等 gitignore 内容，实测缓存 431M）。git URL 分发只含 git 跟踪内容、不受影响。对策：正式分发一律用 git URL；本地路径仅限维护者自测（知悉体积开销）。
 6. **分发必需 `.claude-plugin/marketplace.json`**（真实安装实测发现）：单插件仓库作为 marketplace 源时该清单是硬前置（`plugins[].source="./"`），已补齐入库。
+
+## 十二、2026-07-09 增补：oos 阶段（样本外表现分析）
+
+用户需求：「如果复现成功，要处理研报回测区间样本外的表现」。
+
+- **状态机**：STAGE_ORDER 插入 `oos`（`result_audit → oos(条件) → report`），条件 stage 语义与 iterate 一致（SKIPPABLE_STAGES）。触发条件 `verdict.result ∈ {pass, partial}`；verdict 不满足或本地数据未超出研报区间 → skipped（record-event 留痕），不阻塞 report。
+- **新 agent `quant-oos-analyst`（opus）**：把 `src/{id}` 策略**原样**延伸到样本外区间。核心红线：严禁修改策略逻辑与参数（防数据窥探美化样本外）；区间零重叠（oos_start = 样本内末日次一交易日）；指标与 comparison.json 同族同口径；结论四选一枚举（延续/衰减/失效/样本不足），判读阈值写明。
+- **产物合同**：`oos_metrics.json`（区间/oos_days/指标对比/conclusion）、`oos_nav.png`（内外分色+分界线）、`oos_summary.xlsx`、`workspace/{id}/oos_report.md`（oos_days<60 强制「样本外过短」警示）。
+- **门禁 G-OS**（5 项）：产物结构 / **区间零重叠（防样本内数据冒充样本外）** / 结论枚举 / 短样本警示 / 图表字节数。G-FN 动态：`stages.oos.status==done` 时 final_report 必含「样本外表现」章节；skipped 不要求（旧案例零追溯影响）。
+- **旧 state 迁移**：`state.py migrate <id>`（幂等）——STAGE_ORDER 演进后补缺失 stage 键，顶层终态补 skipped、运行中补 pending。本仓库 4 个历史案例已迁移。

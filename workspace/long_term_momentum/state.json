@@ -83,6 +83,12 @@
       "attempts": 0,
       "updated_at": "2026-07-08T04:36:05+08:00",
       "issues": 0
+    },
+    "oos": {
+      "status": "skipped",
+      "attempts": 0,
+      "updated_at": null,
+      "issues": 0
     }
   },
   "gates": [],
@@ -132,8 +138,18 @@
       "payload": {
         "value": "pass"
       }
+    },
+    {
+      "event": "migrate_stages",
+      "timestamp": "2026-07-09T23:33:18+08:00",
+      "payload": {
+        "added": [
+          "oos"
+        ],
+        "as": "skipped"
+      }
     }
   ],
   "created_at": "2026-07-08T04:36:05+08:00",
-  "updated_at": "2026-07-08T04:36:09+08:00"
+  "updated_at": "2026-07-09T23:33:18+08:00"
 }

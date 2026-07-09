@@ -50,12 +50,12 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/<x>.py" ...
 - 状态写入口（唯一）：`uv run python tools/state.py {init|show|set-stage|set|record-event|milestone|gate} ...`
 - 门禁判定：`uv run python tools/check_gates.py <id> --stage <stage> [--assert-done] [--record]`
 - PDF 转文本：`uv run python tools/pdf_extract.py <pdf_path> <out_dir>`
-- 7 个子 agent（`Agent` 工具，`subagent_type`）：`quant-extractor` / `quant-planner` / `quant-auditor`（派发时在 prompt 里指明 `mode=spec|code|result`）/ `quant-coder` / `quant-verifier` / `quant-diagnoser` / `quant-reporter`
+- 8 个子 agent（`Agent` 工具，`subagent_type`）：`quant-extractor` / `quant-planner` / `quant-auditor`（派发时在 prompt 里指明 `mode=spec|code|result`）/ `quant-coder` / `quant-verifier` / `quant-diagnoser` / `quant-oos-analyst`（复现达标后的样本外延伸分析）/ `quant-reporter`
 - codex 三审查点 prompt 骨架：`templates/codex_prompts/{spec_audit,code_audit,result_audit,second_opinion}.md`
 - 通用模板：`templates/_spec_template.md`、`templates/_plan_template.md`、`templates/{factor,timing,allocation,fixed_income,ml}.md`、`templates/data_catalog.md`、`templates/standards.json`、`templates/audit/*`
 
 **STAGE_ORDER（写死在 tools/state.py，不得改名）**：
-`init → extract → plan → spec_audit → implement → code_audit → verify → iterate(条件) → result_audit → report → review`
+`init → extract → plan → spec_audit → implement → code_audit → verify → iterate(条件) → result_audit → oos(条件) → report → review`
 
 **每 stage 的前置断言对象（进入前 `check_gates --stage <prev> --assert-done` 必须 PASS）**：
 
@@ -70,7 +70,8 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/<x>.py" ...
 | verify | code_audit | G-VF |
 | iterate（条件） | verify | G-IT |
 | result_audit | iterate（iterate 可跳过：verify 首轮达标时 iterate=skipped，`--assert-done` 对 skipped 亦放行） | G-RA |
-| report | result_audit | G-FN |
+| oos（条件） | result_audit | G-OS |
+| report | oos（oos 可跳过：verdict 非 pass/partial 或无样本外数据时 oos=skipped，`--assert-done` 对 skipped 亦放行） | G-FN |
 | review | report | （人工，无机器门禁） |
 
 ---

@@ -47,7 +47,7 @@
 | `docs/specs/2026-07-09-plugin-packaging-design.md` | 插件化设计（双形态 / 路径解耦 / setup 向导） |
 | `CLAUDE.md` | 编码与产出格式落地约定（命名 / Excel / 图表 / common 复用 / 数据对齐） |
 | `skills/reproduce/` | `/reproduce` 主编排 SKILL.md + stage 执行卡（`.claude/skills/` 为回指 symlink） |
-| `agents/` | 7 个子 agent 定义（`.claude/agents` 为回指 symlink） |
+| `agents/` | 8 个子 agent 定义（`.claude/agents` 为回指 symlink） |
 | `templates/` | 分诊、类型、审计模板 + `standards.json` 达标标准（插件形态下作为种子拷贝到用户目录） |
 | `common/` | 公共回测库（同上，种子） |
 | `tools/` | `state.py`（状态写入口）/ `check_gates.py`（门禁判定）/ `pdf_extract.py`（PDF 转文本）/ `setup_workspace.py`（首次配置落地） |
@@ -65,6 +65,8 @@
 `test`（新流程验收用例）、`momentum_factor`、`long_term_momentum` 三案例已用 `--legacy` 归档，详见对应 `workspace/{id}/state.json`。
 
 ## 变更记录
+
+- 2026-07-09：新增 oos 阶段与 quant-oos-analyst agent——复现达标（pass/partial）后自动把策略原样延伸到研报回测区间之后的数据，评估效应延续/衰减/失效/样本不足；出口门禁 G-OS（区间零重叠防样本内冒充、结论枚举、短样本警示、净值延伸图），final_report 相应必含「样本外表现」章节（G-FN 动态核验）。STAGE_ORDER 变为十二阶段，旧案例经 `state.py migrate` 补键（oos=skipped）。
 
 - 2026-07-09：setup 配置第五项——`default_max_rel_dev`（可接受的与原报告的偏差，0.005-0.5 小数；留空按 standards.json 分类型精细容差）。check_gates 的 load_standards 自动读取并统一替换所有相对偏差上限（绝对偏差/同号/量级/定性语义不变），G-VF-3/G-RA-3 与 verifier 对数口径一致生效；6 个新测试。
 - 2026-07-09：setup 配置第四项——`backtest_framework`（用户自有回测框架目录，setup 校验存在性，写入 .reproduce.json）；plan/implement 派发合同据此优先复用用户框架、内置 `common/` 仅补缺口，未指定时行为不变。公开分发仓库快照剔除 reports/test.pdf（研报原文不对外）。

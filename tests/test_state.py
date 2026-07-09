@@ -379,3 +379,43 @@ def test_cli_invalid_command_returns_nonzero(tmp_path: Path, monkeypatch: pytest
     monkeypatch.setenv("REPORT_REPRODUCE_ROOT", str(tmp_path))
     rc = st.main(["set-stage", "no_such_report", "extract", "running"])
     assert rc == 1
+
+
+# ---------------------------------------------------------------------------
+# oos stage 与 migrate（STAGE_ORDER 演进的旧 state 兼容）
+# ---------------------------------------------------------------------------
+
+
+def test_stage_order_contains_oos_between_result_audit_and_report():
+    order = st.STAGE_ORDER
+    assert order.index("oos") == order.index("result_audit") + 1
+    assert order.index("report") == order.index("oos") + 1
+
+
+def test_migrate_backfills_missing_stage_as_skipped_for_terminal(tmp_path, monkeypatch):
+    monkeypatch.setenv("REPORT_REPRODUCE_ROOT", str(tmp_path))
+    root = tmp_path
+    state = st.init_state(root, "demo", "reports/demo.pdf")
+    # 模拟旧 state：删掉 oos 键并置终态（绕过 validate 直接写文件模拟历史版本）
+    del state["stages"]["oos"]
+    state["status"] = "done_partial"
+    p = st.state_path(root, "demo")
+    p.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    added = st.migrate_stages(root, "demo")
+    assert added == ["oos"]
+    migrated = json.loads(p.read_text(encoding="utf-8"))
+    assert migrated["stages"]["oos"]["status"] == "skipped"
+    # 幂等
+    assert st.migrate_stages(root, "demo") == []
+
+
+def test_migrate_backfills_as_pending_for_running(tmp_path, monkeypatch):
+    monkeypatch.setenv("REPORT_REPRODUCE_ROOT", str(tmp_path))
+    root = tmp_path
+    state = st.init_state(root, "demo2", "reports/demo2.pdf")
+    del state["stages"]["oos"]
+    p = st.state_path(root, "demo2")
+    p.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    st.migrate_stages(root, "demo2")
+    migrated = json.loads(p.read_text(encoding="utf-8"))
+    assert migrated["stages"]["oos"]["status"] == "pending"

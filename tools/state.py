@@ -43,6 +43,7 @@ STAGE_ORDER: list[str] = [
     "verify",
     "iterate",
     "result_audit",
+    "oos",
     "report",
     "review",
 ]
@@ -415,6 +416,34 @@ def init_state(
     return state
 
 
+def migrate_stages(root: Path, report_id: str) -> list[str]:
+    """STAGE_ORDER 演进后的旧 state 补键迁移。
+
+    对 STAGE_ORDER 中缺失的 stage 补默认条目：顶层 status 已终态
+    （done / done_partial / aborted）时补 skipped（不影响终态语义），
+    否则补 pending。幂等：无缺键时不写文件。
+    """
+    state = load_state(root, report_id)
+    terminal = state.get("status") in {"done", "done_partial", "aborted"}
+    added: list[str] = []
+    for stage in STAGE_ORDER:
+        if stage not in state.get("stages", {}):
+            entry = _default_stage_entry()
+            if terminal:
+                entry["status"] = "skipped"
+            state["stages"][stage] = entry
+            added.append(stage)
+    if added:
+        state["events"].append({
+            "event": "migrate_stages",
+            "timestamp": now_iso(),
+            "payload": {"added": added, "as": "skipped" if terminal else "pending"},
+        })
+        state["updated_at"] = now_iso()
+        save_state(root, report_id, state)
+    return added
+
+
 def set_stage(root: Path, report_id: str, stage: str, status: str) -> dict[str, Any]:
     if stage not in STAGE_ORDER:
         raise ValueError(f"未知 stage: {stage}，应属于 {STAGE_ORDER}")
@@ -622,6 +651,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_milestone.add_argument("field", choices=sorted(MILESTONE_FIELDS))
     p_milestone.add_argument("status")
 
+    p_migrate = sub.add_parser("migrate", help="STAGE_ORDER 演进后补齐旧 state 缺失的 stage 键（幂等）")
+    p_migrate.add_argument("report_id")
+
     p_gate = sub.add_parser("gate", help="追加门禁记录")
     p_gate.add_argument("report_id")
     p_gate.add_argument("stage")
@@ -662,6 +694,9 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "milestone":
             set_milestone_field(root, args.report_id, args.milestone_id, args.field, args.status)
             print(f"milestone={args.milestone_id} {args.field}={args.status}")
+        elif args.command == "migrate":
+            added = migrate_stages(root, args.report_id)
+            print(f"已补齐 stage 键: {added}" if added else "无需迁移（stage 键完整）")
         elif args.command == "gate":
             checks = json.loads(args.checks)
             record_gate(root, args.report_id, args.stage, args.verdict, checks)
