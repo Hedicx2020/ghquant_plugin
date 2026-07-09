@@ -1,0 +1,93 @@
+{
+  "factor": {
+    "metrics": {
+      "rank_ic_mean": {"max_rel_dev": 0.20, "require_same_sign": true, "abs_eps": 0.005},
+      "icir": {"max_rel_dev": 0.20, "require_same_sign": true},
+      "ls_annual_return": {"max_rel_dev": 0.15},
+      "ls_sharpe": {"max_rel_dev": 0.15},
+      "turnover_monthly": {"order_of_magnitude_only": true},
+      "default": {"max_rel_dev": 0.15}
+    },
+    "qualitative_checks": ["group_monotonicity"],
+    "required_charts": [
+      "ic_series.png",
+      "ic_distribution.png",
+      "group_cumulative_returns.png",
+      "group_returns_bar.png",
+      "net_value_comparison.png"
+    ],
+    "required_excels": ["backtest_summary.xlsx"]
+  },
+  "timing": {
+    "metrics": {
+      "annual_return": {"max_rel_dev": 0.05},
+      "max_drawdown": {"max_rel_dev": 0.05},
+      "sharpe": {"max_rel_dev": 0.05},
+      "win_rate": {"max_rel_dev": 0.05},
+      "profit_loss_ratio": {"max_rel_dev": 0.05},
+      "trade_count": {"order_of_magnitude_only": true},
+      "default": {"max_rel_dev": 0.05}
+    },
+    "qualitative_checks": [],
+    "required_charts": [
+      "net_value.png",
+      "drawdown.png",
+      "position_signal.png",
+      "yearly_returns.png",
+      "rolling_sharpe.png"
+    ],
+    "required_excels": ["backtest_summary.xlsx"]
+  },
+  "allocation": {
+    "metrics": {
+      "default": {"max_rel_dev": 0.10}
+    },
+    "qualitative_checks": ["weight_path_similarity"],
+    "required_charts": [
+      "weight_evolution.png",
+      "portfolio_nav.png",
+      "asset_contribution.png",
+      "rolling_volatility.png",
+      "drawdown.png"
+    ],
+    "required_excels": ["backtest_summary.xlsx"]
+  },
+  "fixed_income": {
+    "metrics": {
+      "ytm": {"max_rel_dev": 0.05},
+      "duration": {"max_rel_dev": 0.05},
+      "convexity": {"max_rel_dev": 0.05},
+      "default": {"max_rel_dev": 0.10}
+    },
+    "qualitative_checks": [],
+    "required_charts": [
+      "yield_curve.png",
+      "duration_dist.png",
+      "nav.png",
+      "spread_series.png",
+      "drawdown.png"
+    ],
+    "required_excels": ["backtest_summary.xlsx"]
+  },
+  "ml": {
+    "layers": {
+      "data_feature": {"max_rel_dev": 0.05},
+      "model": {
+        "direction_only": true,
+        "checks": ["ic_same_sign", "group_monotonicity", "top_group_rank"]
+      }
+    },
+    "metrics": {
+      "default": {"max_rel_dev": 0.05}
+    },
+    "qualitative_checks": [],
+    "required_charts": [
+      "feature_importance.png",
+      "ic_series.png",
+      "group_cumulative_returns.png",
+      "train_val_loss.png",
+      "prediction_scatter.png"
+    ],
+    "required_excels": ["backtest_summary.xlsx"]
+  }
+}

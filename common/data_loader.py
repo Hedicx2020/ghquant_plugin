@@ -7,14 +7,37 @@ and filter ST / suspended stocks from local parquet files.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Optional, Sequence
 
 import numpy as np
 import pandas as pd
 
-# Default local data directory
-LOCAL_DATA_DIR = Path.home() / "local_data"
+
+def get_data_root() -> Path:
+    """解析本地数据根目录。
+
+    优先级：从当前工作目录向上就近查找 `.reproduce.json` 的 `data_root` 字段
+    （插件形态下由 /reproduce setup 生成）；未找到或字段缺失时回退
+    `~/local_data`（与历史行为一致）。
+    """
+    for directory in [Path.cwd(), *Path.cwd().parents]:
+        cfg = directory / ".reproduce.json"
+        if cfg.is_file():
+            try:
+                data_root = json.loads(cfg.read_text(encoding="utf-8")).get("data_root")
+            except (json.JSONDecodeError, OSError):
+                break
+            if data_root:
+                return Path(data_root).expanduser()
+            break
+    return Path.home() / "local_data"
+
+
+# Default local data directory（模块加载时解析一次；函数默认参数在 def 时绑定，
+# 行为与旧版模块级常量一致）
+LOCAL_DATA_DIR = get_data_root()
 
 
 # ---------------------------------------------------------------------------
