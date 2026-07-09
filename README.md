@@ -8,7 +8,7 @@
 
 ```bash
 # 在 Claude Code 中添加本仓库为插件源并安装
-/plugin marketplace add <本仓库 git 地址>
+/plugin marketplace add https://github.com/Hedicx2020/ghquant_plugin
 ```
 
 **首次使用（三步）**：
