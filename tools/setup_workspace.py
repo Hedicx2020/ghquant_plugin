@@ -77,6 +77,8 @@ class SetupReport:
         if self.config:
             lines.append(f"  data_root={self.config['data_root']}  default_mode={self.config['default_mode']}  "
                          f"default_max_iter={self.config['default_max_iter']}")
+            bf = self.config.get("backtest_framework")
+            lines.append(f"  backtest_framework={bf or '（未指定，使用内置 common/ 回测框架）'}")
         lines.append(f"种子拷贝: 新拷 {len(self.copied)} 个，已存在跳过 {len(self.skipped_existing)} 个")
         if self.plugin_newer:
             lines.append("  [提示] 以下文件插件侧较新（未覆盖，需人工决定是否同步）:")
@@ -107,7 +109,7 @@ def _now_iso() -> str:
 
 
 def write_config(target: Path, data_root: str, mode: str, max_iter: int | None,
-                 force: bool, report: SetupReport) -> None:
+                 backtest_framework: str | None, force: bool, report: SetupReport) -> None:
     cfg_path = target / CONFIG_NAME
     existed = cfg_path.is_file()
     if existed and not force:
@@ -118,10 +120,13 @@ def write_config(target: Path, data_root: str, mode: str, max_iter: int | None,
         raise SystemExit(f"default_mode 必须是 {VALID_MODES} 之一，收到: {mode}")
     if max_iter is not None and not (1 <= max_iter <= 10):
         raise SystemExit(f"default_max_iter 必须在 1-10 之间或留空（按难度矩阵），收到: {max_iter}")
+    if backtest_framework is not None and not Path(backtest_framework).expanduser().is_dir():
+        raise SystemExit(f"backtest_framework 路径不存在或不是目录: {backtest_framework}（留空则使用内置 common/ 回测框架）")
     config = {
         "data_root": data_root,
         "default_mode": mode,
         "default_max_iter": max_iter,
+        "backtest_framework": backtest_framework,
         "plugin_root": str(plugin_root()),
         "created_at": _now_iso(),
         "config_version": CONFIG_VERSION,
@@ -211,12 +216,13 @@ def check_env(target: Path, report: SetupReport) -> None:
 
 
 def run_setup(target: Path, data_root: str, mode: str, max_iter: int | None,
-              force_config: bool, check_only: bool) -> SetupReport:
+              force_config: bool, check_only: bool,
+              backtest_framework: str | None = None) -> SetupReport:
     target = target.resolve()
     target.mkdir(parents=True, exist_ok=True)
     report = SetupReport(target=str(target))
     if not check_only:
-        write_config(target, data_root, mode, max_iter, force_config, report)
+        write_config(target, data_root, mode, max_iter, backtest_framework, force_config, report)
         copy_seeds(target, report)
         write_pyproject(target, report)
         make_dirs(target, report)
@@ -230,6 +236,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--data-root", default="~/local_data", help="本地 parquet 数据根目录（默认 ~/local_data）")
     parser.add_argument("--mode", default="auto", choices=VALID_MODES, help="默认执行模式（auto=全自动优先 / interactive=blocking 歧义人工裁决）")
     parser.add_argument("--max-iter", default=None, help="默认最大迭代次数 1-10；留空=按难度矩阵 easy3/medium5/hard6")
+    parser.add_argument("--backtest-framework", default=None,
+                        help="用户自有回测框架目录路径（复现代码优先复用其中实现）；留空=使用内置 common/ 回测框架")
     parser.add_argument("--force-config", action="store_true", help="覆盖已存在的 .reproduce.json（默认保留）")
     parser.add_argument("--check-only", action="store_true", help="只做环境检测，不落任何文件")
     parser.add_argument("--json", action="store_true", help="输出机器可读 JSON 摘要")
@@ -244,6 +252,8 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError:
             parser.error(f"--max-iter 需要整数或留空，收到: {args.max_iter}")
 
+    backtest_framework = args.backtest_framework or None
+
     report = run_setup(
         target=Path(args.target),
         data_root=args.data_root,
@@ -251,6 +261,7 @@ def main(argv: list[str] | None = None) -> int:
         max_iter=max_iter,
         force_config=args.force_config,
         check_only=args.check_only,
+        backtest_framework=backtest_framework,
     )
     print(report.to_json() if args.json else report.render_text())
     return 0

@@ -18,6 +18,7 @@
    - `templates/<type>.md`（按 spec.md frontmatter 的 `type_hint`）
    - `templates/audit/assumptions.md`
    - `mode`：state.mode 的值（`auto` | `interactive`）
+   - `backtest_framework`：cwd `.reproduce.json` 的该字段（主会话读后转述）。非空 → 在 prompt 中告知「用户自有回测框架位于 <路径>，复用规划时回测执行层优先盘点该框架的能力，`common/` 仅作缺口补充」；为空/无配置 → 不提，维持内置 `common/` 复用规划。
 3. **点收输出合同**：
    - `workspace/<id>/plan.md`（frontmatter 分诊 + 正文）
    - `workspace/<id>/assumptions.md`（每条 auto 假设，`验证后回看` 写占位符 `[verify 后填]`）

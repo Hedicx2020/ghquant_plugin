@@ -131,3 +131,26 @@ def test_render_text_codex_missing_shows_degradation_note(tmp_path):
     text = report.render_text()
     assert "封顶 B" in text
     assert "uv sync" in text
+
+
+def test_backtest_framework_default_null(tmp_path):
+    """未指定回测框架时配置为 null（消费端解释为内置 common/）。"""
+    _run(tmp_path)
+    cfg = json.loads((tmp_path / ".reproduce.json").read_text(encoding="utf-8"))
+    assert cfg["backtest_framework"] is None
+
+
+def test_backtest_framework_custom_path_recorded(tmp_path):
+    """指定存在的目录时原样写入配置。"""
+    fw = tmp_path / "my_bt_framework"
+    fw.mkdir()
+    workdir = tmp_path / "ws"
+    _run(workdir, backtest_framework=str(fw))
+    cfg = json.loads((workdir / ".reproduce.json").read_text(encoding="utf-8"))
+    assert cfg["backtest_framework"] == str(fw)
+
+
+def test_backtest_framework_missing_path_rejected(tmp_path):
+    """路径不存在必须拒绝（防拼写错误静默落空）。"""
+    with pytest.raises(SystemExit):
+        _run(tmp_path, backtest_framework=str(tmp_path / "no_such_dir"))

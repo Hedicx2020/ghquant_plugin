@@ -81,7 +81,7 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/<x>.py" ...
 
 ### 3.0 `setup`（首次使用配置向导，幂等可重跑）
 
-按 `stages/setup.md` 执行卡走：AskUserQuestion 收三项配置（数据路径 / auto 或 interactive 执行模式 / 最大迭代次数）→ 调 `setup_workspace.py` 一次完成落地（.reproduce.json + templates/common 种子 + pyproject + 目录树）→ 转述环境检测报告（uv / Python 依赖 / codex CLI）→ 引导用户维护 `templates/data_catalog.md`。
+按 `stages/setup.md` 执行卡走：AskUserQuestion 收四项配置（数据路径 / auto 或 interactive 执行模式 / 最大迭代次数 / 回测框架——自有框架目录或默认内置 `common/`）→ 调 `setup_workspace.py` 一次完成落地（.reproduce.json + templates/common 种子 + pyproject + 目录树）→ 转述环境检测报告（uv / Python 依赖 / codex CLI）→ 引导用户维护 `templates/data_catalog.md`。`backtest_framework` 的消费点在 plan / implement 执行卡（planner 复用规划与 coder 合同：用户框架优先、`common/` 补缺口）。
 
 ### 3.1 `<pdf_path> [--mode auto|interactive] [--max-iter N] [--id name] [--difficulty easy|medium|hard]`
 
