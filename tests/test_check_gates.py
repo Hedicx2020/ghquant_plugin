@@ -1159,3 +1159,56 @@ def test_freshness_ignores_pycache_on_output_side(tmp_path):
     _touch(out / "__pycache__" / "build_final_artifacts.cpython-312.pyc", 1_000.0)  # 旧缓存最早
     ok, detail = cg._check_freshness(src, out)
     assert ok, detail
+
+
+# ---------------------------------------------------------------------------
+# 用户全局偏差容忍：.reproduce.json default_max_rel_dev 覆盖相对偏差上限
+# ---------------------------------------------------------------------------
+
+
+def _write_tolerance_standards(root: Path) -> None:
+    (root / "templates").mkdir(parents=True, exist_ok=True)
+    (root / "templates" / "standards.json").write_text(json.dumps({
+        "timing": {"metrics": {
+            "annual_return": {"max_rel_dev": 0.05},
+            "rank_ic": {"max_rel_dev": 0.05, "abs_eps": 0.005},
+            "trade_count": {"order_of_magnitude_only": True},
+            "default": {"max_rel_dev": 0.05},
+        }}
+    }), encoding="utf-8")
+
+
+def test_user_tolerance_overrides_max_rel_dev(tmp_path):
+    """用户配置 0.2 后所有 max_rel_dev 被替换，其他判定键不动。"""
+    _write_tolerance_standards(tmp_path)
+    (tmp_path / ".reproduce.json").write_text(json.dumps({"default_max_rel_dev": 0.2}), encoding="utf-8")
+    std = cg.load_standards(tmp_path)
+    m = std["timing"]["metrics"]
+    assert m["annual_return"]["max_rel_dev"] == 0.2
+    assert m["default"]["max_rel_dev"] == 0.2
+    assert m["rank_ic"]["max_rel_dev"] == 0.2
+    assert m["rank_ic"]["abs_eps"] == 0.005          # 绝对偏差语义不受影响
+    assert m["trade_count"] == {"order_of_magnitude_only": True}  # 量级判定不受影响
+
+
+def test_user_tolerance_absent_keeps_standards(tmp_path):
+    """无配置文件 / 字段 null / 非法值 → standards 原样。"""
+    _write_tolerance_standards(tmp_path)
+    assert cg.load_standards(tmp_path)["timing"]["metrics"]["annual_return"]["max_rel_dev"] == 0.05
+    (tmp_path / ".reproduce.json").write_text(json.dumps({"default_max_rel_dev": None}), encoding="utf-8")
+    assert cg.load_standards(tmp_path)["timing"]["metrics"]["annual_return"]["max_rel_dev"] == 0.05
+    (tmp_path / ".reproduce.json").write_text(json.dumps({"default_max_rel_dev": 5}), encoding="utf-8")
+    assert cg.load_standards(tmp_path)["timing"]["metrics"]["annual_return"]["max_rel_dev"] == 0.05
+
+
+def test_user_tolerance_changes_recalc_verdict(tmp_path):
+    """端到端语义：8% 偏差在 standards 5% 下 FAIL，用户容忍 10% 下 PASS。"""
+    _write_tolerance_standards(tmp_path)
+    metric = {"key": "annual_return", "report_value": 0.10, "reproduced_value": 0.108}
+    std = cg.load_standards(tmp_path)
+    spec = cg._tolerance_spec_for_metric(std, "timing", metric)
+    assert cg.recalc_metric(metric, spec).passed is False
+    (tmp_path / ".reproduce.json").write_text(json.dumps({"default_max_rel_dev": 0.1}), encoding="utf-8")
+    std2 = cg.load_standards(tmp_path)
+    spec2 = cg._tolerance_spec_for_metric(std2, "timing", metric)
+    assert cg.recalc_metric(metric, spec2).passed is True

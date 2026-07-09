@@ -154,3 +154,23 @@ def test_backtest_framework_missing_path_rejected(tmp_path):
     """路径不存在必须拒绝（防拼写错误静默落空）。"""
     with pytest.raises(SystemExit):
         _run(tmp_path, backtest_framework=str(tmp_path / "no_such_dir"))
+
+
+def test_max_rel_dev_default_null(tmp_path):
+    """未指定偏差容忍时为 null（按 standards.json 分类型精细容差）。"""
+    _run(tmp_path)
+    cfg = json.loads((tmp_path / ".reproduce.json").read_text(encoding="utf-8"))
+    assert cfg["default_max_rel_dev"] is None
+
+
+def test_max_rel_dev_custom_recorded(tmp_path):
+    _run(tmp_path, max_rel_dev=0.1)
+    cfg = json.loads((tmp_path / ".reproduce.json").read_text(encoding="utf-8"))
+    assert cfg["default_max_rel_dev"] == 0.1
+
+
+def test_max_rel_dev_out_of_range_rejected(tmp_path):
+    with pytest.raises(SystemExit):
+        _run(tmp_path, max_rel_dev=0.9)
+    with pytest.raises(SystemExit):
+        _run(tmp_path, max_rel_dev=0.001)

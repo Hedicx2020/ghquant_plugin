@@ -864,14 +864,49 @@ def check_implement(root: Path, report_id: str) -> list[CheckResult]:
 # ---------------------------------------------------------------------------
 
 
+def _apply_user_tolerance(standards: dict, root: Path) -> dict:
+    """用户全局偏差容忍（.reproduce.json 的 default_max_rel_dev）覆盖相对偏差上限。
+
+    语义：用户在 setup 配置的「能接受的与原报告的偏差」是对所有**相对偏差判定**
+    的统一要求——替换 standards 中每个含 max_rel_dev 键的容差 spec 的该键；
+    abs_eps / require_same_sign / order_of_magnitude_only / direction_only /
+    定性判定等其他语义不受影响。null / 缺失 / 非法值 / 无配置文件 → 原样返回
+    （默认走 standards.json 分类型精细容差）。
+    """
+    cfg = root / ".reproduce.json"
+    if not cfg.is_file():
+        return standards
+    try:
+        value = json.loads(cfg.read_text(encoding="utf-8")).get("default_max_rel_dev")
+    except (json.JSONDecodeError, OSError):
+        return standards
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not (0 < value <= 1):
+        return standards
+    out = json.loads(json.dumps(standards))  # 深拷贝，不污染缓存/复用方
+
+    def _walk(node) -> None:
+        if isinstance(node, dict):
+            if isinstance(node.get("max_rel_dev"), (int, float)):
+                node["max_rel_dev"] = value
+            for child in node.values():
+                _walk(child)
+        elif isinstance(node, list):
+            for child in node:
+                _walk(child)
+
+    _walk(out)
+    return out
+
+
 def load_standards(root: Path) -> dict:
     path = root / "templates" / "standards.json"
     if not path.is_file():
         return {}
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        standards = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return {}
+    return _apply_user_tolerance(standards, root)
 
 
 def _tolerance_spec_for_metric(standards: dict, report_type: Optional[str], metric: dict) -> dict:

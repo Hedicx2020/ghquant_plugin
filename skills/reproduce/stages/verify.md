@@ -12,7 +12,7 @@
 2. **派 `quant-verifier`**（subagent_type=`quant-verifier`）。输入合同（逐字）：
    - `src/<id>/` 全部
    - `workspace/<id>/spec/spec.md` 的 R 类基准表（验证基准唯一真相源）
-   - `templates/standards.json`（容差 + required_charts + required_excels）
+   - `templates/standards.json`（容差 + required_charts + required_excels）。**用户偏差容忍**：cwd `.reproduce.json` 的 `default_max_rel_dev` 非空时（主会话读后转述数值），comparison.json 的 pass 字段按「所有相对偏差判定统一用该容忍度、abs_eps/同号/量级语义不变」填写，与 check_gates 的重算口径一致（check_gates 已自动读该配置）；为空则按 standards.json 原值。
    - `templates/<type>.md`
    - `templates/audit/evidence_manifest.md`
    - `workspace/<id>/spec/coverage_matrix.md`（回填「验证结果」列）

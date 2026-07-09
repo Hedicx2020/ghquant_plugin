@@ -79,6 +79,8 @@ class SetupReport:
                          f"default_max_iter={self.config['default_max_iter']}")
             bf = self.config.get("backtest_framework")
             lines.append(f"  backtest_framework={bf or '（未指定，使用内置 common/ 回测框架）'}")
+            mrd = self.config.get("default_max_rel_dev")
+            lines.append(f"  default_max_rel_dev={f'{mrd}（所有相对偏差判定统一用此容忍度）' if mrd is not None else '（未指定，按 templates/standards.json 分类型精细容差）'}")
         lines.append(f"种子拷贝: 新拷 {len(self.copied)} 个，已存在跳过 {len(self.skipped_existing)} 个")
         if self.plugin_newer:
             lines.append("  [提示] 以下文件插件侧较新（未覆盖，需人工决定是否同步）:")
@@ -109,7 +111,8 @@ def _now_iso() -> str:
 
 
 def write_config(target: Path, data_root: str, mode: str, max_iter: int | None,
-                 backtest_framework: str | None, force: bool, report: SetupReport) -> None:
+                 backtest_framework: str | None, max_rel_dev: float | None,
+                 force: bool, report: SetupReport) -> None:
     cfg_path = target / CONFIG_NAME
     existed = cfg_path.is_file()
     if existed and not force:
@@ -122,11 +125,14 @@ def write_config(target: Path, data_root: str, mode: str, max_iter: int | None,
         raise SystemExit(f"default_max_iter 必须在 1-10 之间或留空（按难度矩阵），收到: {max_iter}")
     if backtest_framework is not None and not Path(backtest_framework).expanduser().is_dir():
         raise SystemExit(f"backtest_framework 路径不存在或不是目录: {backtest_framework}（留空则使用内置 common/ 回测框架）")
+    if max_rel_dev is not None and not (0.005 <= max_rel_dev <= 0.5):
+        raise SystemExit(f"default_max_rel_dev 必须在 0.005-0.5（即 0.5%-50%）之间或留空（按 standards.json 分类型精细容差），收到: {max_rel_dev}")
     config = {
         "data_root": data_root,
         "default_mode": mode,
         "default_max_iter": max_iter,
         "backtest_framework": backtest_framework,
+        "default_max_rel_dev": max_rel_dev,
         "plugin_root": str(plugin_root()),
         "created_at": _now_iso(),
         "config_version": CONFIG_VERSION,
@@ -217,12 +223,13 @@ def check_env(target: Path, report: SetupReport) -> None:
 
 def run_setup(target: Path, data_root: str, mode: str, max_iter: int | None,
               force_config: bool, check_only: bool,
-              backtest_framework: str | None = None) -> SetupReport:
+              backtest_framework: str | None = None,
+              max_rel_dev: float | None = None) -> SetupReport:
     target = target.resolve()
     target.mkdir(parents=True, exist_ok=True)
     report = SetupReport(target=str(target))
     if not check_only:
-        write_config(target, data_root, mode, max_iter, backtest_framework, force_config, report)
+        write_config(target, data_root, mode, max_iter, backtest_framework, max_rel_dev, force_config, report)
         copy_seeds(target, report)
         write_pyproject(target, report)
         make_dirs(target, report)
@@ -238,6 +245,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-iter", default=None, help="默认最大迭代次数 1-10；留空=按难度矩阵 easy3/medium5/hard6")
     parser.add_argument("--backtest-framework", default=None,
                         help="用户自有回测框架目录路径（复现代码优先复用其中实现）；留空=使用内置 common/ 回测框架")
+    parser.add_argument("--max-rel-dev", default=None,
+                        help="可接受的与原报告的偏差（小数，0.005-0.5，如 0.1=10%%，对所有相对偏差判定统一生效）；留空=按 standards.json 分类型精细容差")
     parser.add_argument("--force-config", action="store_true", help="覆盖已存在的 .reproduce.json（默认保留）")
     parser.add_argument("--check-only", action="store_true", help="只做环境检测，不落任何文件")
     parser.add_argument("--json", action="store_true", help="输出机器可读 JSON 摘要")
@@ -254,6 +263,15 @@ def main(argv: list[str] | None = None) -> int:
 
     backtest_framework = args.backtest_framework or None
 
+    max_rel_dev: float | None
+    if args.max_rel_dev in (None, "", "auto", "null"):
+        max_rel_dev = None
+    else:
+        try:
+            max_rel_dev = float(args.max_rel_dev)
+        except ValueError:
+            parser.error(f"--max-rel-dev 需要小数或留空，收到: {args.max_rel_dev}")
+
     report = run_setup(
         target=Path(args.target),
         data_root=args.data_root,
@@ -262,6 +280,7 @@ def main(argv: list[str] | None = None) -> int:
         force_config=args.force_config,
         check_only=args.check_only,
         backtest_framework=backtest_framework,
+        max_rel_dev=max_rel_dev,
     )
     print(report.to_json() if args.json else report.render_text())
     return 0
