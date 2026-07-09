@@ -70,7 +70,7 @@
 | `bond_cashflow.parquet` | bond_code, payment_date, interest_per, payment_per, cashflow | - | 债券现金流（YTM/久期） |
 | `bond_rating.parquet` | bond_code, rating_date, rating, rating_agency | - | 信用评级 |
 | `bond_default.parquet` | bond_code, default_date, default_type, payable_amount | - | 违约事件 |
-| `bond_index_quote.parquet` | index_code, date, OHLC, change_pct | - | 债券指数行情（中债系列） |
+| `bond_index_quote.parquet` | index_code, date, OHLC, change_pct | - | 债券指数行情（实测为中证/深证/富时/标普/摩根系列；**无中债 CBA 系列行情**——中债 5509 指数仅有元数据在 bond_index_info，零行情覆盖，2026-07-08 test_v2 复现时穷尽核实，证据 workspace/test_v2/audit/m3_data_infeasibility.md） |
 | `bond_shibor.parquet` | date, maturity_raw, rate | - | SHIBOR 各期限利率 |
 | `bond_code.parquet` | bond_code, bond_type_level1/2, issuer | - | 债券分类/发行人 |
 
