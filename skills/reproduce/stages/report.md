@@ -18,7 +18,7 @@
    - `workspace/<id>/` 产物（**瘦身合同，2026-07-10**）：`spec/{spec.md,coverage_matrix.md,ambiguities.md}`、`plan.md`、`assumptions.md`、`audit/audit_responses.md`（全量意见处置总表——原始意见结论均已在此，**不给**各 codex 原始输出与逐 milestone 内审全文）、`audit/evidence_manifest.md`、`iterations/iteration_log.md` + **仅最后一轮** `iter_NN/diagnosis.md`（历史轮次细节靠 log 汇总，**不给**全部轮次全文）
    - `output/<id>/results/comparison.json`、`output/<id>/verify_report.md`
    - **oos=done 时追加**：`workspace/<id>/oos_report.md`、`output/<id>/results/oos_metrics.json`（final_report 必含「样本外表现」章节——收录区间、逐指标对比、conclusion 与判读规则；G-FN 动态核验该章节。oos=skipped 时不追加，报告在复跑指引或残余章节一句话说明跳过原因）
-   - state 的 `external_reviews` / `verdict` / `coverage_stats` 摘要（**由主会话在 prompt 里转述关键字段**，reporter 不直接读 state.json）
+   - state 的 `external_reviews` / `verdict` / `coverage_stats` / `reproduction_mode` 摘要（**由主会话在 prompt 里转述关键字段**，reporter 不直接读 state.json）。**experimental 时**：final_report.md 必须含「市场迁移声明」H2 章节（G-FN 核验）——声明本次为方法迁移复现、替代数据清单（引 market-transplant 假设）、数值不与原文对齐的语义、方法在迁移市场成立与否的结论；评级含义注明为「方法迁移完成度」而非「数值复现可信度」。
 4. **点收输出合同**：`workspace/<id>/final_report.md`（8 个必需 H2 章节 + 附录 A 六小节 + 可信度评级 A/B/C）。
 5. **渲染单文件展示页**（主会话跑工具，确定性渲染非内容生产）：
    ```

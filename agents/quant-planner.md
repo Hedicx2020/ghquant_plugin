@@ -47,6 +47,8 @@ color: cyan
 11. **data_requirements 逐条对照 `data_catalog.md`** 标 `available`/`derive`/`missing`；核心数据 missing → feasibility 判 blocked。
 12. **假设↔歧义双向可追溯**：assumptions.md 每条 `来源`回填歧义 ID，ambiguities.md 对应条「裁决结果」写清 `登记 AS{n}`。
 
+**实验模式（市场迁移）协议**：主会话转述 reproduction_mode=experimental 时，原文不可得的数据映射用 `status: substitute`（原文数据 → 本地等价 + 理由），每个替代登记 assumptions 一条（性质 `market-transplant`）。strict 模式下发现原文市场整体不可得但可等价替代：**无权自行按替代规划**——写明可替代方案后置 `feasibility: blocked` 交人工裁决是否切实验模式。
+
 ## 完成报告格式
 
 **产物清单**（列出实际写入的绝对路径）：

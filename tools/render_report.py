@@ -255,6 +255,8 @@ def render(root: Path, report_id: str) -> Path:
     B.append(f"<header><div style='font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--accent);text-transform:uppercase'>Reproduction Report · quant-report-reproduce</div>")
     B.append(f"<h1>复现结果报告：{esc(report_id)}</h1>")
     B.append("<div class='hero-meta'>")
+    if state.get("reproduction_mode") == "experimental":
+        B.append("<span class='pill warn'>实验模式 · 市场迁移</span>")
     B.append(f"<span class='pill {result_pill}'>verdict: {esc(str(result))}</span>")
     if grade:
         gp = {"A": "pass", "B": "warn", "C": "fail"}.get(grade, "dim")
@@ -276,6 +278,14 @@ def render(root: Path, report_id: str) -> Path:
         B.append(f"<div class='kpi'><div class='k-label'>样本外结论</div><div class='k-value' style='font-size:18px'>{esc(str(oos.get('conclusion', '-')))}</div><div class='k-sub'>{esc(str(oos.get('oos_days', '-')))} 个交易日</div></div>")
     B.append("</div></header>")
 
+    # ---- 实验模式显著声明（用户核心要求：运行后明确提示） ----
+    if state.get("reproduction_mode") == "experimental":
+        B.append("<div class='note' style='border-left-color:var(--warn);background:var(--warn-wash)'>"
+                 "<strong>实验模式声明（市场迁移复现）</strong>：本次复现将原文方法迁移至本地可得市场数据"
+                 "（等价替代清单见假设登记簿的 market-transplant 条目，如原文美国 CPI → 中国 CPI）。"
+                 "<strong>数值不与原论文对齐、也不应对齐</strong>——下表「原文值」仅作方向与量级的对照参考；"
+                 "本报告回答的是「该方法在迁移市场是否成立」，效应存在与否都是有效结论。</div>")
+
     # ---- 指标对比总表 ----
     B.append("<section><h2>指标对比总表</h2>")
     B.append("<div class='filter-bar'>筛选："
@@ -285,8 +295,10 @@ def render(root: Path, report_id: str) -> Path:
     n_downgraded = sum(1 for m in metrics if m.get("verification_level") not in (None, "full"))
     if n_downgraded:
         B.append(f"<p class='note'>核验分层：{len(metrics) - n_downgraded} 项全量数值核验，{n_downgraded} 项因研报参数不明降级核验（方向/量级/不可核验，均已锚定假设登记簿对应 AS 条目，详见指标表「核验」列）。</p>")
+    exp_mode = state.get("reproduction_mode") == "experimental"
+    col1, col2 = ("原文值（对照参考）", "迁移复现值") if exp_mode else ("研报值", "复现值")
     B.append("<div class='tbl-scroll'><table id='cmp'><thead><tr>"
-             "<th>指标</th><th>研报值</th><th>复现值</th><th>相对偏差</th><th>核验</th><th>状态</th><th>归因</th></tr></thead><tbody>")
+             f"<th>指标</th><th>{col1}</th><th>{col2}</th><th>相对偏差</th><th>核验</th><th>状态</th><th>归因</th></tr></thead><tbody>")
     for m in metrics:
         p = m.get("pass")
         s = "pass" if p is True else "fail"

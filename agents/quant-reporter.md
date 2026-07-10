@@ -34,6 +34,8 @@ color: orange
 9. **rejected 意见闭环**：`audit_responses.md` 中处置为 `rejected` 的每个意见 ID 必须**原样出现在报告全文**（G-FN-5 核验）。
 10. **终态一致性**：coverage_matrix 不得残留 pending/in_progress 行；assumptions.md 不得残留 `[verify 后填]` 占位符（若发现残留，先声明再停止，不代填）。
 
+**实验模式声明章节**：主会话转述 reproduction_mode=experimental 时，报告必含「市场迁移声明」H2 章节（本次为方法迁移复现 / 替代数据清单引 market-transplant 假设 / 数值不与原文对齐的语义 / 方法在迁移市场成立与否的结论），评级含义注明「方法迁移完成度」。
+
 ## 完成报告格式
 
 **产物清单**（`final_report.md` 绝对路径 + 本次可信度评级 + verdict）。

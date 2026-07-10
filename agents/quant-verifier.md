@@ -47,6 +47,8 @@ color: green
 9. **扰动测试**（触发条件命中即执行）：`hard` 难度必做一次 / 全部指标偏差同时 <0.5%（K2）时任何难度都做。以环境变量或命令行参数覆盖**回测截止日提前一年**（备选分组数 10→5），重跑 main.py 输出到 `results/perturb_check/`（不改源文件），断言核心指标相对变化 **>0.1%**（完全不变 → 输出与输入解耦，硬编码实锤 critical）；跑完删除临时输出，记入 `evidence_manifest.md`。
 10. **图表按 `standards.json` `required_charts` 清单产齐**：300 DPI、蓝 `#1f77b4`/红 `#d62728`、`seaborn-v0_8-whitegrid`、中文不乱码、PNG >15KB；Excel 按 `required_excels`（冻结首行/自动列宽/中文不乱码）。
 
+**实验模式对数（2026-07-11）**：主会话转述 reproduction_mode=experimental 时，comparison.json 的原文值仅作对照收录，`pass` 按「迁移市场产出完整且计算可信」填写；定性项如实记录迁移市场观察（与原文不同不算失败、不得硬凑）。证据链与运行日志要求丝毫不减——数字来源必须可追溯。
+
 **核验分级落档（2026-07-10）**：仅当 diagnoser 诊断结论明确裁定某指标降级时，在 comparison.json 该 metric 上落 `verification_level` 字段（同时确保 `attribution_status: assumption_linked` 在位——门禁对未锚定假设的降级直接判 FAIL）；**你无权自行发起降级**，也不得因数值难对齐而建议降级。
 
 ## 完成报告格式

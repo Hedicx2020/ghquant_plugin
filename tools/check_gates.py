@@ -766,7 +766,14 @@ def check_result_audit(root: Path, report_id: str) -> list[CheckResult]:
 
     comparison_path = root / "output" / report_id / "results" / "comparison.json"
     attribution_issue: list[str] = []
-    if comparison_path.is_file():
+    if _is_experimental(state):
+        results.append(CheckResult(
+            f"{gid}-3",
+            "超差指标归因状态（实验模式：数值对齐豁免，无超差归因语义）",
+            True,
+            "reproduction_mode=experimental，原文值仅作对照",
+        ))
+    elif comparison_path.is_file():
         try:
             comparison = json.loads(comparison_path.read_text(encoding="utf-8"))
             for m in comparison.get("metrics", []):
@@ -779,14 +786,15 @@ def check_result_audit(root: Path, report_id: str) -> list[CheckResult]:
                     attribution_issue.append(m.get("key", "?"))
         except json.JSONDecodeError:
             attribution_issue.append("<comparison.json 解析失败>")
-    results.append(
-        CheckResult(
-            f"{gid}-3",
-            "超差指标（按 standards.json 重算圈定，不信任文件自述 pass）归因状态 ∈ {accepted, assumption_linked}",
-            not attribution_issue,
-            f"未归因: {attribution_issue}" if attribution_issue else "",
+    if not _is_experimental(state):
+        results.append(
+            CheckResult(
+                f"{gid}-3",
+                "超差指标（按 standards.json 重算圈定，不信任文件自述 pass）归因状态 ∈ {accepted, assumption_linked}",
+                not attribution_issue,
+                f"未归因: {attribution_issue}" if attribution_issue else "",
+            )
         )
-    )
 
     evidence_manifest = root / "workspace" / report_id / "audit" / "evidence_manifest.md"
     if difficulty == "hard":
@@ -863,6 +871,15 @@ def check_implement(root: Path, report_id: str) -> list[CheckResult]:
 # ---------------------------------------------------------------------------
 # G-VF：verify（含 standards.json 容差重算，核心逻辑）
 # ---------------------------------------------------------------------------
+
+
+def _is_experimental(state: dict) -> bool:
+    """实验模式（市场迁移复现）：等价数据替代原文市场数据，数值对齐判定整体豁免。
+
+    只认 state.json 的 reproduction_mode 字段（唯一写入口为主会话），agent 无法
+    自行切换——防止借实验语义绕过 strict 模式的容差达标。
+    """
+    return state.get("reproduction_mode") == "experimental"
 
 
 def _apply_user_tolerance(standards: dict, root: Path) -> dict:
@@ -1072,21 +1089,34 @@ def check_verify(root: Path, report_id: str) -> list[CheckResult]:
         fails: list[str] = []
         metrics = comparison.get("metrics", [])
         waived: list[str] = []
-        for m in metrics:
-            spec = _tolerance_spec_for_metric(standards, report_type, m)
-            r = recalc_metric(m, spec)
-            if r.passed is False:
-                fails.append(f"{r.key}[{r.reason}]")
-            elif r.passed is None:
-                # unverifiable：不计入达标分母也不驱动迭代，但必须透明展示，不得静默吞掉
-                waived.append(r.key)
-        qualitative = comparison.get("qualitative", [])
-        for q in qualitative:
-            if q.get("expect") != q.get("observed"):
-                fails.append(f"{q.get('key', '?')}[定性指标 expect!=observed]")
-        recalced_ok = not fails
-        waived_note = f"；unverifiable 豁免 {len(waived)} 项: {waived}" if waived else ""
-        detail = (f"未通过: {fails}" if fails else f"{len(metrics)} 项数值指标 + {len(qualitative)} 项定性指标均通过重算") + waived_note
+        if _is_experimental(state):
+            # 实验模式（市场迁移）：数值不与原文对齐，只核「每个原文指标都有迁移市场的对应产出」
+            for m in metrics:
+                if m.get("reproduced_value") is None:
+                    fails.append(f"{m.get('key', '?')}[实验模式：迁移市场产出缺失]")
+            qualitative = comparison.get("qualitative", [])
+            for q in qualitative:
+                if q.get("observed") in (None, ""):
+                    fails.append(f"{q.get('key', '?')}[实验模式：定性观察缺失]")
+            recalced_ok = not fails
+            detail = (f"未通过: {fails}" if fails
+                      else f"实验模式（市场迁移）：{len(metrics)} 项指标产出完整 + {len(qualitative)} 项定性观察在位；数值对齐判定按模式豁免，原文值仅作对照")
+        else:
+            for m in metrics:
+                spec = _tolerance_spec_for_metric(standards, report_type, m)
+                r = recalc_metric(m, spec)
+                if r.passed is False:
+                    fails.append(f"{r.key}[{r.reason}]")
+                elif r.passed is None:
+                    # unverifiable：不计入达标分母也不驱动迭代，但必须透明展示，不得静默吞掉
+                    waived.append(r.key)
+            qualitative = comparison.get("qualitative", [])
+            for q in qualitative:
+                if q.get("expect") != q.get("observed"):
+                    fails.append(f"{q.get('key', '?')}[定性指标 expect!=observed]")
+            recalced_ok = not fails
+            waived_note = f"；unverifiable 豁免 {len(waived)} 项: {waived}" if waived else ""
+            detail = (f"未通过: {fails}" if fails else f"{len(metrics)} 项数值指标 + {len(qualitative)} 项定性指标均通过重算") + waived_note
     else:
         recalced_ok = False
         detail = "comparison.json 不可用，无法重算"
@@ -1292,6 +1322,8 @@ def check_report(root: Path, report_id: str) -> list[CheckResult]:
     _st = _safe_load_state(root, report_id) or {}
     if ((_st.get("stages") or {}).get("oos") or {}).get("status") == "done":
         required_sections.append("样本外")  # oos 完成时最终报告必须收录样本外表现章节
+    if _is_experimental(_st):
+        required_sections.append("市场迁移")  # 实验模式必须显著声明（用户核心要求：运行后明确提示）
     missing_sections = [s for s in required_sections if not any(s in line for line in h2_lines)]
     results.append(
         CheckResult(

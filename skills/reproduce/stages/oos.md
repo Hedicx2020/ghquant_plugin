@@ -10,7 +10,7 @@
 
 ## 触发判定（主会话执行，写死）
 
-读 state 的 `verdict.result`：
+读 state 的 `verdict.result`（实验模式同样适用——样本外验证的是迁移市场上该方法的持续性，价值不减）：
 - `pass` 或 `partial` → 进入动作序列（partial 时在派发 prompt 里注明基线达标水平 N/M，agent 会在报告标注）。
 - 其他（null / fail）→ `uv run python tools/state.py set-stage <id> oos skipped` + `record-event <id> oos_skipped --json '{"reason":"verdict 不满足触发条件"}'`，直接进 report。
 

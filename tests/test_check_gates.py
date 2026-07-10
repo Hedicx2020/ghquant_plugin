@@ -1351,3 +1351,72 @@ def test_vlevel_full_or_absent_keeps_normal_path():
     assert cg.recalc_metric(m, spec).passed is True
     m2 = {"key": "y", "report_value": 0.10, "reproduced_value": 0.2}
     assert cg.recalc_metric(m2, spec).passed is False
+
+
+# ---------------------------------------------------------------------------
+# 实验模式（reproduction_mode=experimental：市场迁移复现，数值判定豁免）
+# ---------------------------------------------------------------------------
+
+
+def _exp_fixture(root: Path, *, mode="experimental", reproduced=0.06) -> None:
+    ws = root / "workspace" / "demo"
+    res = root / "output" / "demo" / "results"
+    (ws / "spec").mkdir(parents=True, exist_ok=True)
+    res.mkdir(parents=True, exist_ok=True)
+    (ws / "state.json").write_text(json.dumps({
+        "reproduction_mode": mode, "type": "timing", "difficulty": "medium",
+        "stages": {}, "coverage_stats": {"total": 1},
+    }), encoding="utf-8")
+    (res / "comparison.json").write_text(json.dumps({
+        "pass_count": 1, "total": 1,
+        "metrics": [{"key": "annual_return", "report_value": 0.12, "reproduced_value": reproduced,
+                     "rel_dev": 0.5, "pass": True}],
+        "qualitative": [{"key": "direction", "expect": "正收益", "observed": "正收益"}],
+    }), encoding="utf-8")
+    (root / "templates").mkdir(exist_ok=True)
+    (root / "templates" / "standards.json").write_text(json.dumps({
+        "timing": {"metrics": {"default": {"max_rel_dev": 0.05}}, "required_charts": [], "required_excels": []}
+    }), encoding="utf-8")
+
+
+def test_experimental_gvf3_waives_tolerance_but_requires_output(tmp_path):
+    """实验模式：偏差 50% 不判 FAIL（产出完整即过）；产出缺失才 FAIL。"""
+    _exp_fixture(tmp_path)
+    rs = {r.id: r for r in cg.check_verify(tmp_path, "demo")}
+    assert rs["G-VF-3"].passed is True
+    assert "实验模式" in rs["G-VF-3"].detail
+    _exp_fixture(tmp_path, reproduced=None)
+    rs = {r.id: r for r in cg.check_verify(tmp_path, "demo")}
+    assert rs["G-VF-3"].passed is False
+
+
+def test_strict_mode_unaffected_by_experimental_branch(tmp_path):
+    """strict 模式：同样 50% 偏差按容差判 FAIL（实验分流不泄漏）。"""
+    _exp_fixture(tmp_path, mode="strict")
+    rs = {r.id: r for r in cg.check_verify(tmp_path, "demo")}
+    assert rs["G-VF-3"].passed is False
+
+
+def test_experimental_gra3_exempt(tmp_path):
+    _exp_fixture(tmp_path)
+    rs = {r.id: r for r in cg.check_result_audit(tmp_path, "demo")}
+    assert rs["G-RA-3"].passed is True and "experimental" in rs["G-RA-3"].detail
+
+
+def test_experimental_gfn_requires_transplant_declaration(tmp_path):
+    """实验模式 final_report 缺「市场迁移」声明 → G-FN-2 FAIL。"""
+    ws = tmp_path / "workspace" / "demo"
+    (ws / "spec").mkdir(parents=True)
+    base = "\n".join(f"## {s}" for s in ["结论", "指标对比总表", "假设登记簿", "迭代历史摘要",
+                                          "审计回应汇总", "残余偏差与归因", "未复现清单", "复跑指引"])
+    (ws / "final_report.md").write_text(base, encoding="utf-8")
+    (ws / "spec" / "coverage_matrix.md").write_text("| 要素ID | 状态 |\n|---|---|\n", encoding="utf-8")
+    (ws / "assumptions.md").write_text("无", encoding="utf-8")
+    (ws / "state.json").write_text(json.dumps({
+        "reproduction_mode": "experimental", "stages": {}, "coverage_stats": {"total": 1},
+    }), encoding="utf-8")
+    rs = {r.id: r for r in cg.check_report(tmp_path, "demo")}
+    assert rs["G-FN-2"].passed is False and "市场迁移" in rs["G-FN-2"].detail
+    (ws / "final_report.md").write_text(base + "\n## 市场迁移声明", encoding="utf-8")
+    rs = {r.id: r for r in cg.check_report(tmp_path, "demo")}
+    assert rs["G-FN-2"].passed is True

@@ -35,6 +35,7 @@
 ```bash
 /reproduce setup                          # 首次使用配置向导（形态 A 本仓库直跑可跳过）
 /reproduce reports/test.pdf --mode auto   # 新起一份复现
+/reproduce reports/us_paper.pdf --experimental   # 实验模式：海外报告市场迁移复现（等价数据替代，数值判定豁免）
 /reproduce status                         # 查看全部案例状态摘要（中文进度）
 ```
 
@@ -67,6 +68,8 @@
 `test`（新流程验收用例）、`momentum_factor`、`long_term_momentum` 三案例已用 `--legacy` 归档，详见对应 `workspace/{id}/state.json`。
 
 ## 变更记录
+
+- 2026-07-11（v2.8.0）：实验模式（市场迁移复现）——`/reproduce reports/xxx.pdf --experimental`：海外报告原文市场数据本地不可得时，用本地等价数据替代（如美国 CPI → 中国 CPI），复现目标从「数值对齐原文」变为「方法在迁移市场是否成立」。数值对齐判定整体豁免（G-VF-3 只核产出完整、G-RA-3 无超差归因语义、iterate 天然跳过），替代数据逐条入假设登记簿（market-transplant），最终报告与 HTML 结果页强制显著声明（G-FN 核验「市场迁移」章节、结果页顶部醒目 banner）；反虚报照审（数字仍不能编）。strict 模式下 planner 发现整体不可得只能建议、经人工闸门裁决切换，agent 无权自行切换。
 
 - 2026-07-11（v2.7.0）：墙钟加速——① implement 流水线化：milestone 验证与下一 milestone 编码滚动重叠（medium 从完全串行改为流水线，hard 依赖链同享；含汇合分诊表：假 FAIL 复跑不占重派、下游缓验+增量适配、尾部条件封堵协议洞）；② code_audit∥verify 默认并行（easy/ml 例外，G-VF-6 新鲜度机器兜底作废规则）；③ result_audit∥oos 可选并发；④ milestone 拆分粒度收紧（hard 3~5 为宜、<100 行相邻同主题合并）；⑤ 并行纪律入硬约束（state.py 写命令严禁同批并行、同批 agent 写集不相交——顺带修复既有 hard 路径丢更新隐患）；⑥ iterate 卡 join codex 歧义修正。预期 medium 每跑省 25-55 分钟、hard 省 40-110+ 分钟；纯文案层，门禁与审计体系零变更。
 

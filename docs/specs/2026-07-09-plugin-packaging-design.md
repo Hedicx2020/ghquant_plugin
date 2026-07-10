@@ -220,3 +220,14 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/state.py" ...
 1. G-IM-6：核 medium/hard milestones 全部 verify=done——关掉「在途验证被遗忘」协议洞的机器化方案，属门禁语义变更。
 2. verifier 增量重跑：迭代轮只重算受影响指标族+抽样全量校验——需案例数据支撑正确性设计。
 3. plan∥codex 盲提取预跑：coverage_matrix 撕裂读产生噪声意见污染审计台账；若做需先从 codex prompt 输入清单移除矩阵。
+
+## 十六、2026-07-11 增补（v2.8.0）：实验模式（市场迁移复现）
+
+用户需求：复现海外报告时原文市场数据本地没有（如某论文用美国 CPI），可用中国大陆等价数据替代，运行后给出明确提示，此类复现不要求结果与原论文一致。
+
+- **state 字段** `reproduction_mode: strict|experimental`（默认 strict；init `--experimental` 写入；migrate 对旧 state 补 strict）。唯一写入口为主会话——agent 无法自行切换，防止借实验语义绕过 strict 容差。
+- **门禁分流**（`_is_experimental`）：G-VF-3 只核每个原文指标有迁移市场产出（数值对齐豁免→iterate 天然 skipped）；G-RA-3 无超差归因语义直接 PASS（detail 注明）；G-FN 动态必含「市场迁移」章节（用户核心要求：运行后明确提示）。反虚报（K/E 系列、codex result 审查）照跑——数字与产物一致性、结论措辞不夸大（不得把迁移结果说成原文复现成功）。
+- **数据映射**：plan 的 data_requirements 新状态 `substitute`（原文数据→本地等价+理由），每个替代入 assumptions（性质 market-transplant）。G-PL 不校验该枚举，零门禁改动。
+- **切换协议**：strict 下 planner 发现原文市场整体不可得但可替代 → 写明方案后置 feasibility: blocked 交人工裁决；用户确认后主会话 `set <id> reproduction_mode experimental` 续跑。
+- **展示**：render_report.py 顶部 warn 色 banner + hero「实验模式·市场迁移」徽章 + 指标表列头改「原文值（对照参考）/迁移复现值」。
+- **oos 兼容**：实验模式下样本外分析照常（验证迁移市场上方法的持续性）。

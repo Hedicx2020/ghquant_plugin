@@ -221,7 +221,7 @@
   <h1>quant-report-reproduce<br>量化研报复现流水线</h1>
   <p class="lede">给它一份量化研报 PDF，它产出与原文逐项对齐的策略代码、回测结果，和一份带可信度评级的复现报告——中间的提取、规划、实现、验证、审计、迭代，全部由带门禁的多 agent 流水线自动完成。</p>
   <div class="hero-meta">
-    <span class="pill gate">v2.7.0</span>
+    <span class="pill gate">v2.8.0</span>
     <span class="pill dim">1 skill + 8 agents</span>
     <span class="pill dim">12 阶段门禁状态机</span>
     <span class="pill dim">codex 三审查点外审</span>
@@ -234,7 +234,10 @@
 /reproduce setup
 
 <span class="cmt"># 把研报 PDF 放进 reports/，起跑</span>
-/reproduce reports/你的研报.pdf</code></pre>
+/reproduce reports/你的研报.pdf
+
+<span class="cmt"># 海外报告本地无原文市场数据？实验模式：等价数据替代 + 方法迁移验证</span>
+/reproduce reports/us_paper.pdf --experimental</code></pre>
 </header>
 
 <section id="pipeline">
@@ -490,6 +493,10 @@
     <div><p><code>/reproduce continue &lt;id&gt;</code>。全部进度在 <code>workspace/{id}/state.json</code> 与产物文件里，续跑时逐阶段幂等自愈：产物齐全的阶段直接跳过，缺的从断点重做。换机器把工作目录同步过去即可。</p></div>
   </details>
   <details>
+    <summary>复现海外报告/论文，本地没有原文市场的数据怎么办？</summary>
+    <div><p>用<strong>实验模式</strong>：起跑时加 <code>--experimental</code>。规划阶段会把原文不可得的数据映射为本地等价替代（如美国 CPI → 中国 CPI、SPX → 沪深300），每个替代都登记进假设登记簿；复现目标从「数值对齐原文」变为「<strong>该方法在迁移市场是否成立</strong>」——数值达标判定整体豁免（效应存在与否都是有效结论），但数字与产物的一致性照样被反虚报审计盯着（数字不能编）。最终报告与 HTML 结果页会<strong>强制显著声明</strong>这是市场迁移复现，门禁核验该声明缺失过不了关。若你没加 flag 而规划阶段发现原文市场整体不可得，系统会挂起询问你是否切换，不会擅自决定。</p></div>
+  </details>
+  <details>
     <summary>报告被分诊为 hard，跑得又慢又贵怎么办？</summary>
     <div><p>先看分诊依据（plan.md 的难度判定节）。v2.6.0 起判据以<strong>方法复杂度</strong>为主轴：只有训练模型 / 优化求解 / 多资产联动才 hard，结果表多、指标多属于"工作量大"，只影响里程碑数量不抬难度档。若仍觉得过重：起跑时 <code>--difficulty medium</code> 直接覆盖分诊；配置 <code>economy: true</code> 让机械性角色降为 sonnet；把 <code>audit_level</code> 调为 <code>standard</code> 让规格/代码外审只在关键条件下触发。三者叠加约可省三分之二 token 消耗。v2.7.0 又叠加了<strong>墙钟流水线</strong>（自动生效无需配置）：milestone 验证与下一段编码重叠、代码外审与运行验证默认并行、结果审计与样本外分析并发——medium 每跑再省约半小时。结果反虚报、达标门禁、人工闸门一处不动。</p></div>
   </details>
@@ -532,7 +539,7 @@
 </section>
 
 <footer>
-  <span>quant-report-reproduce v2.7.0</span>
+  <span>quant-report-reproduce v2.8.0</span>
   <span><a href="https://github.com/Hedicx2020/ghquant_plugin">github.com/Hedicx2020/ghquant_plugin</a></span>
   <span>12 阶段门禁状态机 · 8 子 agent · codex 三审查点 · 样本外延伸分析</span>
 </footer>

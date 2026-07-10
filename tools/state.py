@@ -51,6 +51,7 @@ STAGE_ORDER: list[str] = [
 STAGE_STATUS_VALUES = {"pending", "running", "done", "failed", "skipped", "blocked"}
 TOP_STATUS_VALUES = {"running", "paused_blocked", "awaiting_review", "done", "done_partial", "aborted"}
 MODE_VALUES = {"auto", "interactive"}
+REPRODUCTION_MODE_VALUES = {"strict", "experimental"}  # strict=数值对齐原文；experimental=市场迁移复现（等价数据替代，数值判定豁免）
 DIFFICULTY_VALUES = {"easy", "medium", "hard"}
 # 5 类型模板：factor/timing/allocation/fixed_income/ml（见 templates/ 与设计文档 §十一 standards 表）
 TYPE_VALUES = {"factor", "timing", "allocation", "fixed_income", "ml"}
@@ -71,6 +72,7 @@ CANONICAL_TOP_FIELDS = {
     "pdf_path",
     "paths",
     "mode",
+    "reproduction_mode",
     "max_iter",
     "type",
     "tags",
@@ -170,6 +172,7 @@ def default_state(
     root: Path,
     mode: str = "auto",
     max_iter: int | None = None,
+    reproduction_mode: str = "strict",
 ) -> dict[str, Any]:
     ts = now_iso()
     return {
@@ -182,6 +185,7 @@ def default_state(
             "output": _rel(root, output_dir(root, report_id)),
         },
         "mode": mode,
+        "reproduction_mode": reproduction_mode,
         "max_iter": max_iter,
         "type": None,
         "tags": [],
@@ -242,6 +246,7 @@ def validate_state(state: Any) -> list[str]:
         errors.append("report_id 必须是非空字符串")
 
     _check_enum(errors, "mode", state.get("mode"), MODE_VALUES, allow_none=False)
+    _check_enum(errors, "reproduction_mode", state.get("reproduction_mode"), REPRODUCTION_MODE_VALUES, allow_none=False)
     _check_enum(errors, "status", state.get("status"), TOP_STATUS_VALUES, allow_none=False)
     _check_enum(errors, "difficulty", state.get("difficulty"), DIFFICULTY_VALUES)
     _check_enum(errors, "difficulty_override", state.get("difficulty_override"), DIFFICULTY_VALUES)
@@ -387,9 +392,12 @@ def init_state(
     mode: str = "auto",
     max_iter: int | None = None,
     legacy: bool = False,
+    reproduction_mode: str = "strict",
 ) -> dict[str, Any]:
     if mode not in MODE_VALUES:
         raise ValueError(f"非法 mode: {mode}，应属于 {sorted(MODE_VALUES)}")
+    if reproduction_mode not in REPRODUCTION_MODE_VALUES:
+        raise ValueError(f"非法 reproduction_mode: {reproduction_mode}，应属于 {sorted(REPRODUCTION_MODE_VALUES)}")
 
     for d in (
         workspace_dir(root, report_id) / "spec",
@@ -401,7 +409,7 @@ def init_state(
         d.mkdir(parents=True, exist_ok=True)
 
     pdf_path_norm = _normalize_pdf_path(root, pdf_path)
-    state = default_state(report_id, pdf_path_norm, root, mode=mode, max_iter=max_iter)
+    state = default_state(report_id, pdf_path_norm, root, mode=mode, max_iter=max_iter, reproduction_mode=reproduction_mode)
 
     if legacy:
         ts = state["updated_at"]
@@ -426,6 +434,9 @@ def migrate_stages(root: Path, report_id: str) -> list[str]:
     state = load_state(root, report_id)
     terminal = state.get("status") in {"done", "done_partial", "aborted"}
     added: list[str] = []
+    if "reproduction_mode" not in state:
+        state["reproduction_mode"] = "strict"
+        added.append("reproduction_mode=strict")
     for stage in STAGE_ORDER:
         if stage not in state.get("stages", {}):
             entry = _default_stage_entry()
@@ -625,6 +636,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_init.add_argument("--pdf", required=True, dest="pdf_path")
     p_init.add_argument("--mode", choices=sorted(MODE_VALUES), default="auto")
     p_init.add_argument("--max-iter", type=int, default=None, dest="max_iter")
+    p_init.add_argument("--experimental", action="store_true", help="实验模式：市场迁移复现（等价数据替代，数值判定豁免，报告显著声明）")
     p_init.add_argument("--legacy", action="store_true")
 
     p_show = sub.add_parser("show", help="打印人读摘要")
@@ -675,6 +687,7 @@ def main(argv: list[str] | None = None) -> int:
                 mode=args.mode,
                 max_iter=args.max_iter,
                 legacy=args.legacy,
+                reproduction_mode="experimental" if args.experimental else "strict",
             )
             print(f"已初始化 {args.report_id}: {state_path(root, args.report_id)}")
             print(f"status={state['status']} current_stage={state['current_stage']}")

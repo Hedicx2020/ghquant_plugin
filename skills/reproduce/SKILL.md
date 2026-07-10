@@ -86,15 +86,16 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/<x>.py" ...
 
 按 `stages/setup.md` 执行卡走：AskUserQuestion 收六项配置（数据路径 / auto 或 interactive 执行模式 / 最大迭代次数 / 回测框架 / 偏差容忍 / 经济模式；另有配置文件项 audit_level 不进问卷）→ 调 `setup_workspace.py` 一次完成落地（.reproduce.json + templates/common 种子 + pyproject + 目录树）→ 转述环境检测报告（uv / Python 依赖 / codex CLI）→ 引导用户维护 `templates/data_catalog.md`。`backtest_framework` 的消费点在 plan / implement 执行卡（planner 复用规划与 coder 合同：用户框架优先、`common/` 补缺口）；`default_max_rel_dev` 的消费点在 `check_gates`（load_standards 自动读取，统一替换相对偏差上限）与 verify 执行卡（verifier 对数口径同步）。
 
-### 3.1 `<pdf_path> [--mode auto|interactive] [--max-iter N] [--id name] [--difficulty easy|medium|hard]`
+### 3.1 `<pdf_path> [--mode auto|interactive] [--max-iter N] [--id name] [--difficulty easy|medium|hard] [--experimental]`
 
 新跑，从 init 开始。
 0. **未初始化引导**（形态 B）：cwd 无 `.reproduce.json` 且无 `tools/state.py`（即不是本仓库直跑）→ 先走 3.0 setup 再回本分支。
 1. 定 `<id>`：`--id` 给定则用之，否则由 pdf 文件名取 snake_case。
 2. **参数默认值**：`--mode` / `--max-iter` 未显式给出时，读 cwd `.reproduce.json` 的 `default_mode` / `default_max_iter` 作默认；配置也缺（或形态 A 无配置文件）时维持既有默认（mode=auto，max_iter=难度矩阵 3/5/6）。优先级固定：**显式参数 > .reproduce.json > 内置默认**。
-3. 走 **init 执行卡**（`stages/init.md`）：`state.py init` → `pdf_extract` → 回填 `pdf_pages` → 若给了 `--difficulty` 则 `set <id> difficulty_override <d>` → 过 G-IN。
-4. init 完成后**打印可复制的 /goal 无人值守命令**（见第七节）。
-5. 之后按第四节主循环协议逐 stage 推进（本次会话即可继续跑，或让用户粘贴 /goal 无人值守）。
+3. **实验模式（`--experimental`，市场迁移复现）**：适用于原文市场数据本地不可得的海外报告/论文——用本地等价数据替代（如美国 CPI → 中国 CPI、SPX → 沪深300），复现目标从「数值对齐原文」变为「**方法在迁移市场是否成立**」。给了该 flag 则 `state.py init` 带 `--experimental`（state.reproduction_mode=experimental）。语义变化：数值对齐判定整体豁免（G-VF-3 只核产出完整、G-RA-3 无超差归因、iterate 天然跳过）；**最终报告与 HTML 结果页强制显著声明**（G-FN 核验「市场迁移」章节）；替代数据逐条入假设登记簿（market-transplant 性质）。**未给 flag 而 planner 分诊发现原文市场整体不可得但存在等价替代 → 不得自行切换**：置 `paused_blocked` 呈报「严格复现不可行，建议实验模式」等人工裁决（用户确认后主会话 `set <id> reproduction_mode experimental` 再续跑）。
+4. 走 **init 执行卡**（`stages/init.md`）：`state.py init`（含 `--experimental` 透传）→ `pdf_extract` → 回填 `pdf_pages` → 若给了 `--difficulty` 则 `set <id> difficulty_override <d>` → 过 G-IN。
+5. init 完成后**打印可复制的 /goal 无人值守命令**（见第七节）。
+6. 之后按第四节主循环协议逐 stage 推进（本次会话即可继续跑，或让用户粘贴 /goal 无人值守）。
 
 ### 3.2 `continue <id>`（断点续跑，所有驱动器的统一接入点）
 

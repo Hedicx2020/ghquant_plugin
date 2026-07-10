@@ -18,6 +18,7 @@
    - `templates/<type>.md`（按 spec.md frontmatter 的 `type_hint`）
    - `templates/audit/assumptions.md`
    - `mode`：state.mode 的值（`auto` | `interactive`）
+   - `reproduction_mode`：state 的该字段（主会话转述）。**experimental**（市场迁移）时告知 planner：数据映射对原文不可得项使用 `status: substitute`（写明「原文数据 → 本地等价替代 + 选择理由」，如 US CPI → 中国 CPI 月度同比），每个替代登记一条 assumptions（性质标 `market-transplant`）；feasibility 按替代后的可得性判。**strict** 时若发现原文市场数据整体不可得但存在等价替代：不得自行按替代规划——在 plan.md 写明可替代方案后置 `feasibility: blocked`，由主会话走 paused_blocked 呈报「建议实验模式」等人工裁决。
    - `backtest_framework`：cwd `.reproduce.json` 的该字段（主会话读后转述）。非空 → 在 prompt 中告知「用户自有回测框架位于 <路径>，复用规划时回测执行层优先盘点该框架的能力，`common/` 仅作缺口补充」；为空/无配置 → 不提，维持内置 `common/` 复用规划。
 3. **点收输出合同**：
    - `workspace/<id>/plan.md`（frontmatter 分诊 + 正文）
