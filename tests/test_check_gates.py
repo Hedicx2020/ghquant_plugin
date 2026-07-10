@@ -1284,3 +1284,21 @@ def test_report_requires_oos_section_when_oos_done(tmp_path):
     (ws / "final_report.md").write_text(base + "\n## 样本外表现", encoding="utf-8")
     rs = {r.id: r for r in cg.check_report(tmp_path, "demo")}
     assert rs["G-FN-2"].passed is True
+
+
+def test_report_g_fn_7_requires_rendered_html(tmp_path):
+    """G-FN-7：final_report.html 缺失 FAIL；渲染合格后 PASS。"""
+    ws = tmp_path / "workspace" / "demo"
+    (ws / "spec").mkdir(parents=True)
+    (ws / "final_report.md").write_text("## 结论", encoding="utf-8")
+    (ws / "spec" / "coverage_matrix.md").write_text("| 要素ID | 状态 |\n|---|---|\n", encoding="utf-8")
+    (ws / "assumptions.md").write_text("无", encoding="utf-8")
+    (ws / "state.json").write_text(json.dumps({"stages": {}, "coverage_stats": {"total": 1}}), encoding="utf-8")
+    rs = {r.id: r for r in cg.check_report(tmp_path, "demo")}
+    assert rs["G-FN-7"].passed is False
+    out_dir = tmp_path / "output" / "demo"
+    out_dir.mkdir(parents=True)
+    (out_dir / "final_report.html").write_text(
+        "<html>demo 指标对比总表" + "x" * 6000 + "</html>", encoding="utf-8")
+    rs = {r.id: r for r in cg.check_report(tmp_path, "demo")}
+    assert rs["G-FN-7"].passed is True

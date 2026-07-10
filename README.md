@@ -66,6 +66,8 @@
 
 ## 变更记录
 
+- 2026-07-10：新增复现结果单文件 HTML 展示页——report 阶段由 `tools/render_report.py` 确定性渲染 `output/{id}/final_report.html`（指标对比总表可筛选、图表 base64 内嵌自包含、样本外/审计台账/假设登记簿与报告全文折叠收录，浏览器直接打开可分享）；G-FN-7 门禁核验；5 个渲染器单测。
+
 - 2026-07-10：修复 setup 执行卡——五项配置问卷分两批收集（AskUserQuestion 工具单次上限 4 问，原「一次问卷收齐」在实际运行中触发 InputValidationError）。
 
 - 2026-07-09：新增 oos 阶段与 quant-oos-analyst agent——复现达标（pass/partial）后自动把策略原样延伸到研报回测区间之后的数据，评估效应延续/衰减/失效/样本不足；出口门禁 G-OS（区间零重叠防样本内冒充、结论枚举、短样本警示、净值延伸图），final_report 相应必含「样本外表现」章节（G-FN 动态核验）。STAGE_ORDER 变为十二阶段，旧案例经 `state.py migrate` 补键（oos=skipped）。

@@ -192,3 +192,12 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/state.py" ...
 - **产物合同**：`oos_metrics.json`（区间/oos_days/指标对比/conclusion）、`oos_nav.png`（内外分色+分界线）、`oos_summary.xlsx`、`workspace/{id}/oos_report.md`（oos_days<60 强制「样本外过短」警示）。
 - **门禁 G-OS**（5 项）：产物结构 / **区间零重叠（防样本内数据冒充样本外）** / 结论枚举 / 短样本警示 / 图表字节数。G-FN 动态：`stages.oos.status==done` 时 final_report 必含「样本外表现」章节；skipped 不要求（旧案例零追溯影响）。
 - **旧 state 迁移**：`state.py migrate <id>`（幂等）——STAGE_ORDER 演进后补缺失 stage 键，顶层终态补 skipped、运行中补 pending。本仓库 4 个历史案例已迁移。
+
+## 十三、2026-07-10 增补：复现结果单文件 HTML 展示页
+
+用户需求：「输出复现结果最终都放到一个 html 里展示」。
+
+- **确定性工具而非模型生成**：`tools/render_report.py` 读结构化产物（state.json 硬输入 / comparison.json 硬输入 / oos_metrics.json / *.png / final_report.md / assumptions.md）按固定模板渲染 `output/{id}/final_report.html`——每份报告样式统一、零 token、幂等可重跑；可选输入缺失按节省略/占位容错。
+- **页面内容**：verdict/评级/覆盖率/迭代 KPI 卡、指标对比总表（pass/fail 标色 + 全部/仅未达标筛选 + 归因列）、图表画廊（base64 内嵌自包含，单图 >8MB 跳过）、样本外表现节（oos 产物存在时）、外部审查台账、假设登记簿与最终报告全文（简易 markdown 渲染折叠收录）。所有产物文本 HTML 转义（注入防护有单测）。
+- **集成**：report 执行卡步骤 5（reporter 点收后主会话跑工具）；门禁 G-FN-7（存在 + 含 report_id 与「指标对比总表」锚 + >5KB）。
+- 评级 A/B/C 从 final_report.md 正则提取（state 不存评级）。

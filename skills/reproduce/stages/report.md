@@ -20,13 +20,18 @@
    - **oos=done 时追加**：`workspace/<id>/oos_report.md`、`output/<id>/results/oos_metrics.json`（final_report 必含「样本外表现」章节——收录区间、逐指标对比、conclusion 与判读规则；G-FN 动态核验该章节。oos=skipped 时不追加，报告在复跑指引或残余章节一句话说明跳过原因）
    - state 的 `external_reviews` / `verdict` / `coverage_stats` 摘要（**由主会话在 prompt 里转述关键字段**，reporter 不直接读 state.json）
 4. **点收输出合同**：`workspace/<id>/final_report.md`（8 个必需 H2 章节 + 附录 A 六小节 + 可信度评级 A/B/C）。
+5. **渲染单文件展示页**（主会话跑工具，确定性渲染非内容生产）：
+   ```
+   uv run python tools/render_report.py <id>
+   ```
+   产出 `output/<id>/final_report.html`（自包含：指标对比总表可筛选、图表 base64 内嵌、样本外/审计台账/假设登记簿与报告全文折叠收录，浏览器直接打开可分享）。点收该文件存在。
 
 ## 出口门禁
 
 ```
 uv run python tools/check_gates.py <id> --stage report --record
 ```
-原样贴输出。G-FN：G-FN-1 final_report.md 存在 / G-FN-2 必需 H2 章节齐（结论/指标对比/假设登记簿/迭代历史/审计回应/残余偏差/未复现清单/复跑指引）/ G-FN-3 coverage_matrix 无 pending/in_progress 行 / G-FN-4 假设登记簿无遗留占位符 `[verify 后填]` / G-FN-5 所有 rejected 意见出现在报告 / G-FN-6 state.coverage_stats.total > 0。
+原样贴输出。G-FN：G-FN-1 final_report.md 存在 / G-FN-2 必需 H2 章节齐（结论/指标对比/假设登记簿/迭代历史/审计回应/残余偏差/未复现清单/复跑指引；oos=done 时另须「样本外」章节）/ G-FN-3 coverage_matrix 无 pending/in_progress 行 / G-FN-4 假设登记簿无遗留占位符 `[verify 后填]` / G-FN-5 所有 rejected 意见出现在报告 / G-FN-6 state.coverage_stats.total > 0 / G-FN-7 final_report.html 单文件展示页存在且含指标对比总表。
 
 VERDICT PASS → `set-stage <id> report done` → `set <id> status awaiting_review` → 进 review。
 
@@ -37,3 +42,4 @@ VERDICT PASS → `set-stage <id> report done` → `set <id> status awaiting_revi
 - **G-FN-4 遗留占位符** → verify 阶段「验证后回看」未回填干净 → 回 `quant-verifier` 补填（reporter 不代填）。
 - **G-FN-5 rejected 意见未现** → 回 reporter 把 audit_responses 中处置=rejected 的意见 ID 原样写入报告遗留清单。
 - **G-FN-6 coverage_stats.total=0** → 主会话补跑步骤 2 的 `set coverage_stats`。
+- **G-FN-7 缺 final_report.html** → 主会话补跑步骤 5 的 `render_report.py`（工具报错则按报错修 comparison/state 硬输入后重跑）。

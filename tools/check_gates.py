@@ -1292,6 +1292,15 @@ def check_report(root: Path, report_id: str) -> list[CheckResult]:
     else:
         results.append(CheckResult(f"{gid}-5", "所有 rejected 意见出现在报告", True, "audit_responses.md 不存在，视为无 rejected 项"))
 
+    html_path = root / "output" / report_id / "final_report.html"
+    if html_path.is_file():
+        html_text = html_path.read_text(encoding="utf-8", errors="replace")
+        html_ok = report_id in html_text and "指标对比总表" in html_text and html_path.stat().st_size > 5 * 1024
+        html_detail = "" if html_ok else "存在但缺 report_id/指标对比总表锚点或 <=5KB"
+    else:
+        html_ok, html_detail = False, "final_report.html 不存在（report 阶段应运行 tools/render_report.py）"
+    results.append(CheckResult(f"{gid}-7", "final_report.html 单文件展示页存在且含指标对比总表", html_ok, html_detail))
+
     state = _safe_load_state(root, report_id) or {}
     coverage_stats = state.get("coverage_stats") or {}
     total = coverage_stats.get("total")

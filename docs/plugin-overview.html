@@ -221,7 +221,7 @@
   <h1>quant-report-reproduce<br>量化研报复现流水线</h1>
   <p class="lede">给它一份量化研报 PDF，它产出与原文逐项对齐的策略代码、回测结果，和一份带可信度评级的复现报告——中间的提取、规划、实现、验证、审计、迭代，全部由带门禁的多 agent 流水线自动完成。</p>
   <div class="hero-meta">
-    <span class="pill gate">v2.4.0</span>
+    <span class="pill gate">v2.5.0</span>
     <span class="pill dim">1 skill + 8 agents</span>
     <span class="pill dim">12 阶段门禁状态机</span>
     <span class="pill dim">codex 三审查点外审</span>
@@ -324,7 +324,7 @@
     <tr><td><code>iterate</code></td><td>迭代修正</td><td>diagnoser + coder + verifier</td><td>每轮三件套（诊断/修改/复验对数）齐全、防兜圈规则、超差项全归因</td></tr>
     <tr><td><code>result_audit</code></td><td>结果审计</td><td>codex 外审 + 反虚报核查</td><td>结论没有编：数字与产物一致、归因真实、无 open critical</td></tr>
     <tr><td><code>oos</code></td><td>样本外分析</td><td>quant-oos-analyst</td><td>复现达标（pass/partial）才跑：策略原样延伸到研报区间之后的数据，样本外区间零重叠、结论枚举、短样本警示</td></tr>
-    <tr><td><code>report</code></td><td>报告汇总</td><td>quant-reporter</td><td>八大必需章节齐全、假设登记簿全收录、无遗留占位符</td></tr>
+    <tr><td><code>report</code></td><td>报告汇总</td><td>quant-reporter + 渲染工具</td><td>八大必需章节齐全、假设登记簿全收录、无遗留占位符；并渲染单文件 HTML 展示页（指标表可筛选、图表内嵌）</td></tr>
     <tr><td><code>review</code></td><td>人工评审</td><td><strong>你</strong></td><td>唯一人工阶段：读报告后 <code>accept</code> 收尾或 <code>revise</code> 定向重跑</td></tr>
   </table></div>
 
@@ -446,6 +446,7 @@
 ├── src/{id}/                      <span class="c"># 策略代码：strategy / config / main</span>
 └── output/{id}/
     ├── results/                   <span class="c"># 回测对数表 comparison.json / 图表 PNG / Excel</span>
+    ├── final_report.html          <span class="c"># 单文件结果展示页（图表内嵌，浏览器直接打开可分享）</span>
     └── verify_report.md           <span class="c"># 验证过程记录（含证据链）</span></div>
 
   <h3 id="faq-title"></h3>
@@ -524,7 +525,7 @@
 </section>
 
 <footer>
-  <span>quant-report-reproduce v2.4.0</span>
+  <span>quant-report-reproduce v2.5.0</span>
   <span><a href="https://github.com/Hedicx2020/ghquant_plugin">github.com/Hedicx2020/ghquant_plugin</a></span>
   <span>12 阶段门禁状态机 · 8 子 agent · codex 三审查点 · 样本外延伸分析</span>
 </footer>
