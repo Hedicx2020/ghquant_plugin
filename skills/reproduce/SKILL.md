@@ -156,13 +156,18 @@ review 通过收尾：`set-stage <id> review done` → 按 verdict 定终态：`
 
 ## 五、并行规则（并行只由主会话发起；子 agent 一律不嵌套）
 
-允许的并行仅限以下三处，其余一律串行：
+允许的并行仅限以下五处，其余一律串行：
 
 1. **hard 难度无依赖 milestone 多 coder**：`implement` 阶段，deps 互不相关的 milestone 可同时派多个 `quant-coder`（一条消息内多个 Agent 调用）。
 2. **spec_audit 双通道**：codex 盲提取审查（Bash 直调）∥ `quant-auditor mode=spec` 内审（Agent，medium+ 才有内审）——同时发起，两者都返回后汇合统一过 G-SA。
-3. **code_audit ∥ verify**（可选提速，medium/hard）：codex code_audit（Bash，只读）与 `quant-verifier` 跑数（Agent）互不改源码，可并发；**汇合后先过 G-CA，若有 critical 则作废本次 verify 产物回 coder，再过 G-VF**。默认可串行；提速时才并行。
+3. **code_audit ∥ verify**（**medium/hard 默认并行**；easy 或 `tags` 含 ml 维持串行——ml 外审抓 critical 先验高，先审后跑省大概率作废的全跑）：verifier 派发**前移至 code_audit 阶段**，与 codex（Bash）同批发起；**verify 阶段的记账与门禁次序不变**——汇合后先过 G-CA → `set-stage verify running` → 点收已返回的 verify 产物 → 过 G-VF。**作废规则**：G-CA 处置引发任何 `src/` 改动（critical 修复或涉码 major 处置）→ 本次预跑 verify 产物作废（G-VF-6 新鲜度机器兜底会判 FAIL），重派 verifier，不得拿旧产物过门。economy 用户可选择维持串行，避免作废时浪费一次全跑。
+4. **implement 流水线（medium/hard 默认）**：milestone mN 的验证环节（medium：verifier；hard：auditor(code)→verifier 链）与 mN+1 的编码同批派发重叠（滚动批次，深度 1：任一时刻至多一个 milestone 的验证链 + 一个 milestone 的编码在途；hard 的无依赖多 coder 并行不受此限、可叠加）。**多个 milestone 的 verifier 不得同批**（共写 verify_report.md）；多个 auditor 可同批（各写各的 impl_audit_m{mid}.md）。汇合分诊与尾部条件见 `stages/implement.md`「流水线汇合协议」。
+5. **result_audit ∥ oos**（可选提速）：oos-analyst 的全部输入在 result_audit 开始前已冻结（verdict 已定）；触发判定前移，与 result_audit 双通道同批加派。**汇合后先过 G-RA**——若有数字不实类 critical（回 verify 重出 comparison）则 oos 产物作废重跑（基线已变）；G-RA 干净 → oos 阶段照常 `set-stage running` → 直接点收 → G-OS。
 
 硬约束：子 agent 不得再派 agent / 调 skill / 启动 Task 工具（API 400 根源）；`codex exec` 是外部进程调用、非 agent 嵌套，只有主会话与 `quant-verifier`（辅助验证用途）可 Bash 直调。
+**并行纪律（任何并行点一体适用）**：
+- **state.py 写命令严禁同批并行**：同一汇合点的多笔记账用单个 Bash 调用内 `&&` 串联（state.json 为整文件读改写、无锁，同批并行的两个写命令必丢一笔更新）。
+- **同批 agent 的输出文件集必须不相交**：会共写同一文件的两个 agent（如两个 milestone 的 verifier 共写 verify_report.md）不得同批发起。
 
 ---
 
@@ -172,7 +177,7 @@ review 通过收尾：`set-stage <id> review done` → 按 verdict 定终态：`
 |------|------|--------|------|
 | spec_audit：codex（含盲提取协议） | 必跑（轻量：R 表逐格 + 图表编号连续性） | 必跑（盲抄全部结果表数值 + 全维度） | 必跑（全量盲提取 diff + 全维度） |
 | spec_audit：auditor(spec) 内审 | 跳过 | 必跑 | 必跑 |
-| implement 编排 | 单 coder 一次实现 | 单 coder 逐 milestone 串行 | 按 milestone 派独立 coder，无依赖模块并行 |
+| implement 编排 | 单 coder 一次实现 | 逐 milestone 派发，验证与下一编码流水线重叠 | 按 milestone 派独立 coder，无依赖并行 + 依赖链流水线重叠 |
 | milestone 级 verify | 跳过（并入 final verify） | 每 milestone | 每 milestone |
 | auditor(code) 实现忠实性审计 | 并入 verify（抽 2 条核心要素） | 逐条核对 core 要素（含 ml tag 时全量） | 逐条核对全部要素，每 milestone |
 | code_audit / result_audit：codex | 必跑 | 必跑 | 必跑 |

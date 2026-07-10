@@ -26,7 +26,8 @@
    - **hard**：impl_audit 已在 implement 阶段逐 milestone 产出，无需重派（若缺则补派）。
    - **medium，或任何难度含 `ml` 标签**：派一次 `quant-auditor mode=code`（输入合同**不含 coder 完成汇报**：`spec.md`、`coverage_matrix.md`、`assumptions.md`、`src/<id>/` 全部、`common/` 相关模块、当前/全部 milestone id），产 `workspace/<id>/audit/impl_audit_m{X}.md`。
    - **easy 非 ml**：auditor(code) 并入 verify（抽 2 条核心要素），本 stage 不单独产 impl_audit。
-   - 提速可选：本步 auditor 与第 4 步 codex 并行发起。
+   - 本步 auditor 与第 4 步 codex 默认同批并行发起。
+   - **并行加派 verifier（medium/hard 默认；easy 或 tags 含 ml 除外，见 SKILL.md 五.3）**：与 codex/auditor 同批发起 `quant-verifier`，输入合同逐字取 `stages/verify.md` 步骤 2（含 economy 的 sonnet 覆盖规则）；其产物在 verify 阶段点收，**本阶段不点收、不写任何 verify 相关 state**。
 6. **意见入 responses**：`code_audit_codex.md` 每条 `CDX-C-` finding 逐条录入 `workspace/<id>/audit/audit_responses.md`（同一张表追加）。impl_audit 若出现 `not_found`（空壳虚报）→ auditor 已在 coverage_matrix 变更日志记回退（状态打回 in_progress），主会话据此回 coder 重做该要素。
 7. **记外审台账**（读改写三步，同 `spec_audit.md` 步骤 8；**警告**：`state.py set` 是整体覆盖字段，直接 `set` 单条数组会把 spec 审查已写入的记录抹掉）：
    1. **读**：`Read workspace/<id>/state.json`，取出现有 `external_reviews` 数组。
@@ -43,6 +44,8 @@ uv run python tools/check_gates.py <id> --stage code_audit --record
 VERDICT PASS → `set-stage <id> code_audit done` → 进 verify。
 
 ## 失败处理
+
+- **并行模式下 critical 修复涉及 `src/` 改动** → 本次预跑 verify 产物作废（G-VF-6 新鲜度机器判 FAIL 兜底），进 verify 阶段时重派 verifier。
 
 - **critical**（未来函数/硬编码/方向反/空壳 not_found）→ 回 `quant-coder` 修复（只改问题文件）→ codex 复审（复审输入=修复 diff + 原意见 + 定位文件，缩减 prompt）→ 复核列写 `pass`。**同一审查点审→修→复审最多 3 轮，仍有 critical → paused_blocked**。修复计入迭代账（若已进 verify 后回来，见 iterate）。
 - **G-CA-3 命中 not_found** → 对应实现是空壳，回 coder 真正实现该要素，矩阵状态回 in_progress → done；**coder 补实现后必须重派 `quant-auditor mode=code` 覆盖重写对应的 `impl_audit_m{X}.md`（不是在旧文件上增补一行了事）**，复审干净（不再命中「判定: not_found」）才能重过 G-CA 门禁——否则旧文件里残留的 `判定: not_found` 行会让门禁永远 FAIL，即便实现已经修好（陈旧文件死锁）。

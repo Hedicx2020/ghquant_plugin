@@ -8,6 +8,8 @@
 
 ## 动作序列
 
+> **并行模式（SKILL.md 五.3，medium/hard 默认）**：verifier 已在 code_audit 阶段同批派发并返回——本阶段照常执行步骤 1（状态先行不豁免、attempts 照增），**跳过步骤 2 的派发**，直接从步骤 3 点收开始；若 G-CA 处置改动过 `src/`，预跑产物视同未跑（G-VF-6 会判 FAIL），重派 verifier。
+
 1. **状态先行**：`uv run python tools/state.py set-stage <id> verify running`
 2. **派 `quant-verifier`**（subagent_type=`quant-verifier`）。输入合同（逐字）：
    - `src/<id>/` 全部

@@ -6,6 +6,8 @@
 
 - 前置断言：`uv run python tools/check_gates.py <id> --stage result_audit --assert-done` 必须 PASS。
 
+> **并发模式（SKILL.md 五.5）**：oos-analyst 已在 result_audit 阶段同批派发并返回——本阶段照常 `set-stage oos running`，跳过步骤 2 的派发，直接从点收开始；若 result_audit 曾回 verify 重出 comparison，预跑产物作废、重派。
+
 ## 触发判定（主会话执行，写死）
 
 读 state 的 `verdict.result`：

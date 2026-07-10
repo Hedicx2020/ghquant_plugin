@@ -16,6 +16,8 @@
    ```
    command codex exec -s read-only --skip-git-repo-check -C /Users/hedi/report_reproduce --color never --output-last-message "workspace/<id>/iterations/iter_<NN>/codex_opinion.md" - < "workspace/<id>/iterations/iter_<NN>/codex_prompt_second_opinion.md"
    ```
+   > 后台跑 codex 期间只做本地记账类动作；**派 diagnoser 前必须 join codex**（等待 `iter_<NN>/codex_opinion.md` 落盘）——第二意见是防兜圈的关键输入，不得不等而派；步骤 5 的「如有」仅指 codex 调用失败降级的情形。
+
 5. **派 `quant-diagnoser`**（subagent_type=`quant-diagnoser`）。输入合同：`spec.md`、`plan.md`、`assumptions.md`、`src/<id>/`、`output/<id>/verify_report.md`、`output/<id>/results/comparison.json`（或本轮快照）、`iteration_log.md` + **全部历史 iter_NN/**、`iter_<NN>/codex_opinion.md`（如有）、本轮 `iter_<NN>` id。产 `iter_<NN>/diagnosis.md`（含 N≥2 的「## 已排除假设」节 + 末尾 `结论 ∈ {continue, stop_partial, blocked}`）。
 6. **按结论分派**：
    - **continue** → 派 `quant-coder`（迭代轮输入含 `iter_<NN>/diagnosis.md`，**只改 diagnosis 列明的文件范围**），产 `iter_<NN>/changes.md` → 派 `quant-verifier` 重跑 → 覆盖 `output/<id>/results/comparison.json`，并把重跑后的拷进 `iter_<NN>/comparison.json`。

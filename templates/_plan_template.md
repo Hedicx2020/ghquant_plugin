@@ -31,7 +31,7 @@ milestones:
     desc: <该里程碑要交付什么>
     deps: []                        # 依赖的其它 milestone id 列表，无依赖写 []；check_gates 按此判环（G-PL-5）
     elements: [F1, F2, B1]           # 本 milestone 覆盖的 spec.md 要素 ID 列表，供 coverage_matrix.md 的 milestone 列回填核对
-  # easy=1 个；medium=2~3 个；hard=≥3 个
+  # easy=1 个；medium=2~3 个；hard=3~5 个为宜（≥3 为 G-PL-4 硬下限）
 ---
 ```
 
@@ -39,7 +39,7 @@ milestones:
 - **type**：看研报最终回测对象。截面选股=`factor`；时序仓位信号=`timing`；多资产权重=`allocation`；债券/收益率曲线=`fixed_income`；需训练模型=`ml`。混合时取「最终回测形态」为 type，其余进 tags（例：深度学习选股 → `type: factor` + `tags: [ml]`）。
 - **difficulty**：按 §三 三步判定（方法复杂度定基准 → 修正项上调 → easy 收口）；plan 正文「难度判定」节必须写明基准档依据与各修正项触发情况，供审计核对。
 - **feasibility**：取值 ∈ `{feasible, degraded, blocked}`（与 `tools/state.py` 的 `FEASIBILITY_VALUES` 逐字对齐，注意不是 `ok/partial`）。所有核心 data_requirement 为 available/derive → `feasible`；部分非核心数据 missing 但不影响主结论、需降级复现 → `degraded`；核心数据 missing 或核心方法无法确定 → `blocked`（触发主流程停下问用户，`tools/check_gates.py` G-PL-9 断言 `feasibility != blocked` 才能放行）。
-- **milestones**：每个里程碑应是一个「可独立实现+验证」的闭环单元，粒度参考对应类型模板的「plan 正文结构」。`deps` 描述里程碑间的先后依赖（`tools/check_gates.py` G-PL-5 会检测环依赖，成环直接判 FAIL）；`elements` 是该里程碑要交付的 spec.md 要素 ID 清单，写完后须与 `coverage_matrix.md` 对应行的 milestone 列相互印证（一个要素只能落在一个 milestone）。
+- **milestones**：每个里程碑应是一个「可独立实现+验证」的闭环单元，粒度参考对应类型模板的「plan 正文结构」。**粒度下界**：预计实现 <100 行的 milestone 不单立——与相邻、同主题（同一因子/同一数据环节/同一回测环节）的 milestone 合并，`elements` 清单原样并入**一条不减**（审计逐条覆盖面不变）；合并后 hard 总数不得低于 3（G-PL-4 硬下限）。每个 milestone 的固定编排成本约为一次 coder+复核+验证（30-50 分钟），拆分收益必须大于该成本。`deps` 描述里程碑间的先后依赖（`tools/check_gates.py` G-PL-5 会检测环依赖，成环直接判 FAIL）；`elements` 是该里程碑要交付的 spec.md 要素 ID 清单，写完后须与 `coverage_matrix.md` 对应行的 milestone 列相互印证（一个要素只能落在一个 milestone）。
 
 ---
 
@@ -91,4 +91,4 @@ milestones:
 3. **easy 收口**：仅当单模块 + 标准公式 + 主线数据全有才可判 easy；有任何修正项触发则至少 medium。
 
 > **milestone 数不是判据**（它是 planner 拆分的产出，拆得细不该反过来抬高难度）；工作量大（结果表多、对数指标多）只影响 milestone 数量，不影响难度档。
-> 主流程据 difficulty 选编排：easy 直接串行；medium 单 coder 逐 milestone；hard 按 milestone 派发独立 coder 子实例（独立模块可并行）+ 每 milestone 独立复核。详见 SKILL.md 第六节裁剪矩阵。
+> 主流程据 difficulty 选编排：easy 直接串行；medium 逐 milestone 派发（milestone 验证与下一 milestone 编码流水线重叠）；hard 按 milestone 派发独立 coder（无依赖并行 + 依赖链流水线重叠）+ 每 milestone 独立复核。详见 SKILL.md 第五/六节。

@@ -221,7 +221,7 @@
   <h1>quant-report-reproduce<br>量化研报复现流水线</h1>
   <p class="lede">给它一份量化研报 PDF，它产出与原文逐项对齐的策略代码、回测结果，和一份带可信度评级的复现报告——中间的提取、规划、实现、验证、审计、迭代，全部由带门禁的多 agent 流水线自动完成。</p>
   <div class="hero-meta">
-    <span class="pill gate">v2.6.0</span>
+    <span class="pill gate">v2.7.0</span>
     <span class="pill dim">1 skill + 8 agents</span>
     <span class="pill dim">12 阶段门禁状态机</span>
     <span class="pill dim">codex 三审查点外审</span>
@@ -491,7 +491,7 @@
   </details>
   <details>
     <summary>报告被分诊为 hard，跑得又慢又贵怎么办？</summary>
-    <div><p>先看分诊依据（plan.md 的难度判定节）。v2.6.0 起判据以<strong>方法复杂度</strong>为主轴：只有训练模型 / 优化求解 / 多资产联动才 hard，结果表多、指标多属于"工作量大"，只影响里程碑数量不抬难度档。若仍觉得过重：起跑时 <code>--difficulty medium</code> 直接覆盖分诊；配置 <code>economy: true</code> 让机械性角色降为 sonnet；把 <code>audit_level</code> 调为 <code>standard</code> 让规格/代码外审只在关键条件下触发。三者叠加约可省三分之二消耗，且结果反虚报、达标门禁、人工闸门一处不动。</p></div>
+    <div><p>先看分诊依据（plan.md 的难度判定节）。v2.6.0 起判据以<strong>方法复杂度</strong>为主轴：只有训练模型 / 优化求解 / 多资产联动才 hard，结果表多、指标多属于"工作量大"，只影响里程碑数量不抬难度档。若仍觉得过重：起跑时 <code>--difficulty medium</code> 直接覆盖分诊；配置 <code>economy: true</code> 让机械性角色降为 sonnet；把 <code>audit_level</code> 调为 <code>standard</code> 让规格/代码外审只在关键条件下触发。三者叠加约可省三分之二 token 消耗。v2.7.0 又叠加了<strong>墙钟流水线</strong>（自动生效无需配置）：milestone 验证与下一段编码重叠、代码外审与运行验证默认并行、结果审计与样本外分析并发——medium 每跑再省约半小时。结果反虚报、达标门禁、人工闸门一处不动。</p></div>
   </details>
   <details>
     <summary>怎么更新插件？</summary>
@@ -532,7 +532,7 @@
 </section>
 
 <footer>
-  <span>quant-report-reproduce v2.6.0</span>
+  <span>quant-report-reproduce v2.7.0</span>
   <span><a href="https://github.com/Hedicx2020/ghquant_plugin">github.com/Hedicx2020/ghquant_plugin</a></span>
   <span>12 阶段门禁状态机 · 8 子 agent · codex 三审查点 · 样本外延伸分析</span>
 </footer>

@@ -209,3 +209,14 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/state.py" ...
 3. **外审档位**（`audit_level: strict|standard`，配置文件项不进问卷）：standard 时 spec 外审触发条件（blocking/major 歧义 ∨ 首次类型 ∨ hard）、code 外审触发条件（ml tag ∨ hard ∨ 内审 critical）；不触发时落明示 skipped 的占位档（占位 JSON findings=[] 天然过三关解析，G-SA-1 三件套占位齐、external_reviews 记 skipped，报告如实展示）。result 外审任何档位必跑。
 4. **reporter 瘦身**：输入合同以 audit_responses 总表 + iteration_log + 最后一轮 diagnosis 替代全量原文（验收实测 reporter 380k token 的主要来源）。
 5. **核验分级**（`verification_level: full|directional|magnitude|unverifiable`）：参数不明指标的诚实降级。裁定权唯一在 diagnoser（限 assumption_linked 项、AS 性质须为参数不明）；verifier 只落字段无权发起；recalc_metric 分路径判定（方向/量级/不计入分母）；**防作弊**：降级未锚定 assumption_linked 直接 False；auditor(result) 三点人审（AS 性质/裁定出处/档位不过度）；G-VF-3 对 unverifiable 豁免且透明展示（waived 清单），渲染页分层统计。
+
+## 十五、2026-07-11 增补（v2.7.0）：墙钟加速与暂缓清单
+
+机器事实锚点：G-IM-4 只核 implement=done（milestone verify 子状态无 gate 消费）；G-VF-6 新鲜度是 critical 修复后旧 verify 产物的机器作废兜底；state.py 无文件锁（同批并行写丢更新）；Agent 并行为 fork-join 批次（不可中途召回，「作废在途」不可行 → 语义改为「缓验 + 增量适配」）。
+
+落地五项（全部文案层）：implement 流水线（verify(mN)∥code(mN+1) 滚动深度 1 + 汇合分诊表：mN 所辖 FAIL 计重派/流水线干扰假 FAIL 复跑不计/下游缓验/尾部条件后才 G-IM --record）；code_audit∥verify 默认化（easy/ml 例外）；result_audit∥oos 可选并发（G-RA 先行、critical 回 verify 则 oos 作废）；拆分粒度收紧（hard 3~5、<100 行合并、elements 不减条）；并行纪律两条入硬约束。
+
+**暂缓清单**（本次不做，留档）：
+1. G-IM-6：核 medium/hard milestones 全部 verify=done——关掉「在途验证被遗忘」协议洞的机器化方案，属门禁语义变更。
+2. verifier 增量重跑：迭代轮只重算受影响指标族+抽样全量校验——需案例数据支撑正确性设计。
+3. plan∥codex 盲提取预跑：coverage_matrix 撕裂读产生噪声意见污染审计台账；若做需先从 codex prompt 输入清单移除矩阵。

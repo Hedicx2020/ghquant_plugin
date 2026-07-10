@@ -68,6 +68,8 @@
 
 ## 变更记录
 
+- 2026-07-11（v2.7.0）：墙钟加速——① implement 流水线化：milestone 验证与下一 milestone 编码滚动重叠（medium 从完全串行改为流水线，hard 依赖链同享；含汇合分诊表：假 FAIL 复跑不占重派、下游缓验+增量适配、尾部条件封堵协议洞）；② code_audit∥verify 默认并行（easy/ml 例外，G-VF-6 新鲜度机器兜底作废规则）；③ result_audit∥oos 可选并发；④ milestone 拆分粒度收紧（hard 3~5 为宜、<100 行相邻同主题合并）；⑤ 并行纪律入硬约束（state.py 写命令严禁同批并行、同批 agent 写集不相交——顺带修复既有 hard 路径丢更新隐患）；⑥ iterate 卡 join codex 歧义修正。预期 medium 每跑省 25-55 分钟、hard 省 40-110+ 分钟；纯文案层，门禁与审计体系零变更。
+
 - 2026-07-10（v2.6.0）：四项修订——① 分诊判据修正：方法复杂度为主轴（训练/优化/多资产联动才 hard），删除 milestone 数维度（循环论证），已降级支线的数据缺失不再抬难度，「工作量大 ≠ 技术难」；② 经济模式 `economy`：机械性角色（extractor/verifier/oos-analyst）派发降 sonnet，质量敏感角色保持 opus；③ 外审档位 `audit_level: strict|standard`：standard 时 spec/code 外审触发式（skipped 明示落档保持门禁兼容），result 外审任何档位必跑；④ 核验分级 `verification_level`：研报参数不明的指标经 diagnoser 裁定可降级为方向/量级/不可核验（必须锚定 assumption_linked 防作弊，报告分层展示）。reporter 输入合同瘦身（总表替代全量原文）。
 
 - 2026-07-10：新增复现结果单文件 HTML 展示页——report 阶段由 `tools/render_report.py` 确定性渲染 `output/{id}/final_report.html`（指标对比总表可筛选、图表 base64 内嵌自包含、样本外/审计台账/假设登记簿与报告全文折叠收录，浏览器直接打开可分享）；G-FN-7 门禁核验；5 个渲染器单测。

@@ -15,6 +15,7 @@
    command codex exec -s read-only --skip-git-repo-check -C /Users/hedi/report_reproduce --color never --output-last-message "workspace/<id>/audit/result_audit_codex.md" - < "workspace/<id>/audit/codex_prompt_result.md"
    ```
 4. **auditor mode=result**（**hard 必跑**；medium/easy 仅 K2 触发时）：派 `quant-auditor mode=result`。输入合同：`output/<id>/results/comparison.json`、`output/<id>/results/`（PNG 图片、metrics.json、backtest_summary.xlsx）、`workspace/<id>/audit/evidence_manifest.md`（输出对象）、`output/<id>/verify_report.md`、`assumptions.md`、`ambiguities.md`、`coverage_matrix.md`。产出：在 `evidence_manifest.md` 追加「反虚报复核」节（K2/K3/E4 复核 + skip/infeasible 理由核实 + 扰动测试触发判断 + 末行 verdict）。可与第 3 步 codex 并行。
+5. **并行加派 oos-analyst（可选提速，SKILL.md 五.5）**：`stages/oos.md` 的触发判定前移到本阶段执行——verdict ∈ {pass, partial} 时与第 3/4 步同批加派 `quant-oos-analyst`（输入合同逐字取 `stages/oos.md` 步骤 2，含 economy sonnet 覆盖）；其产物在 oos 阶段点收，本阶段不点收、不写 oos 相关 state。**若本阶段发现数字不实 critical 回 verify 重出 comparison → oos 产物作废**（基线已变），oos 阶段重派。verdict 不满足时不加派，oos 阶段照常走 skipped 分支。
 5. **意见入 responses**：`result_audit_codex.md` 每条 `CDX-R-` finding 逐条录入 `audit_responses.md`（同表追加）。
 6. **记外审台账**（读改写三步，同 `spec_audit.md` 步骤 8；**警告**：`state.py set` 是整体覆盖字段，直接 `set` 单条数组会把 spec/code 两条已有记录抹掉）：
    1. **读**：`Read workspace/<id>/state.json`，取出现有 `external_reviews` 数组。
