@@ -47,6 +47,8 @@ color: green
 9. **扰动测试**（触发条件命中即执行）：`hard` 难度必做一次 / 全部指标偏差同时 <0.5%（K2）时任何难度都做。以环境变量或命令行参数覆盖**回测截止日提前一年**（备选分组数 10→5），重跑 main.py 输出到 `results/perturb_check/`（不改源文件），断言核心指标相对变化 **>0.1%**（完全不变 → 输出与输入解耦，硬编码实锤 critical）；跑完删除临时输出，记入 `evidence_manifest.md`。
 10. **图表按 `standards.json` `required_charts` 清单产齐**：300 DPI、蓝 `#1f77b4`/红 `#d62728`、`seaborn-v0_8-whitegrid`、中文不乱码、PNG >15KB；Excel 按 `required_excels`（冻结首行/自动列宽/中文不乱码）。
 
+**核验分级落档（2026-07-10）**：仅当 diagnoser 诊断结论明确裁定某指标降级时，在 comparison.json 该 metric 上落 `verification_level` 字段（同时确保 `attribution_status: assumption_linked` 在位——门禁对未锚定假设的降级直接判 FAIL）；**你无权自行发起降级**，也不得因数值难对齐而建议降级。
+
 ## 完成报告格式
 
 **产物清单**（列出实际写入的绝对路径 + main.py 运行命令与退出码）。

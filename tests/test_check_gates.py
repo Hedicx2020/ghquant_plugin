@@ -1302,3 +1302,52 @@ def test_report_g_fn_7_requires_rendered_html(tmp_path):
         "<html>demo 指标对比总表" + "x" * 6000 + "</html>", encoding="utf-8")
     rs = {r.id: r for r in cg.check_report(tmp_path, "demo")}
     assert rs["G-FN-7"].passed is True
+
+
+# ---------------------------------------------------------------------------
+# 核验分级 verification_level（参数不明的诚实降级 + 防作弊锚定）
+# ---------------------------------------------------------------------------
+
+
+def test_vlevel_directional_checks_sign_only():
+    spec = {"max_rel_dev": 0.05}
+    m = {"key": "x", "report_value": 0.10, "reproduced_value": 0.30,
+         "verification_level": "directional", "attribution_status": "assumption_linked"}
+    r = cg.recalc_metric(m, spec)
+    assert r.passed is True  # 偏差 200% 但方向对 → directional 放行
+    m["reproduced_value"] = -0.02
+    assert cg.recalc_metric(m, spec).passed is False  # 方向反 → FAIL
+
+
+def test_vlevel_magnitude_checks_order_only():
+    spec = {}
+    m = {"key": "x", "report_value": 100.0, "reproduced_value": 300.0,
+         "verification_level": "magnitude", "attribution_status": "assumption_linked"}
+    assert cg.recalc_metric(m, spec).passed is True   # 同量级
+    m["reproduced_value"] = 5000.0
+    assert cg.recalc_metric(m, spec).passed is False  # 差 50 倍
+
+
+def test_vlevel_unverifiable_waived_not_failed():
+    m = {"key": "x", "verification_level": "unverifiable",
+         "attribution_status": "assumption_linked"}
+    r = cg.recalc_metric(m, {})
+    assert r.passed is None and "不计入" in r.reason
+
+
+def test_vlevel_downgrade_without_assumption_is_cheating():
+    """防作弊：降级未挂 assumption_linked → 直接 False。"""
+    for lv in ("directional", "magnitude", "unverifiable"):
+        m = {"key": "x", "report_value": 1.0, "reproduced_value": 1.0,
+             "verification_level": lv, "attribution_status": "accepted"}
+        r = cg.recalc_metric(m, {})
+        assert r.passed is False and "assumption_linked" in r.reason
+
+
+def test_vlevel_full_or_absent_keeps_normal_path():
+    spec = {"max_rel_dev": 0.05}
+    m = {"key": "x", "report_value": 0.10, "reproduced_value": 0.101,
+         "verification_level": "full"}
+    assert cg.recalc_metric(m, spec).passed is True
+    m2 = {"key": "y", "report_value": 0.10, "reproduced_value": 0.2}
+    assert cg.recalc_metric(m2, spec).passed is False

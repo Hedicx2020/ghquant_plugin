@@ -15,7 +15,7 @@
    ```
    （pending 应为 0——若非 0 说明仍有未终态要素，先回上游终态化再进报告。）确认 `verdict.result` 已在 verify/iterate 出口设好。
 3. **派 `quant-reporter`**（subagent_type=`quant-reporter`）。输入合同：
-   - `workspace/<id>/` 全部产物：`spec/{spec.md,coverage_matrix.md,ambiguities.md}`、`plan.md`、`assumptions.md`、`audit/`（extract_audit / impl_audit / evidence_manifest / audit_responses / 各 codex 原始输出）、`iterations/`（iteration_log.md + 全部 iter_NN/）
+   - `workspace/<id>/` 产物（**瘦身合同，2026-07-10**）：`spec/{spec.md,coverage_matrix.md,ambiguities.md}`、`plan.md`、`assumptions.md`、`audit/audit_responses.md`（全量意见处置总表——原始意见结论均已在此，**不给**各 codex 原始输出与逐 milestone 内审全文）、`audit/evidence_manifest.md`、`iterations/iteration_log.md` + **仅最后一轮** `iter_NN/diagnosis.md`（历史轮次细节靠 log 汇总，**不给**全部轮次全文）
    - `output/<id>/results/comparison.json`、`output/<id>/verify_report.md`
    - **oos=done 时追加**：`workspace/<id>/oos_report.md`、`output/<id>/results/oos_metrics.json`（final_report 必含「样本外表现」章节——收录区间、逐指标对比、conclusion 与判读规则；G-FN 动态核验该章节。oos=skipped 时不追加，报告在复跑指引或残余章节一句话说明跳过原因）
    - state 的 `external_reviews` / `verdict` / `coverage_stats` 摘要（**由主会话在 prompt 里转述关键字段**，reporter 不直接读 state.json）

@@ -6,6 +6,11 @@
 
 - 前置断言：`uv run python tools/check_gates.py <id> --stage plan --assert-done` 必须 PASS。
 
+
+> **外审档位触发判定（audit_level=standard 时先执行；strict 跳过本框直接全跑）**：
+> 读 cwd `.reproduce.json` 的 `audit_level`。为 `standard` 时，codex 盲提取外审仅当满足任一触发条件才跑：① `ambiguities.md` 含 blocking 或 major 级歧义；② state 的 `type` 是本工作目录首次复现的类型（`ls workspace/` 无同 type 已完成案例）；③ difficulty=hard。
+> **不触发时的 skipped 落档协议**（保持门禁兼容，非伪造审计）：主会话落三个明示跳过的占位档——`spec_audit_codex.md` 写 `{"checkpoint":"spec","verdict":"skipped","reason":"audit_level=standard 未触发","findings":[]}`；`spec/spec_codex.md` 与 `spec/extract_diff.md` 各写一行说明「audit_level=standard 未触发盲提取，本文件为占位」（extract_diff 保留空表头）；external_reviews 追加 `{"checkpoint":"spec","engine":"codex","verdict":"skipped",...}`。内审（auditor mode=spec，medium+ 必跑）不受档位影响照常执行。最终报告如实展示 skipped。
+
 ## 动作序列
 
 1. **状态先行**：`uv run python tools/state.py set-stage <id> spec_audit running`

@@ -40,6 +40,8 @@ color: red
 9. **同指标 3 轮红线**：同一指标连续 3 轮 fail → 自动建议 `stop_partial`，并标注「无法收敛，疑数据源口径差异」进报告。
 10. **结论三选一**：`continue`（附给 coder 的**具体修改指令** + 文件范围）/ `stop_partial`（残余偏差与已试假设入报告）/ `blocked`（写明缺什么外部输入）。
 
+**核验分级裁定权（2026-07-10）**：对归因为 assumption_linked 的超差指标，若对应 AS# 的性质是「研报参数不明」（原文未披露该参数且无惯例可锚定），你可以裁定核验降级——`verification_level ∈ {directional(仅方向), magnitude(仅量级), unverifiable(不可核验)}`，写入诊断结论并注明依据（哪条 AS#、为何数值核验无意义）；verifier 据此在 comparison.json 落字段。**约束**：只有 assumption_linked 项可降级；降级是「诚实声明核验边界」不是「放水达标」，能用方向/量级核验就不要用 unverifiable；实现缺陷导致的超差严禁借降级掩盖。
+
 ## 完成报告格式
 
 **产物清单**（`iter_NN/diagnosis.md` 绝对路径 + 本轮结论）。

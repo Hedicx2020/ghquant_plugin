@@ -51,6 +51,8 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/<x>.py" ...
 - 门禁判定：`uv run python tools/check_gates.py <id> --stage <stage> [--assert-done] [--record]`
 - PDF 转文本：`uv run python tools/pdf_extract.py <pdf_path> <out_dir>`
 - 8 个子 agent（`Agent` 工具，`subagent_type`）：`quant-extractor` / `quant-planner` / `quant-auditor`（派发时在 prompt 里指明 `mode=spec|code|result`）/ `quant-coder` / `quant-verifier` / `quant-diagnoser` / `quant-oos-analyst`（复现达标后的样本外延伸分析）/ `quant-reporter`
+- **经济模式派发规则**：cwd `.reproduce.json` 的 `economy=true` 时，派发 `quant-extractor` / `quant-verifier` / `quant-oos-analyst` 一律带 `model: "sonnet"` 覆盖（机械性工作：抄写结构化/跑脚本对数/延伸跑数）；`quant-planner` / `quant-coder` / `quant-auditor` / `quant-diagnoser` 任何模式下保持 opus（分诊裁决/写代码/对抗审计/归因推理，质量敏感）；`quant-reporter` 本就 sonnet。economy=false 或无配置时不加覆盖。
+- **外审档位规则**：cwd `.reproduce.json` 的 `audit_level=standard` 时，spec_audit / code_audit 的 codex 外审改为触发式（触发条件与 skipped 落档协议见对应执行卡）；**result_audit 的 codex 外审任何档位必跑**（反虚报是最后防线）。strict（默认）或无配置时三审查点全跑。
 - codex 三审查点 prompt 骨架：`templates/codex_prompts/{spec_audit,code_audit,result_audit,second_opinion}.md`
 - 通用模板：`templates/_spec_template.md`、`templates/_plan_template.md`、`templates/{factor,timing,allocation,fixed_income,ml}.md`、`templates/data_catalog.md`、`templates/standards.json`、`templates/audit/*`
 
@@ -82,7 +84,7 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/<x>.py" ...
 
 ### 3.0 `setup`（首次使用配置向导，幂等可重跑）
 
-按 `stages/setup.md` 执行卡走：AskUserQuestion 收五项配置（数据路径 / auto 或 interactive 执行模式 / 最大迭代次数 / 回测框架——自有框架目录或默认内置 `common/` / 偏差容忍——可接受的与原报告的偏差，默认按 standards.json 分类型精细容差）→ 调 `setup_workspace.py` 一次完成落地（.reproduce.json + templates/common 种子 + pyproject + 目录树）→ 转述环境检测报告（uv / Python 依赖 / codex CLI）→ 引导用户维护 `templates/data_catalog.md`。`backtest_framework` 的消费点在 plan / implement 执行卡（planner 复用规划与 coder 合同：用户框架优先、`common/` 补缺口）；`default_max_rel_dev` 的消费点在 `check_gates`（load_standards 自动读取，统一替换相对偏差上限）与 verify 执行卡（verifier 对数口径同步）。
+按 `stages/setup.md` 执行卡走：AskUserQuestion 收六项配置（数据路径 / auto 或 interactive 执行模式 / 最大迭代次数 / 回测框架 / 偏差容忍 / 经济模式；另有配置文件项 audit_level 不进问卷）→ 调 `setup_workspace.py` 一次完成落地（.reproduce.json + templates/common 种子 + pyproject + 目录树）→ 转述环境检测报告（uv / Python 依赖 / codex CLI）→ 引导用户维护 `templates/data_catalog.md`。`backtest_framework` 的消费点在 plan / implement 执行卡（planner 复用规划与 coder 合同：用户框架优先、`common/` 补缺口）；`default_max_rel_dev` 的消费点在 `check_gates`（load_standards 自动读取，统一替换相对偏差上限）与 verify 执行卡（verifier 对数口径同步）。
 
 ### 3.1 `<pdf_path> [--mode auto|interactive] [--max-iter N] [--id name] [--difficulty easy|medium|hard]`
 

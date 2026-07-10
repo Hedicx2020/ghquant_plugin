@@ -201,3 +201,11 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/state.py" ...
 - **页面内容**：verdict/评级/覆盖率/迭代 KPI 卡、指标对比总表（pass/fail 标色 + 全部/仅未达标筛选 + 归因列）、图表画廊（base64 内嵌自包含，单图 >8MB 跳过）、样本外表现节（oos 产物存在时）、外部审查台账、假设登记簿与最终报告全文（简易 markdown 渲染折叠收录）。所有产物文本 HTML 转义（注入防护有单测）。
 - **集成**：report 执行卡步骤 5（reporter 点收后主会话跑工具）；门禁 G-FN-7（存在 + 含 report_id 与「指标对比总表」锚 + >5KB）。
 - 评级 A/B/C 从 final_report.md 正则提取（state 不存评级）。
+
+## 十四、2026-07-10 增补（v2.6.0）：分诊判据修正 + 成本三刀 + 核验分级
+
+1. **分诊判据修正**（_plan_template §三）：test_v2 实测暴露旧判据三缺陷——milestone 数 ≥3 即 hard 是循环论证（拆分产出反推难度）、any-hard 规则太激进（已降级支线缺失仍抬档）、模块数量≠技术难度。新判据：方法复杂度定基准档（训练/优化/多资产联动才 hard）→ 修正项各最多上调一档（主线数据需外部/复杂衍生；模块 ≥8 且基准已 medium）→ easy 收口（单模块+标准公式+数据全有）。
+2. **经济模式**（`.reproduce.json economy`，问卷第二批第 2 问）：Agent 派发 model 覆盖——extractor/verifier/oos-analyst → sonnet；planner/coder/auditor/diagnoser 恒 opus。SKILL.md 全局派发规则。
+3. **外审档位**（`audit_level: strict|standard`，配置文件项不进问卷）：standard 时 spec 外审触发条件（blocking/major 歧义 ∨ 首次类型 ∨ hard）、code 外审触发条件（ml tag ∨ hard ∨ 内审 critical）；不触发时落明示 skipped 的占位档（占位 JSON findings=[] 天然过三关解析，G-SA-1 三件套占位齐、external_reviews 记 skipped，报告如实展示）。result 外审任何档位必跑。
+4. **reporter 瘦身**：输入合同以 audit_responses 总表 + iteration_log + 最后一轮 diagnosis 替代全量原文（验收实测 reporter 380k token 的主要来源）。
+5. **核验分级**（`verification_level: full|directional|magnitude|unverifiable`）：参数不明指标的诚实降级。裁定权唯一在 diagnoser（限 assumption_linked 项、AS 性质须为参数不明）；verifier 只落字段无权发起；recalc_metric 分路径判定（方向/量级/不计入分母）；**防作弊**：降级未锚定 assumption_linked 直接 False；auditor(result) 三点人审（AS 性质/裁定出处/档位不过度）；G-VF-3 对 unverifiable 豁免且透明展示（waived 清单），渲染页分层统计。

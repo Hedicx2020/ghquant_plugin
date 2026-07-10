@@ -947,6 +947,33 @@ def recalc_metric(metric: dict, spec: dict) -> MetricRecalc:
     同号否决逻辑。
     """
     key = metric.get("key", "?")
+
+    # 核验分级（2026-07-10）：研报参数不明导致数值核验无意义时的诚实降级。
+    # 防作弊：降级必须挂 assumption_linked（锚定登记在案的不明参数假设 AS#），
+    # 否则任何角色都可借降级绕过容差——直接判 False，反虚报核查另行人审合理性。
+    vlevel = metric.get("verification_level")
+    if vlevel and vlevel != "full":
+        if metric.get("attribution_status") != "assumption_linked":
+            return MetricRecalc(key, None, False, f"verification_level={vlevel} 但未挂 assumption_linked（降级核验必须锚定不明参数假设）")
+        if vlevel == "unverifiable":
+            return MetricRecalc(key, None, None, "核验分级 unverifiable：参数不明且无法定位，不计入达标分母（已锚定假设，报告分层展示）")
+        try:
+            rv = float(metric.get("report_value"))
+            cv = float(metric.get("reproduced_value"))
+        except (TypeError, ValueError):
+            return MetricRecalc(key, None, False, f"verification_level={vlevel} 但 report_value/reproduced_value 缺失或非数值")
+        if vlevel == "directional":
+            ok = (rv == 0 and cv == 0) or (rv * cv > 0)
+            return MetricRecalc(key, None, ok, "核验分级 directional：参数不明，仅校验方向/同号")
+        if vlevel == "magnitude":
+            if rv == 0 or cv == 0:
+                ok = rv == cv
+            else:
+                ratio = abs(cv / rv)
+                ok = 0.1 <= ratio <= 10
+            return MetricRecalc(key, None, ok, "核验分级 magnitude：参数不明，仅校验数量级")
+        return MetricRecalc(key, None, False, f"未知 verification_level: {vlevel}")
+
     try:
         report_value = float(metric.get("report_value"))
         reproduced_value = float(metric.get("reproduced_value"))
@@ -1044,17 +1071,22 @@ def check_verify(root: Path, report_id: str) -> list[CheckResult]:
     if comparison is not None:
         fails: list[str] = []
         metrics = comparison.get("metrics", [])
+        waived: list[str] = []
         for m in metrics:
             spec = _tolerance_spec_for_metric(standards, report_type, m)
             r = recalc_metric(m, spec)
-            if r.passed is not True:
+            if r.passed is False:
                 fails.append(f"{r.key}[{r.reason}]")
+            elif r.passed is None:
+                # unverifiable：不计入达标分母也不驱动迭代，但必须透明展示，不得静默吞掉
+                waived.append(r.key)
         qualitative = comparison.get("qualitative", [])
         for q in qualitative:
             if q.get("expect") != q.get("observed"):
                 fails.append(f"{q.get('key', '?')}[定性指标 expect!=observed]")
         recalced_ok = not fails
-        detail = f"未通过: {fails}" if fails else f"{len(metrics)} 项数值指标 + {len(qualitative)} 项定性指标均通过重算"
+        waived_note = f"；unverifiable 豁免 {len(waived)} 项: {waived}" if waived else ""
+        detail = (f"未通过: {fails}" if fails else f"{len(metrics)} 项数值指标 + {len(qualitative)} 项定性指标均通过重算") + waived_note
     else:
         recalced_ok = False
         detail = "comparison.json 不可用，无法重算"

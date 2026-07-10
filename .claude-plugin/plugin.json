@@ -1,7 +1,7 @@
 {
   "name": "quant-report-reproduce",
   "description": "量化研报复现流水线：11 阶段门禁状态机 + 7 子 agent + codex 三审查点。给定研报 PDF，按类型（factor/timing/allocation/fixed_income/ml）与难度差异化复现，产出对齐原文的策略代码、回测结果与带可信度评级的最终报告。首次使用运行 /reproduce setup 配置数据路径、执行模式与最大迭代次数。",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "author": {
     "name": "Hedi"
   }

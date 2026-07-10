@@ -105,3 +105,15 @@ def test_html_escapes_content(tmp_path):
     t = rr.render(tmp_path, "demo").read_text(encoding="utf-8")
     assert "<script>alert(1)</script>" not in t
     assert "&lt;script&gt;" in t
+
+
+def test_render_shows_verification_level_layers(tmp_path):
+    """降级核验项在指标表与分层说明中透明展示。"""
+    _fixture(tmp_path)
+    res = tmp_path / "output" / "demo" / "results"
+    data = json.loads((res / "comparison.json").read_text(encoding="utf-8"))
+    data["metrics"][1]["verification_level"] = "directional"
+    (res / "comparison.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    t = rr.render(tmp_path, "demo").read_text(encoding="utf-8")
+    assert "核验分层" in t and "1 项因研报参数不明降级核验" in t
+    assert "方向" in t

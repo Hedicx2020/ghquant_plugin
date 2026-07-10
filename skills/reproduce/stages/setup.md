@@ -6,7 +6,7 @@
 
 1. **已初始化检测**：cwd 存在 `.reproduce.json` → 读出并展示现有三项配置，用 AskUserQuestion 问「保留现有配置只补齐缺失文件 / 重新配置三项」；选保留则跳过步骤 2，调用步骤 3 时**不带** `--force-config`。
 
-2. **五项配置（AskUserQuestion 分两批收齐；工具单次上限 4 问，严禁一次塞 5 个）**：
+2. **六项配置（AskUserQuestion 分两批收齐；工具单次上限 4 问，严禁超限）**：
 
    **第一批（4 问）**：
    - **数据路径**（header: 数据路径）：本地 parquet 数据根目录。选项：`~/local_data`（默认）/ 自定义（Other 输入）。说明：分诊数据可行性以 `templates/data_catalog.md` 为唯一判定依据，该目录下的数据请在 setup 后维护进 catalog。
@@ -14,14 +14,17 @@
    - **最大迭代次数**（header: 迭代上限）：`按难度自动`（推荐——easy 3 / medium 5 / hard 6 轮）/ 自定义 1-10 的整数（全局覆盖）。说明：指标未达标时的自动迭代修正轮数上限；轮次越多复现越充分、耗时与成本越高。
    - **回测框架**（header: 回测框架）：`内置框架`（推荐——使用随插件落地的 `common/` 回测库）/ 自定义路径（Other 输入你自有回测框架的目录）。说明：指定后复现代码的回测执行层优先调用你的框架、`common/` 仅补缺口；路径必须真实存在（工具会校验）。
 
-   **第二批（1 问）**：
+   **第二批（2 问）**：
    - **偏差容忍**（header: 偏差容忍）：`按内置标准`（推荐——分类型精细容差：如年化/夏普等相对偏差 5%、因子 IC 近零走绝对偏差 0.005，详见 `templates/standards.json`，落地后可手工细调）/ 自定义百分比（Other 输入如 `10%` 或 `0.1`，换算为 0.005-0.5 的小数）。说明：你能接受的复现值与原报告的偏差——自定义后**所有按相对偏差判定的指标统一用该容忍度**（绝对偏差/同号/数量级/定性判定语义不变），达标门禁与最终报告的 pass/partial 判定随之变化。
 
+   - **经济模式**（header: 经济模式）：`关闭`（推荐首次使用——全 opus 质量优先）/ `开启`（机械性角色 extractor/verifier/oos-analyst 派发降为 sonnet，token 消耗约降三成；coder/auditor/diagnoser 等质量敏感角色不受影响）。
+
+   > 外审档位 `audit_level`（strict|standard）不进问卷，默认 strict；需要降为 standard（spec/code 外审触发式、result 必跑）时直接编辑 `.reproduce.json` 或带 `--audit-level standard` 重跑本工具。
    > 未来新增配置项时同样遵守 4 问上限分批；两批答案合并后一次性传给步骤 3。
 
 3. **落地骨架**（命令按 SKILL.md 二、工具定位协议展开）：
    ```
-   uv run python tools/setup_workspace.py --target . --data-root "<答案1>" --mode <答案2> --max-iter <答案3|留空> --backtest-framework "<答案4|留空>" --max-rel-dev <答案5小数|留空> [--force-config]
+   uv run python tools/setup_workspace.py --target . --data-root "<答案1>" --mode <答案2> --max-iter <答案3|留空> --backtest-framework "<答案4|留空>" --max-rel-dev <答案5小数|留空> [--economy] [--audit-level strict|standard] [--force-config]
    ```
    - 重新配置时带 `--force-config`；保留现有配置时不带。
    - `--max-iter` 用户选「按难度自动」时留空；`--backtest-framework` 用户选「内置框架」时留空（省略该参数）；`--max-rel-dev` 用户选「按内置标准」时留空，自定义时把百分比换算为小数（10% → 0.1）。

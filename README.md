@@ -19,6 +19,7 @@
    - **最大迭代次数**：按难度自动（easy 3 / medium 5 / hard 6）或自定义 1-10
    - **回测框架**：默认使用内置 `common/` 回测库；也可指定你自有回测框架的目录路径——复现代码的回测执行层将优先调用你的框架，内置库仅补缺口
    - **偏差容忍**：你能接受的复现值与原报告的偏差。默认按 `templates/standards.json` 分类型精细容差（年化/夏普等 5%、因子 IC 近零走绝对偏差等）；也可自定义统一百分比（如 10%）——所有相对偏差判定随之放宽或收紧，达标判定与最终报告一致生效
+   - **经济模式**：开启后机械性角色（提取/验证/样本外）派发降为 sonnet，token 消耗约降三成；质量敏感角色（写码/审计/归因）保持 opus。另有配置文件项 `audit_level`（strict 默认 / standard 外审触发式）进一步控成本，见手册
    随后 setup 自动落地：`.reproduce.json` 配置、`templates/`（含数据目录模板与达标标准）、`common/`（公共回测库）、`pyproject.toml`、目录树，并检测 uv / Python 依赖 / codex CLI。
 2. **维护 `templates/data_catalog.md`**：按你数据目录的实际内容登记数据清单——分诊阶段判断「研报所需数据是否可得」完全依据此文件。
 3. 把研报 PDF 放进 `reports/`，运行 `/reproduce reports/xxx.pdf` 起跑。
@@ -65,6 +66,8 @@
 `test`（新流程验收用例）、`momentum_factor`、`long_term_momentum` 三案例已用 `--legacy` 归档，详见对应 `workspace/{id}/state.json`。
 
 ## 变更记录
+
+- 2026-07-10（v2.6.0）：四项修订——① 分诊判据修正：方法复杂度为主轴（训练/优化/多资产联动才 hard），删除 milestone 数维度（循环论证），已降级支线的数据缺失不再抬难度，「工作量大 ≠ 技术难」；② 经济模式 `economy`：机械性角色（extractor/verifier/oos-analyst）派发降 sonnet，质量敏感角色保持 opus；③ 外审档位 `audit_level: strict|standard`：standard 时 spec/code 外审触发式（skipped 明示落档保持门禁兼容），result 外审任何档位必跑；④ 核验分级 `verification_level`：研报参数不明的指标经 diagnoser 裁定可降级为方向/量级/不可核验（必须锚定 assumption_linked 防作弊，报告分层展示）。reporter 输入合同瘦身（总表替代全量原文）。
 
 - 2026-07-10：新增复现结果单文件 HTML 展示页——report 阶段由 `tools/render_report.py` 确定性渲染 `output/{id}/final_report.html`（指标对比总表可筛选、图表 base64 内嵌自包含、样本外/审计台账/假设登记簿与报告全文折叠收录，浏览器直接打开可分享）；G-FN-7 门禁核验；5 个渲染器单测。
 

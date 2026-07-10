@@ -197,7 +197,7 @@
   <a href="#overview">这是什么</a>
   <a href="#pipeline">复现流水线全景</a>
   <a href="#install">安装与首次配置</a>
-  <a class="lv2" href="#setup5">五项配置详解</a>
+  <a class="lv2" href="#setup5">配置详解</a>
   <a class="lv2" href="#catalog">数据目录维护</a>
   <a href="#how">运作方式</a>
   <a class="lv2" href="#rules">六条硬规则</a>
@@ -221,7 +221,7 @@
   <h1>quant-report-reproduce<br>量化研报复现流水线</h1>
   <p class="lede">给它一份量化研报 PDF，它产出与原文逐项对齐的策略代码、回测结果，和一份带可信度评级的复现报告——中间的提取、规划、实现、验证、审计、迭代，全部由带门禁的多 agent 流水线自动完成。</p>
   <div class="hero-meta">
-    <span class="pill gate">v2.5.0</span>
+    <span class="pill gate">v2.6.0</span>
     <span class="pill dim">1 skill + 8 agents</span>
     <span class="pill dim">12 阶段门禁状态机</span>
     <span class="pill dim">codex 三审查点外审</span>
@@ -279,7 +279,7 @@
   </ol>
   <p>setup 幂等可重跑：已有配置默认保留，你改过的模板文件永不被覆盖（插件侧更新只列清单提示，不动你的文件）。</p>
 
-  <h3 id="setup5">五项配置详解</h3>
+  <h3 id="setup5">配置详解（问卷六项 + 配置文件项）</h3>
   <div class="tbl-scroll"><table>
     <tr><th>配置项</th><th>字段</th><th>默认</th><th>含义与影响</th></tr>
     <tr><td><strong>数据路径</strong></td><td><code>data_root</code></td><td><code>~/local_data</code></td><td>本地 parquet 数据库根目录。<code>common/data_loader.py</code> 从这里读行情、财务等数据。</td></tr>
@@ -287,6 +287,8 @@
     <tr><td><strong>最大迭代次数</strong></td><td><code>default_max_iter</code></td><td>按难度自动</td><td>指标未达标时自动迭代修正的轮数上限。默认 easy 3 / medium 5 / hard 6，可用 1–10 的整数全局覆盖。轮次越多复现越充分，耗时与成本越高。</td></tr>
     <tr><td><strong>回测框架</strong></td><td><code>backtest_framework</code></td><td>内置 <code>common/</code></td><td>可指定你自有回测框架的目录路径（工具校验存在性）。指定后，复现代码的回测执行层<strong>优先调用你的框架</strong>，内置库仅补缺口；输出产物与门禁要求不变。</td></tr>
     <tr><td><strong>偏差容忍</strong></td><td><code>default_max_rel_dev</code></td><td>按内置标准</td><td>你能接受的复现值与原报告的偏差。默认走 <code>standards.json</code> 分类型精细容差；自定义（0.5%–50%）后，所有按<strong>相对偏差</strong>判定的指标统一用该容忍度，达标门禁与最终报告一致生效。</td></tr>
+    <tr><td><strong>经济模式</strong></td><td><code>economy</code></td><td>关闭</td><td>开启后机械性角色（提取 / 验证 / 样本外分析）派发降为 sonnet，token 约降三成；写码 / 审计 / 归因等质量敏感角色保持 opus 不受影响。</td></tr>
+    <tr><td><strong>外审档位</strong></td><td><code>audit_level</code></td><td><code>strict</code></td><td>配置文件项（不进问卷）。<code>standard</code> 时规格/代码外审改为触发式（关键歧义、首次类型、hard、ml 才跑，跳过时明示留档），<strong>结果外审任何档位必跑</strong>——反虚报是最后防线。</td></tr>
   </table></div>
   <div class="note">
     <strong>偏差是「相对偏差」</strong>：判定式为 |复现值 − 研报值| ÷ |研报值|。研报年化 10%、容忍 5% ⇒ 允许区间 <span class="num">9.5% ~ 10.5%</span>（不是 5%~15%）。研报值越小同样容忍越苛刻，所以近零指标（如因子 IC）在内置标准里配有绝对偏差兜底（abs_eps），自定义容忍不改变这些特殊判定的语义。
@@ -487,6 +489,10 @@
     <div><p><code>/reproduce continue &lt;id&gt;</code>。全部进度在 <code>workspace/{id}/state.json</code> 与产物文件里，续跑时逐阶段幂等自愈：产物齐全的阶段直接跳过，缺的从断点重做。换机器把工作目录同步过去即可。</p></div>
   </details>
   <details>
+    <summary>报告被分诊为 hard，跑得又慢又贵怎么办？</summary>
+    <div><p>先看分诊依据（plan.md 的难度判定节）。v2.6.0 起判据以<strong>方法复杂度</strong>为主轴：只有训练模型 / 优化求解 / 多资产联动才 hard，结果表多、指标多属于"工作量大"，只影响里程碑数量不抬难度档。若仍觉得过重：起跑时 <code>--difficulty medium</code> 直接覆盖分诊；配置 <code>economy: true</code> 让机械性角色降为 sonnet；把 <code>audit_level</code> 调为 <code>standard</code> 让规格/代码外审只在关键条件下触发。三者叠加约可省三分之二消耗，且结果反虚报、达标门禁、人工闸门一处不动。</p></div>
+  </details>
+  <details>
     <summary>怎么更新插件？</summary>
     <div><p><code>/plugin update quant-report-reproduce</code>（重启会话生效）。你目录里的 templates/common 不会被自动覆盖——setup 重跑时会列出「插件侧较新」的文件清单，由你决定是否手动同步。</p></div>
   </details>
@@ -525,7 +531,7 @@
 </section>
 
 <footer>
-  <span>quant-report-reproduce v2.5.0</span>
+  <span>quant-report-reproduce v2.6.0</span>
   <span><a href="https://github.com/Hedicx2020/ghquant_plugin">github.com/Hedicx2020/ghquant_plugin</a></span>
   <span>12 阶段门禁状态机 · 8 子 agent · codex 三审查点 · 样本外延伸分析</span>
 </footer>

@@ -282,8 +282,11 @@ def render(root: Path, report_id: str) -> Path:
              "<button class='on' onclick=\"fl('all',this)\">全部</button>"
              "<button onclick=\"fl('fail',this)\">仅未达标</button>"
              "<button onclick=\"fl('pass',this)\">仅达标</button></div>")
+    n_downgraded = sum(1 for m in metrics if m.get("verification_level") not in (None, "full"))
+    if n_downgraded:
+        B.append(f"<p class='note'>核验分层：{len(metrics) - n_downgraded} 项全量数值核验，{n_downgraded} 项因研报参数不明降级核验（方向/量级/不可核验，均已锚定假设登记簿对应 AS 条目，详见指标表「核验」列）。</p>")
     B.append("<div class='tbl-scroll'><table id='cmp'><thead><tr>"
-             "<th>指标</th><th>研报值</th><th>复现值</th><th>相对偏差</th><th>状态</th><th>归因</th></tr></thead><tbody>")
+             "<th>指标</th><th>研报值</th><th>复现值</th><th>相对偏差</th><th>核验</th><th>状态</th><th>归因</th></tr></thead><tbody>")
     for m in metrics:
         p = m.get("pass")
         s = "pass" if p is True else "fail"
@@ -295,8 +298,11 @@ def render(root: Path, report_id: str) -> Path:
         att = m.get("attribution_status") or ""
         note = m.get("attribution_note") or ""
         att_cell = f"<span class='pill dim'>{esc(att)}</span> {esc(note[:80])}" if att else ""
+        vl = m.get("verification_level") or "full"
+        vl_label = {"full": "全量", "directional": "方向", "magnitude": "量级", "unverifiable": "不可核验"}.get(vl, vl)
+        vl_cell = f"<span class='pill {'dim' if vl == 'full' else 'warn'}'>{esc(vl_label)}</span>"
         B.append(f"<tr{row_cls} data-s='{s}'><td><code>{esc(str(m.get('key', '?')))}</code></td>"
-                 f"<td>{_fmt(rep_v)}</td><td>{_fmt(rec_v)}</td><td>{rel_s}</td>"
+                 f"<td>{_fmt(rep_v)}</td><td>{_fmt(rec_v)}</td><td>{rel_s}</td><td>{vl_cell}</td>"
                  f"<td><span class='pill {s}'>{'PASS' if p is True else 'FAIL'}</span></td><td>{att_cell}</td></tr>")
     B.append("</tbody></table></div></section>")
 

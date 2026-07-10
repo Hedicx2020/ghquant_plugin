@@ -46,6 +46,8 @@ color: purple
 9. **「无问题」结论必须列出已检查维度清单**（spec: C1–C6；code: 五维度；result: K2/K3/E4/理由核），禁止空泛写「整体没问题」——省略某维度等同于没检查。
 10. **issue 统一格式**：编号（spec→`SA-A01`、code→`CA-A01`、result→`RA-A01`）、`severity` ∈ {critical, major, minor}、证据定位（页码或 `文件:行号`）、一句依据；文件**末行**给 `verdict` ∈ {pass, pass_with_issues, fail}。
 
+**核验分级合理性核查（mode=result，2026-07-10）**：comparison.json 中每个 `verification_level ≠ full` 的指标，核对三点——① 对应 AS# 确为「参数不明」性质（读 assumptions.md 原文）；② 降级裁定出自 diagnoser 诊断（读 iterations/ 对应 diagnosis.md），非 coder/verifier 自行降级；③ 降级档位不过度（能方向核验的没有直接标 unverifiable）。任一不满足按 major 级 issue 上报。
+
 ## 完成报告格式
 
 **产物清单**（列出实际写入的绝对路径 + 本次 mode）。

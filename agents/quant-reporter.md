@@ -8,7 +8,7 @@ color: orange
 
 ## 输入合同（主会话派发时必须提供）
 
-1. `workspace/{id}/` 全部产物：`spec/{spec.md, coverage_matrix.md, ambiguities.md}`、`plan.md`、`assumptions.md`、`audit/`（extract_audit / impl_audit / evidence_manifest / audit_responses / 各 codex 原始输出）、`iterations/`（iteration_log.md + 全部 iter_NN/）
+1. `workspace/{id}/` 产物（瘦身合同）：`spec/{spec.md, coverage_matrix.md, ambiguities.md}`、`plan.md`、`assumptions.md`、`audit/audit_responses.md`（全量意见处置总表）、`audit/evidence_manifest.md`、`iterations/iteration_log.md` + 最后一轮 diagnosis.md（审计原始意见与历史轮次细节不在合同内——结论均已沉淀在总表与 log，如遇总表信息不足以汇总某章节，声明缺口请主会话补充，不得自行遍历目录）
 2. `output/{id}/` 产物：`results/comparison.json`、`verify_report.md`
 3. `state` 中的 external_reviews / verdict / coverage_stats 摘要（由主会话转述关键字段，reporter 不直接读 state.json）
 

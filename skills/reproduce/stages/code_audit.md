@@ -6,6 +6,11 @@
 
 - 前置断言：`uv run python tools/check_gates.py <id> --stage implement --assert-done` 必须 PASS。
 
+
+> **外审档位触发判定（audit_level=standard 时先执行；strict 跳过本框直接全跑）**：
+> 读 cwd `.reproduce.json` 的 `audit_level`。为 `standard` 时，codex 代码外审仅当满足任一触发条件才跑：① `tags` 含 ml（未来函数/训练泄漏数值验证抓不到，必须外审）；② difficulty=hard；③ 本阶段内审（auditor mode=code）抓到 critical。
+> **不触发时的 skipped 落档协议**：`code_audit_codex.md` 写 `{"checkpoint":"code","verdict":"skipped","reason":"audit_level=standard 未触发","findings":[]}`；external_reviews 追加 skipped 记录。内审照常执行。最终报告如实展示 skipped。
+
 ## 动作序列
 
 1. **状态先行**：`uv run python tools/state.py set-stage <id> code_audit running`

@@ -37,7 +37,7 @@ milestones:
 
 ### 字段填写规则
 - **type**：看研报最终回测对象。截面选股=`factor`；时序仓位信号=`timing`；多资产权重=`allocation`；债券/收益率曲线=`fixed_income`；需训练模型=`ml`。混合时取「最终回测形态」为 type，其余进 tags（例：深度学习选股 → `type: factor` + `tags: [ml]`）。
-- **difficulty**：按 §三 难度判定表，任一维度落 hard 即 hard；含模型训练自动 ≥ medium。
+- **difficulty**：按 §三 三步判定（方法复杂度定基准 → 修正项上调 → easy 收口）；plan 正文「难度判定」节必须写明基准档依据与各修正项触发情况，供审计核对。
 - **feasibility**：取值 ∈ `{feasible, degraded, blocked}`（与 `tools/state.py` 的 `FEASIBILITY_VALUES` 逐字对齐，注意不是 `ok/partial`）。所有核心 data_requirement 为 available/derive → `feasible`；部分非核心数据 missing 但不影响主结论、需降级复现 → `degraded`；核心数据 missing 或核心方法无法确定 → `blocked`（触发主流程停下问用户，`tools/check_gates.py` G-PL-9 断言 `feasibility != blocked` 才能放行）。
 - **milestones**：每个里程碑应是一个「可独立实现+验证」的闭环单元，粒度参考对应类型模板的「plan 正文结构」。`deps` 描述里程碑间的先后依赖（`tools/check_gates.py` G-PL-5 会检测环依赖，成环直接判 FAIL）；`elements` 是该里程碑要交付的 spec.md 要素 ID 清单，写完后须与 `coverage_matrix.md` 对应行的 milestone 列相互印证（一个要素只能落在一个 milestone）。
 
@@ -80,13 +80,15 @@ milestones:
 
 ---
 
-## 三、难度判定表（决定 milestone 数与编排强度）
+## 三、难度判定（2026-07-10 修订：方法复杂度主轴 + 修正项；工作量大 ≠ 技术难）
 
-| 维度 | easy | medium | hard |
-|------|------|--------|------|
-| 模块/因子数 | 1 | 2–4 | ≥5 |
-| 数据可得性 | 本地全有 | 需简单衍生 | 需外部/复杂衍生 |
-| 方法复杂度 | 标准公式 | 回归/中性化/参数优化 | 训练模型/优化求解/多资产联动 |
-| milestone 数 | 1 | 2–3 | ≥3 |
+三步判定，**方法复杂度是主轴**（编排强度防的是出错风险，跟技术难度走，不跟工作量走）：
 
-> 主流程据 difficulty 选编排：easy 直接串行；medium 单 coder 逐 milestone；hard 按 milestone 派发独立 coder 子实例（独立模块可并行）+ 每 milestone 独立复核。详见 `.claude/skills/reproduce/SKILL.md`。
+1. **按方法复杂度定基准档**：标准公式/简单统计 → `easy` 基准；回归/中性化/参数寻优 → `medium`；训练模型/优化求解/多资产联动 → `hard`。
+2. **修正项（各最多上调一档，封顶 hard）**：
+   - 数据可得性：**复现主线**需外部数据或复杂衍生 → 上调一档。已随 `feasibility: degraded` 降级不做的支线缺失**不计**（缺失已由降级表达，不重复惩罚）。
+   - 模块/因子数：≥8 **且**基准档已为 medium → 上调 hard（数量只在方法本身不简单时才放大出错风险）。
+3. **easy 收口**：仅当单模块 + 标准公式 + 主线数据全有才可判 easy；有任何修正项触发则至少 medium。
+
+> **milestone 数不是判据**（它是 planner 拆分的产出，拆得细不该反过来抬高难度）；工作量大（结果表多、对数指标多）只影响 milestone 数量，不影响难度档。
+> 主流程据 difficulty 选编排：easy 直接串行；medium 单 coder 逐 milestone；hard 按 milestone 派发独立 coder 子实例（独立模块可并行）+ 每 milestone 独立复核。详见 SKILL.md 第六节裁剪矩阵。
