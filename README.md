@@ -7,8 +7,9 @@
 ## 作为插件安装（推荐给其他使用者）
 
 ```bash
-# 在 Claude Code 中添加本仓库为插件源并安装
+# 在 Claude Code 中：第一步注册插件源，第二步安装（缺一不可）
 /plugin marketplace add https://github.com/Hedicx2020/ghquant_plugin
+/plugin install quant-report-reproduce@hedi-quant
 ```
 
 **首次使用（三步）**：

@@ -226,8 +226,9 @@
     <span class="pill dim">12 阶段门禁状态机</span>
     <span class="pill dim">codex 三审查点外审</span>
   </div>
-  <pre><code><span class="cmt"># 安装（Claude Code 内执行）</span>
+  <pre><code><span class="cmt"># 安装（Claude Code 内执行，两步缺一不可：注册源 → 安装）</span>
 /plugin marketplace add https://github.com/Hedicx2020/ghquant_plugin
+/plugin install quant-report-reproduce@hedi-quant
 
 <span class="cmt"># 进入你的工作目录，首次配置（五项问卷 + 自动落地骨架）</span>
 /reproduce setup
@@ -273,7 +274,7 @@
   </ul>
   <h3>三步开始</h3>
   <ol>
-    <li>安装插件：<code>/plugin marketplace add https://github.com/Hedicx2020/ghquant_plugin</code></li>
+    <li>安装插件（两步）：<code>/plugin marketplace add https://github.com/Hedicx2020/ghquant_plugin</code> 注册源，然后 <code>/plugin install quant-report-reproduce@hedi-quant</code> 安装（重启会话生效）</li>
     <li>进入你自己的工作目录（任意空目录），运行 <code>/reproduce setup</code>——一次问卷收五项配置，随后自动落地：<code>.reproduce.json</code> 配置、<code>templates/</code>（数据目录模板与达标标准）、<code>common/</code>（内置回测库）、<code>pyproject.toml</code>、目录树，并检测 uv / Python 依赖 / codex。</li>
     <li>维护 <code>templates/data_catalog.md</code>（见下），把 PDF 放进 <code>reports/</code>，运行 <code>/reproduce reports/xxx.pdf</code>。</li>
   </ol>
