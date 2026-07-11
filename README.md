@@ -36,12 +36,13 @@
 
 ```bash
 /reproduce setup                          # 首次使用配置向导（形态 A 本仓库直跑可跳过）
-/reproduce reports/test.pdf --mode auto   # 新起一份复现
+/reproduce reports/test.pdf --mode auto   # 新起一份复现（自动分配案例编号 rNNN_<slug>）
 /reproduce reports/us_paper.pdf --experimental   # 实验模式：海外报告市场迁移复现（等价数据替代，数值判定豁免）
-/reproduce status                         # 查看全部案例状态摘要（中文进度）
+/reproduce status                         # 全部案例一览表（编号 | id | 类型/难度 | 状态 | 阶段）
+/reproduce continue r3                    # 编号缩写即可续跑（r3 / r003 / 3 都指向 r003_xxx）
 ```
 
-其余子命令：`/reproduce continue <report_id>` 断点续跑；`/reproduce revise <report_id> ...` / `/reproduce accept <report_id>` 用于人工 review 闸门。
+**案例统一编号**：新案例自动分配 `rNNN_<slug>` 形式的 report_id（三位顺序号 + 语义短名，如 `r001_style_factor`），起跑时终端会明示编号；所有子命令（`continue` / `status` / `revise` / `accept`）都接受编号缩写或唯一前缀，忘了 id 就跑一次无参 `/reproduce status`。`--id` 仍可显式指定覆盖。
 
 ## 目录导航
 
@@ -71,6 +72,7 @@
 
 ## 变更记录
 
+- 2026-07-11（v2.10.0）：案例统一编号——新案例 report_id 自动编号为 `rNNN_<slug>`（`state.py next-id` 分配，接现存最大编号；slug 取 PDF 文件名或研报标题的英文短名，保证看名知义）；全部子命令接受编号缩写（`r3`/`r003`/`3`）与唯一前缀（`state.py resolve` 解析，歧义时列候选）；无参 `status` 输出按编号排序的案例一览表。既有案例不迁移（旧式 id 照常可用、可前缀缩写）；`--id` 显式指定不强加编号。
 - 2026-07-11（v2.9.0）：codex 备用方案补强——外审降级链细化为可执行协议（正本收口在 spec_audit 执行卡）：① 调用前 `command -v codex` 速判，未安装零成本直降、会话内沿用不反复探测；② 失败特征分类：额度/认证类错误（usage limit/quota/429/401）跳过无意义的缩减重试直接降级；③ 一级降级 Claude 替身盲审规范化（general-purpose 执行同一份已填充审查 prompt、禁读过程性文件、直接写原输出路径、不受经济模式降配），二级才 skipped；④ result 审查点（反虚报最后防线）必须先试替身、不得直接 skipped；⑤ iterate 第二意见同链降级（替身独立上下文保留防兜圈价值）；⑥ verifier 辅助自查失败即跳过不替代；⑦ 评级口径统一：失败性降级/缺失（claude_fallback 或 skipped）不分难度封顶 B，audit_level=standard 未触发的配置性 skipped 不封顶。门禁只核产物文件与格式、不核 engine 字段，全链零代码变更。
 - 2026-07-11（v2.8.0）：实验模式（市场迁移复现）——`/reproduce reports/xxx.pdf --experimental`：海外报告原文市场数据本地不可得时，用本地等价数据替代（如美国 CPI → 中国 CPI），复现目标从「数值对齐原文」变为「方法在迁移市场是否成立」。数值对齐判定整体豁免（G-VF-3 只核产出完整、G-RA-3 无超差归因语义、iterate 天然跳过），替代数据逐条入假设登记簿（market-transplant），最终报告与 HTML 结果页强制显著声明（G-FN 核验「市场迁移」章节、结果页顶部醒目 banner）；反虚报照审（数字仍不能编）。strict 模式下 planner 发现整体不可得只能建议、经人工闸门裁决切换，agent 无权自行切换。
 

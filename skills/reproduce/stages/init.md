@@ -10,7 +10,11 @@
 
 ## 动作序列
 
-1. **定 id**：`--id` 给定则用之；否则由 PDF 文件名取 snake_case（如 `reports/xxx_timing.pdf` → `xxx_timing`）。
+1. **定 id（统一编号制）**：`--id` 给定则用之（显式覆盖不强加编号）；否则自动编号：
+   ```
+   uv run python tools/state.py next-id --slug <slug>
+   ```
+   得 `rNNN_<slug>`（NNN 接现存最大编号，从 r001 起）。slug 取 PDF 文件名 snake_case（如 `reports/xxx_timing.pdf` → slug `xxx_timing`）；文件名无语义（纯编号如 `ssrn_6115073`）或含中文/非 ASCII 时，从研报标题取 2-4 个英文词作 slug。**定稿即告知用户**：「本案例编号 rNNN（report_id=`rNNN_<slug>`），续跑 `/reproduce continue rNNN`、看进度 `/reproduce status rNNN`」。
 2. **初始化 state 与目录骨架**（自动创建 `workspace/<id>/{spec,audit,iterations}`、`output/<id>/results`、`src/<id>`）：
    ```
    uv run python tools/state.py init <id> --pdf <pdf_path> [--mode auto|interactive] [--max-iter N]

@@ -83,6 +83,8 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/<x>.py" ...
 
 进入时先判断第一个参数：`setup` / `continue` / `status` / `revise` / `accept` 命中对应分支；否则视为 `<pdf_path>` 走新跑分支。
 
+**案例 id 解析（全部接受 `<id>` 的子命令通用）**：用户输入先经 `uv run python tools/state.py resolve "<输入>"` 解析为完整 report_id 再用——支持完整 id、**编号缩写**（`r3` / `r003` / `3` 均命中 `r003_xxx`）与唯一前缀（如 `ssrn` → `ssrn_6115073`）。resolve 报「匹配到多个」时把候选列给用户请其挑选；报「未找到」时跑 `status`（无参）把现有案例列表呈给用户。**对用户提及案例时优先用编号（如「案例 r003」）**，完整 id 括注即可。
+
 ### 3.0 `setup`（首次使用配置向导，幂等可重跑）
 
 按 `stages/setup.md` 执行卡走：AskUserQuestion 收六项配置（数据路径 / auto 或 interactive 执行模式 / 最大迭代次数 / 回测框架 / 偏差容忍 / 经济模式；另有配置文件项 audit_level 不进问卷）→ 调 `setup_workspace.py` 一次完成落地（.reproduce.json + templates/common 种子 + pyproject + 目录树）→ 转述环境检测报告（uv / Python 依赖 / codex CLI）→ 引导用户维护 `templates/data_catalog.md`。`backtest_framework` 的消费点在 plan / implement 执行卡（planner 复用规划与 coder 合同：用户框架优先、`common/` 补缺口）；`default_max_rel_dev` 的消费点在 `check_gates`（load_standards 自动读取，统一替换相对偏差上限）与 verify 执行卡（verifier 对数口径同步）。
@@ -91,7 +93,7 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/<x>.py" ...
 
 新跑，从 init 开始。
 0. **未初始化引导**（形态 B）：cwd 无 `.reproduce.json` 且无 `tools/state.py`（即不是本仓库直跑）→ 先走 3.0 setup 再回本分支。
-1. 定 `<id>`：`--id` 给定则用之，否则由 pdf 文件名取 snake_case。
+1. 定 `<id>`（**统一编号制**）：`--id` 给定则用之（用户显式覆盖，不强加编号）；否则 **自动编号** `uv run python tools/state.py next-id --slug <slug>` → 得 `rNNN_<slug>`（NNN 三位顺序号，接现存最大编号）。slug 规则：pdf 文件名 snake_case 化；文件名无语义（如 `ssrn_6115073`、`2024061201`）或含中文/非 ASCII 时，**从研报标题取 2-4 个英文词**（如 `style_factor_subdomain`），保证看名知义。定稿后**立即告知用户**：「本案例编号 <rNNN>（report_id=`rNNN_slug`），之后 `/reproduce continue <rNNN>` 即可续跑」。
 2. **参数默认值**：`--mode` / `--max-iter` 未显式给出时，读 cwd `.reproduce.json` 的 `default_mode` / `default_max_iter` 作默认；配置也缺（或形态 A 无配置文件）时维持既有默认（mode=auto，max_iter=难度矩阵 3/5/6）。优先级固定：**显式参数 > .reproduce.json > 内置默认**。
 3. **实验模式（`--experimental`，市场迁移复现）**：适用于原文市场数据本地不可得的海外报告/论文——用本地等价数据替代（如美国 CPI → 中国 CPI、SPX → 沪深300），复现目标从「数值对齐原文」变为「**方法在迁移市场是否成立**」。给了该 flag 则 `state.py init` 带 `--experimental`（state.reproduction_mode=experimental）。语义变化：数值对齐判定整体豁免（G-VF-3 只核产出完整、G-RA-3 无超差归因、iterate 天然跳过）；**最终报告与 HTML 结果页强制显著声明**（G-FN 核验「市场迁移」章节）；替代数据逐条入假设登记簿（market-transplant 性质）。**未给 flag 而 planner 分诊发现原文市场整体不可得但存在等价替代 → 不得自行切换**：置 `paused_blocked` 呈报「严格复现不可行，建议实验模式」等人工裁决（用户确认后主会话 `set <id> reproduction_mode experimental` 再续跑）。
 4. 走 **init 执行卡**（`stages/init.md`）：`state.py init`（含 `--experimental` 透传）→ `pdf_extract` → 回填 `pdf_pages` → 若给了 `--difficulty` 则 `set <id> difficulty_override <d>` → 过 G-IN。
@@ -113,8 +115,8 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/<x>.py" ...
 
 ### 3.3 `status [id]`
 
-- 有 `id`：`uv run python tools/state.py show <id>`。
-- 无 `id`：`ls workspace/` 列出全部 report_id，对每个跑一次 `state.py show` 摘要（current_stage / status / verdict）。
+- 有 `id`：先 resolve（见三节头部）再 `uv run python tools/state.py show <完整id>`。
+- 无 `id`：`ls workspace/` 列出全部 report_id，对每个跑一次 `state.py show` 摘要，**按编号排序制表呈现**：`编号 | report_id | 类型/难度 | 状态 | 当前阶段`（无编号的旧式 id 排在编号案例之后，编号列留空）。这张表就是用户「我有哪些案例、id 是什么」的唯一入口，任何时候用户问「id 是什么/有哪些复现」都跑这条。
 - **呈现约定（面向用户的可读性）**：show 原始输出之外，用中文进度摘要转述——11 阶段用人话（初始化→研报提取→复现规划→规格审计→代码实现→代码审计→运行验证→迭代修正→结果审计→报告汇总→人工评审），标注当前所处位置与完成比例；门禁/意见代号（G-XX、CDX/CA/RA-XX）只括注不打头，正文讲清楚它是什么检查、结论如何。此约定适用于全部子命令对用户的汇报措辞：**对用户讲人话，代号进文书**。
 
 ### 3.4 `revise <id> --assumption <ASid> "<新口径>" | --instruction "<指令>"`

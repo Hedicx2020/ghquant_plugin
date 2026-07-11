@@ -248,3 +248,15 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/state.py" ...
 - **评级口径统一（以 reporter 判据为权威）**：失败性降级/缺失（claude_fallback 或因不可用落 skipped）不分难度封顶 B——替身保住审查覆盖、不恢复异构引擎交叉验证的可信度；**audit_level=standard 未触发的配置性 skipped 不封顶**（触发条件本身是风险导向的，未触发=低风险路径，result 必跑兜底；否则 standard 用户永远拿不到 A，档位失去意义）。装回 codex / 额度恢复即自动回主路径，无需配置。
 
 **边界如实**：替身与被审代码同为 Claude 家族，异构盲区（同源幻觉、同源口径偏好）无法靠替身消除——这正是封顶 B 的理由；用户长期无 codex 时评级上限即 B，这是诚实标注而非惩罚。
+
+## 十八、2026-07-11 增补（v2.10.0）：案例统一编号
+
+**问题**：report_id 从 PDF 文件名派生，下载的研报常是无语义编号名（`ssrn_6115073`）或中文名，用户记不住、引用麻烦（continue/revise/accept 都要敲全名）。
+
+**方案**：
+- **自动编号**：未给 `--id` 时，init 前调 `state.py next-id --slug <slug>` 得 `rNNN_<slug>`——NNN 三位顺序号接现存最大编号（`^r(\d{3})_` 前缀扫描 workspace/ 下含 state.json 的目录），slug 取 PDF 文件名 snake_case、文件名无语义或非 ASCII 时由主会话从研报标题取 2-4 个英文词。字母前缀 r 保证 id 仍是合法 Python 包名（src/{id} 模块路径约束）。
+- **缩写解析**：`state.py resolve <query>`——完整 id 精确命中 > 编号缩写（`r?0*(\d+)` 规范化为 rNNN_ 前缀，r3/r003/3 等价）> 一般前缀兜底（编号零命中时回退，r00 视为打一半的前缀而非编号 0）。唯一命中输出完整 id；多命中列候选 exit 1；零命中列现有案例 exit 1。SKILL.md 三节头部定全局协议：所有接受 `<id>` 的子命令先 resolve 再用。
+- **status 一览表**：无参 status 按编号排序制表（编号 | report_id | 类型/难度 | 状态 | 当前阶段），作为「我有哪些案例」的唯一入口。
+- **兼容**：既有案例不迁移（在跑案例改 id 要动 workspace/src/output 三处目录 + state 内路径 + 代码 import，风险大收益小）；旧式 id 照常用、可前缀缩写；`--id` 显式指定不强加编号。两个子命令均只读，不违反 state.py「唯一写入口」架构（编号在 init 落盘时才被占用；并发起两个新案例不在设计内）。
+
+**边界如实**：next-id 只扫描不锁号，同时起两个新案例会拿到同号——单用户串行起跑场景不设防；resolve 的编号匹配不 fallback 到「rNN 开头的非编号 id」歧义场景（id 规范排除了数字开头，实际不冲突）。

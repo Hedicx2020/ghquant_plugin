@@ -419,3 +419,51 @@ def test_migrate_backfills_as_pending_for_running(tmp_path, monkeypatch):
     st.migrate_stages(root, "demo2")
     migrated = json.loads(p.read_text(encoding="utf-8"))
     assert migrated["stages"]["oos"]["status"] == "pending"
+
+
+# ---------------------------------------------------------------------------
+# 案例统一编号：next-id / resolve
+# ---------------------------------------------------------------------------
+
+
+def test_next_id_starts_from_r001(tmp_path: Path) -> None:
+    """空 workspace 或仅有无编号旧案例时，从 r001 起。"""
+    assert st.next_numbered_id(tmp_path, "alpha") == "r001_alpha"
+    st.init_state(tmp_path, "ssrn_6115073", "reports/x.pdf")  # 旧式无编号 id 不参与计数
+    assert st.next_numbered_id(tmp_path, "alpha") == "r001_alpha"
+
+
+def test_next_id_increments_from_max(tmp_path: Path) -> None:
+    st.init_state(tmp_path, "r001_alpha", "reports/a.pdf")
+    st.init_state(tmp_path, "r007_beta", "reports/b.pdf")
+    assert st.next_numbered_id(tmp_path, "gamma") == "r008_gamma"
+
+
+def test_next_id_ignores_dirs_without_state(tmp_path: Path) -> None:
+    (tmp_path / "workspace" / "r099_ghost").mkdir(parents=True)  # 无 state.json 的目录不算案例
+    assert st.next_numbered_id(tmp_path, "alpha") == "r001_alpha"
+
+
+def test_next_id_rejects_bad_slug(tmp_path: Path) -> None:
+    for bad in ("1abc", "Has_Upper", "with-dash", "", "x" * 41):
+        with pytest.raises(ValueError):
+            st.next_numbered_id(tmp_path, bad)
+
+
+def test_resolve_exact_number_abbrev_and_prefix(tmp_path: Path) -> None:
+    st.init_state(tmp_path, "r001_alpha", "reports/a.pdf")
+    st.init_state(tmp_path, "r012_beta", "reports/b.pdf")
+    st.init_state(tmp_path, "ssrn_6115073", "reports/c.pdf")
+    assert st.resolve_case_id(tmp_path, "r001_alpha") == "r001_alpha"      # 完整 id
+    for q in ("r12", "r012", "12"):                                        # 编号缩写三种写法
+        assert st.resolve_case_id(tmp_path, q) == "r012_beta"
+    assert st.resolve_case_id(tmp_path, "ssrn") == "ssrn_6115073"          # 旧式 id 唯一前缀
+
+
+def test_resolve_rejects_ambiguous_and_missing(tmp_path: Path) -> None:
+    st.init_state(tmp_path, "r001_alpha", "reports/a.pdf")
+    st.init_state(tmp_path, "r002_alpha_v2", "reports/b.pdf")
+    with pytest.raises(ValueError, match="多个案例"):
+        st.resolve_case_id(tmp_path, "r00")
+    with pytest.raises(ValueError, match="未找到"):
+        st.resolve_case_id(tmp_path, "r9")

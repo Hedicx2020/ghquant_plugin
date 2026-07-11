@@ -235,7 +235,7 @@
   <h1>quant-report-reproduce<br>量化研报复现流水线</h1>
   <p class="lede">给它一份量化研报 PDF，它产出与原文逐项对齐的策略代码、回测结果，和一份带可信度评级的复现报告——中间的提取、规划、实现、验证、审计、迭代，全部由带门禁的多 agent 流水线自动完成。</p>
   <div class="hero-meta">
-    <span class="pill gate">v2.9.0</span>
+    <span class="pill gate">v2.10.0</span>
     <span class="pill dim">1 skill + 8 agents</span>
     <span class="pill dim">12 阶段门禁状态机</span>
     <span class="pill dim">codex 三审查点外审</span>
@@ -446,9 +446,9 @@
   <div class="tbl-scroll"><table>
     <tr><th class='c-mid' style='width:19em'>命令</th><th class='c-wide'>作用</th></tr>
     <tr><td><code>/reproduce setup</code></td><td>首次配置向导（五项问卷 + 骨架落地 + 环境检测），幂等可重跑</td></tr>
-    <tr><td><code>/reproduce reports/xxx.pdf</code></td><td>新起一份复现。可选参数：<code>--mode auto|interactive</code>、<code>--max-iter N</code>、<code>--id 自定义名</code>、<code>--difficulty easy|medium|hard</code>（覆盖自动分诊）</td></tr>
-    <tr><td><code>/reproduce continue &lt;id&gt;</code></td><td>断点续跑：从状态文件定位第一个未完成阶段，幂等自愈后继续推进</td></tr>
-    <tr><td><code>/reproduce status [id]</code></td><td>状态摘要（无参列出全部案例）：中文进度、当前阶段、达标情况</td></tr>
+    <tr><td><code>/reproduce reports/xxx.pdf</code></td><td>新起一份复现，<strong>自动分配案例编号</strong>（report_id 形如 <code>r001_style_factor</code>：三位顺序号 + 语义短名，起跑时明示）。可选参数：<code>--mode auto|interactive</code>、<code>--max-iter N</code>、<code>--id 自定义名</code>（显式覆盖不编号）、<code>--difficulty easy|medium|hard</code>（覆盖自动分诊）</td></tr>
+    <tr><td><code>/reproduce continue &lt;id&gt;</code></td><td>断点续跑：从状态文件定位第一个未完成阶段，幂等自愈后继续推进。id 支持<strong>编号缩写</strong>——<code>r3</code>、<code>r003</code>、<code>3</code> 都指向 <code>r003_xxx</code>，唯一前缀也行（下同）</td></tr>
+    <tr><td><code>/reproduce status [id]</code></td><td>状态摘要；<strong>无参输出按编号排序的案例一览表</strong>（编号 | id | 类型/难度 | 状态 | 当前阶段）——忘了 id 就跑这条</td></tr>
     <tr><td><code>/reproduce revise &lt;id&gt; --assumption AS编号 "新口径"</code></td><td>评审后不认同某条假设时定向重跑：只重跑受影响链路，不占迭代额度</td></tr>
     <tr><td><code>/reproduce accept &lt;id&gt;</code></td><td>评审通过收尾：状态转 done（全达标）或 done_partial（局部达标）</td></tr>
   </table></div>
@@ -461,8 +461,8 @@
   <pre><code>/reproduce revise treasury_timing --assumption AS4 "涨跌幅采用结算价口径而非收盘价"
 <span class="cmt"># → planner 改假设 → 按影响面只重跑受影响链路 → 报告增量更新 → 回到评审</span></code></pre>
   <p><strong>场景三：断点续跑。</strong>会话中断、机器重启都不丢进度——状态文件是唯一真相源：</p>
-  <pre><code>/reproduce status            <span class="cmt"># 看所有案例进行到哪</span>
-/reproduce continue treasury_timing</code></pre>
+  <pre><code>/reproduce status            <span class="cmt"># 案例一览表：编号 | id | 状态 | 阶段</span>
+/reproduce continue r3       <span class="cmt"># 编号缩写即可，不必敲全名</span></code></pre>
 
   <h3 id="artifacts">产物地图：跑完后东西都在哪</h3>
   <div class="tree">你的工作目录/
@@ -488,6 +488,10 @@
 
 <section id="faq">
   <h2>常见问题</h2>
+  <details>
+    <summary>我怎么知道每个案例的 id？</summary>
+    <div><p>三个途径：① 起跑时终端会明示「本案例编号 rNNN（report_id=<code>rNNN_短名</code>）」——新案例的 id 由系统自动编号，形如 <code>r001_style_factor</code>（三位顺序号 + 看名知义的语义短名，短名取 PDF 文件名或研报标题）；② 任何时候跑无参 <code>/reproduce status</code>，得到按编号排序的案例一览表（编号、id、类型、状态、当前阶段）；③ 目录名即 id：<code>workspace/</code> 下每个子目录对应一个案例。日常引用不必敲全名——<code>continue</code>/<code>status</code>/<code>revise</code>/<code>accept</code> 都接受编号缩写（<code>r3</code>、<code>r003</code>、<code>3</code> 等价）或唯一前缀，输入有歧义时系统会列出候选让你挑。想用自己的命名跑 <code>--id 自定义名</code> 即可（不强加编号）。</p></div>
+  </details>
   <details>
     <summary>没装 codex CLI，或跑到一半额度用完了，会怎样？</summary>
     <div><p>都不会断。外审走两级降级链：<strong>一级降级</strong>——派一个全新的 Claude 子 agent 作"外审替身"，执行与 codex 完全相同的审查任务（同一份审查指令、只读原始材料、禁止接触流水线过程叙事），意见照样逐条编号进回应总表、critical 照样必须修复闭环；<strong>二级降级</strong>——替身也不可行（罕见）才把该审查点标记跳过并在报告显著标注。细节上做了三处省时设计：未安装时零成本直接降级（不做无谓调用，且同一案例后续审查点不再反复探测）；额度/认证类报错（usage limit、429 等）直接降级（不做无意义的缩减重试）；临时性失败（超时/网络）才重试一次。</p>
@@ -539,6 +543,7 @@
   <h2>版本演进</h2>
   <div class="tbl-scroll"><table>
     <tr><th class="c-narrow">版本</th><th class="c-narrow">日期</th><th class="c-wide">要点</th></tr>
+    <tr><td><code>2.10.0</code></td><td class="num">07-11</td><td>案例统一编号：新案例自动分配 rNNN_短名 形式 id，全部子命令接受编号缩写（r3/r003/3），status 输出编号排序一览表</td></tr>
     <tr><td><code>2.9.0</code></td><td class="num">07-11</td><td>codex 备用方案补强：未安装/额度耗尽自动降级 Claude 替身盲审（速判直降、额度类报错免重试、替身规范化），评级封顶口径统一</td></tr>
     <tr><td><code>2.8.0</code></td><td class="num">07-11</td><td>实验模式（市场迁移复现）：等价数据替代 + 数值判定豁免 + 强制显著声明</td></tr>
     <tr><td><code>2.7.0</code></td><td class="num">07-11</td><td>墙钟加速：implement 流水线（验证与下一段编码重叠）、代码外审∥运行验证默认并行、结果审计∥样本外并发、并行纪律入硬约束</td></tr>

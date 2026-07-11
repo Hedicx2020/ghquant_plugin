@@ -9,6 +9,8 @@
     record-event <report_id> <event> [--json <payload>]
     milestone <report_id> <mid> <field> <status>
     gate <report_id> <stage> <verdict> --checks <json>
+    next-id --slug <slug>          # 分配下一个统一编号 id（rNNN_<slug>，只读）
+    resolve <query>                # 编号缩写/前缀 → 完整 report_id（只读）
 
 设计要点：
     - 原子写：临时文件写入 + os.replace 原子替换，异常时清理残留临时文件。
@@ -23,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import tempfile
 from datetime import datetime, timedelta, timezone
@@ -623,6 +626,53 @@ def show_summary(root: Path, report_id: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# 案例统一编号（rNNN_<slug>）：next-id 分配 / resolve 缩写解析，均为只读
+# ---------------------------------------------------------------------------
+
+ID_NUMBER_RE = re.compile(r"^r(\d{3})_")
+SLUG_RE = re.compile(r"[a-z][a-z0-9_]{0,39}")
+
+
+def list_case_ids(root: Path) -> list[str]:
+    """workspace/ 下含 state.json 的目录名（即全部案例 id），按名排序。"""
+    ws = root / "workspace"
+    if not ws.is_dir():
+        return []
+    return sorted(d.name for d in ws.iterdir() if d.is_dir() and (d / "state.json").is_file())
+
+
+def next_numbered_id(root: Path, slug: str) -> str:
+    """分配下一个统一编号 id：rNNN_<slug>，NNN 取现存最大编号 +1（无编号案例时从 r001）。
+
+    只扫描不写盘；并发起两个新案例不在设计内（编号在 init 落盘时才被占用）。
+    """
+    if not SLUG_RE.fullmatch(slug):
+        raise ValueError(f"slug 不合法（需小写字母开头的 snake_case、≤40 字符）: {slug!r}")
+    nums = [int(m.group(1)) for name in list_case_ids(root) if (m := ID_NUMBER_RE.match(name))]
+    return f"r{(max(nums) + 1 if nums else 1):03d}_{slug}"
+
+
+def resolve_case_id(root: Path, query: str) -> str:
+    """把用户输入解析为唯一 report_id：完整 id > 编号缩写（r3 / r003 / 3）> 唯一前缀。
+
+    id 均为字母开头（snake_case），纯数字输入不会与目录名歧义。
+    零命中或多命中一律 ValueError（多命中时列出候选，让用户加长前缀）。
+    """
+    ids = list_case_ids(root)
+    if query in ids:
+        return query
+    m = re.fullmatch(r"r?0*(\d+)", query)
+    hits = [i for i in ids if i.startswith(f"r{int(m.group(1)):03d}_")] if m else []
+    if not hits:  # 编号零命中（或非数字输入）→ 一般前缀匹配兜底，如 r00 是打一半的前缀而非编号 0
+        hits = [i for i in ids if i.startswith(query)]
+    if len(hits) == 1:
+        return hits[0]
+    if not hits:
+        raise ValueError(f"未找到匹配案例: {query!r}（现有: {', '.join(ids) if ids else '无'}）")
+    raise ValueError(f"匹配到多个案例，请用更长前缀: {', '.join(hits)}")
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -672,6 +722,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_gate.add_argument("verdict")
     p_gate.add_argument("--checks", required=True, help="JSON 数组: [{id,desc,result}, ...]")
 
+    p_next = sub.add_parser("next-id", help="分配下一个统一编号案例 id（rNNN_<slug>，只读不占号）")
+    p_next.add_argument("--slug", required=True, help="语义后缀，小写 snake_case（如 style_factor）")
+
+    p_resolve = sub.add_parser("resolve", help="解析案例 id：完整 id / 编号缩写（r3、r003、3）/ 唯一前缀（只读）")
+    p_resolve.add_argument("query")
+
     return parser
 
 
@@ -714,6 +770,10 @@ def main(argv: list[str] | None = None) -> int:
             checks = json.loads(args.checks)
             record_gate(root, args.report_id, args.stage, args.verdict, checks)
             print(f"已记录门禁: stage={args.stage} verdict={args.verdict}")
+        elif args.command == "next-id":
+            print(next_numbered_id(root, args.slug))
+        elif args.command == "resolve":
+            print(resolve_case_id(root, args.query))
         else:  # pragma: no cover - argparse 已保证 command 合法
             raise ValueError(f"未知命令: {args.command}")
     except (ValueError, FileNotFoundError, StateValidationError, json.JSONDecodeError) as exc:
