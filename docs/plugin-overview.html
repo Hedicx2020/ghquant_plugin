@@ -97,18 +97,27 @@
   .pill.dim  { background: #eef0f2; color: var(--dim); border: 1px solid var(--line); }
   .pill.warn { background: var(--warn-wash); color: var(--warn); border: 1px solid #e3d3ac; }
 
-  /* ---------- 表格 ---------- */
-  .tbl-scroll { overflow-x: auto; margin: 14px 0; }
-  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  /* ---------- 表格（v2.8 布局优化：斑马纹 / 悬停 / 粘性表头 / 列宽控制） ---------- */
+  .tbl-scroll { overflow-x: auto; margin: 14px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--card); }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; line-height: 1.6; }
   th {
-    text-align: left; font-weight: 700; font-size: 12.5px;
-    color: var(--dim); letter-spacing: 0.04em;
-    border-bottom: 2px solid var(--ink); padding: 7px 12px 7px 0; white-space: nowrap;
+    text-align: left; font-weight: 700; font-size: 12px;
+    color: var(--accent-deep); letter-spacing: 0.05em;
+    background: var(--accent-wash);
+    border-bottom: 2px solid var(--accent);
+    padding: 9px 14px; white-space: nowrap;
+    position: sticky; top: 0; z-index: 1;
   }
-  td { border-bottom: 1px solid var(--line); padding: 8px 12px 8px 0; vertical-align: top; }
-  td:first-child, th:first-child { padding-left: 2px; }
+  td { border-bottom: 1px solid var(--line); padding: 9px 14px; vertical-align: top; }
+  tbody tr:nth-child(even) td, tr:nth-child(even) td { background: #f6f8f9; }
+  tbody tr:hover td, tr:hover td { background: var(--accent-wash); }
   tr:last-child td { border-bottom: none; }
+  td:first-child, th:first-child { padding-left: 16px; }
+  td:last-child, th:last-child { padding-right: 16px; }
   td code, th code { white-space: nowrap; }
+  /* 列宽控制：短列不被均分拉宽，长文本列保证换行舒适 */
+  td.c-narrow, th.c-narrow { white-space: nowrap; width: 1%; }
+  td.c-wide, th.c-wide { min-width: 34ch; }
   .num { font-variant-numeric: tabular-nums; }
 
   /* ---------- Hero ---------- */
@@ -206,11 +215,13 @@
   <a class="lv2" href="#audit">三层审计体系</a>
   <a class="lv2" href="#iterate">迭代引擎与人工闸门</a>
   <a class="lv2" href="#verdict">达标判定与可信度评级</a>
+  <a href="#modes">复现模式</a>
   <a href="#manual">使用手册</a>
   <a class="lv2" href="#commands">子命令速查</a>
   <a class="lv2" href="#scenarios">三个典型场景</a>
   <a class="lv2" href="#artifacts">产物地图</a>
   <a href="#faq">常见问题</a>
+  <a href="#versions">版本演进</a>
   <a href="#maintainer">维护者说明</a>
   <a href="#glossary">术语速查</a>
 </nav>
@@ -285,7 +296,7 @@
 
   <h3 id="setup5">配置详解（问卷六项 + 配置文件项）</h3>
   <div class="tbl-scroll"><table>
-    <tr><th>配置项</th><th>字段</th><th>默认</th><th>含义与影响</th></tr>
+    <tr><th class='c-narrow'>配置项</th><th class='c-narrow'>字段</th><th class='c-narrow'>默认</th><th class='c-wide'>含义与影响</th></tr>
     <tr><td><strong>数据路径</strong></td><td><code>data_root</code></td><td><code>~/local_data</code></td><td>本地 parquet 数据库根目录。<code>common/data_loader.py</code> 从这里读行情、财务等数据。</td></tr>
     <tr><td><strong>执行模式</strong></td><td><code>default_mode</code></td><td><code>auto</code></td><td><code>auto</code>：全自动优先——研报有歧义时按最合理假设放行并高亮登记，跑完统一人工 review，可事后定向重跑。<code>interactive</code>：遇关键（blocking 级）歧义暂停，人工裁决后继续。</td></tr>
     <tr><td><strong>最大迭代次数</strong></td><td><code>default_max_iter</code></td><td>按难度自动</td><td>指标未达标时自动迭代修正的轮数上限。默认 easy 3 / medium 5 / hard 6，可用 1–10 的整数全局覆盖。轮次越多复现越充分，耗时与成本越高。</td></tr>
@@ -319,7 +330,7 @@
 
   <h3 id="stages">十一阶段与门禁：每一关查什么</h3>
   <div class="tbl-scroll"><table>
-    <tr><th>阶段</th><th>人话</th><th>谁干活</th><th>出口门禁核验（举要）</th></tr>
+    <tr><th class='c-narrow'>阶段</th><th class='c-narrow'>人话</th><th class='c-narrow'>谁干活</th><th class='c-wide'>出口门禁核验（举要）</th></tr>
     <tr><td><code>init</code></td><td>初始化</td><td>工具链</td><td>工作区骨架建立、PDF 转文本页数一致、状态文件就绪</td></tr>
     <tr><td><code>extract</code></td><td>研报提取</td><td>quant-extractor</td><td>规格三件套齐全、要素带页码引用、覆盖矩阵行数与要素守恒</td></tr>
     <tr><td><code>plan</code></td><td>复现规划</td><td>quant-planner</td><td>分诊字段合法、每条要素有数据映射与里程碑归属、歧义全登记</td></tr>
@@ -381,7 +392,7 @@
 
   <h3 id="audit">三层审计体系：防偷懒、防遗漏、防虚报</h3>
   <div class="tbl-scroll"><table>
-    <tr><th>层</th><th>执行者</th><th>防什么</th><th>手段</th></tr>
+    <tr><th class='c-narrow'>层</th><th class='c-narrow'>执行者</th><th class='c-narrow'>防什么</th><th class='c-wide'>手段</th></tr>
     <tr><td><strong>外审三审查点</strong></td><td>codex CLI（read-only 沙箱，全难度必跑）</td><td>提取漏抄 / 实现走样 / 结论造假</td><td>规格审计（盲提取对照：codex 不看规格书独立抄一遍研报数值再逐格 diff）、代码审计（公式对照 + 未来函数）、结果审计（数字与产物一致性）。每条意见编号进回应总表，critical 必须修复 + 缩减复审通过。</td></tr>
     <tr><td><strong>内审</strong></td><td>quant-auditor</td><td>同上，独立视角</td><td>三模式对照审计；hard 难度逐里程碑插入实现忠实性审计；ml 类无视难度必审（训练泄漏数值验证抓不到）。</td></tr>
     <tr><td><strong>反虚报核查</strong></td><td>quant-auditor（result 模式）+ 机器检查项</td><td>「声称做了实际没做」</td><td>K 系列（K1–K8）：结果过于完美嫌疑、声称通过实际未改等；E 系列（E1–E6）证据链：运行日志、产物新鲜度、通过数亲自重数、图表逐张数值级核验。</td></tr>
@@ -403,7 +414,7 @@
   <p>每个量化指标按「研报值 vs 复现值」的相对偏差判定，容差来自 <code>templates/standards.json</code>（分类型精细配置，落地在你目录里可手工细调）叠加你的全局偏差容忍。特殊语义独立判定：近零指标走绝对偏差（abs_eps）、方向类指标查同号、成交笔数类查数量级、定性结论（如分组单调性）按预期字符串核对。</p>
   <p>最终报告给出 A / B / C 可信度评级：</p>
   <div class="tbl-scroll"><table>
-    <tr><th>评级</th><th>判据</th></tr>
+    <tr><th class='c-narrow'>评级</th><th class='c-wide'>判据</th></tr>
     <tr><td><strong>A</strong></td><td>覆盖率 ≥ 90%（核心要素 100%）＋ 三外审通过 ＋ 零 critical 遗留</td></tr>
     <tr><td><strong>B</strong></td><td>核心要素覆盖 100%，但支线有缺，或外审有降级（如未装 codex）</td></tr>
     <tr><td><strong>C</strong></td><td>存在核心要素未复现或 major 意见遗留未回应——报告结论区显著提示成因</td></tr>
@@ -411,12 +422,26 @@
   <div class="note amber">评级 C 不一定意味着复现质量差：数据客观缺失（如某指数系列本地零覆盖，经穷尽核实）导致核心支线不可行时，字面判据同样触发 C——报告会写明成因与主线结论是否受影响，残余偏差 100% 归因后才能出报告。</div>
 </section>
 
+<section id="modes">
+  <h2>两种复现模式：严格 vs 实验</h2>
+  <p>默认为<strong>严格模式</strong>（数值对齐原文）。复现海外报告/论文而本地没有原文市场数据时，用<strong>实验模式</strong>做市场迁移：<code>/reproduce reports/us_paper.pdf --experimental</code>。</p>
+  <div class="tbl-scroll"><table>
+    <tr><th class="c-narrow">维度</th><th>严格模式 strict（默认）</th><th>实验模式 experimental（市场迁移）</th></tr>
+    <tr><td class="c-narrow"><strong>目标</strong></td><td>复现值与原文数值在容差内对齐</td><td>验证「该方法在迁移市场是否成立」——效应存在与否都是有效结论</td></tr>
+    <tr><td class="c-narrow"><strong>数据</strong></td><td>按原文数据源（本地缺失→降级或阻塞）</td><td>等价替代并逐条留痕：美国 CPI → 中国 CPI、SPX → 沪深300……全部登记假设登记簿（market-transplant 条目）</td></tr>
+    <tr><td class="c-narrow"><strong>达标判定</strong></td><td>逐指标容差重算（相对偏差/绝对偏差/同号/量级），超差触发迭代修正</td><td>数值对齐判定整体豁免——只核每个原文指标有迁移市场产出；原文值仅作对照参考；迭代阶段天然跳过</td></tr>
+    <tr><td class="c-narrow"><strong>不变的部分</strong></td><td colspan="2">提取忠实性、代码审计（公式对照/未来函数）、<strong>反虚报核查</strong>（数字与产物一致、结论不夸大）、样本外分析、人工评审闸门——两种模式完全一致</td></tr>
+    <tr><td class="c-narrow"><strong>明确提示</strong></td><td>—</td><td><strong>强制</strong>：结果页顶部醒目声明框 + 徽章，最终报告必含「市场迁移声明」章节（门禁核验，缺失过不了报告关）</td></tr>
+    <tr><td class="c-narrow"><strong>切换权</strong></td><td colspan="2">只在你手里：未加 flag 而规划发现原文市场整体不可得 → 系统挂起呈报「建议实验模式」等你裁决，agent 无权自行切换</td></tr>
+  </table></div>
+</section>
+
 <section id="manual">
   <h2>使用手册</h2>
 
   <h3 id="commands">子命令速查</h3>
   <div class="tbl-scroll"><table>
-    <tr><th>命令</th><th>作用</th></tr>
+    <tr><th class='c-narrow'>命令</th><th class='c-wide'>作用</th></tr>
     <tr><td><code>/reproduce setup</code></td><td>首次配置向导（五项问卷 + 骨架落地 + 环境检测），幂等可重跑</td></tr>
     <tr><td><code>/reproduce reports/xxx.pdf</code></td><td>新起一份复现。可选参数：<code>--mode auto|interactive</code>、<code>--max-iter N</code>、<code>--id 自定义名</code>、<code>--difficulty easy|medium|hard</code>（覆盖自动分诊）</td></tr>
     <tr><td><code>/reproduce continue &lt;id&gt;</code></td><td>断点续跑：从状态文件定位第一个未完成阶段，幂等自愈后继续推进</td></tr>
@@ -506,6 +531,21 @@
   </details>
 </section>
 
+<section id="versions">
+  <h2>版本演进</h2>
+  <div class="tbl-scroll"><table>
+    <tr><th class="c-narrow">版本</th><th class="c-narrow">日期</th><th class="c-wide">要点</th></tr>
+    <tr><td><code>2.8.0</code></td><td class="num">07-11</td><td>实验模式（市场迁移复现）：等价数据替代 + 数值判定豁免 + 强制显著声明</td></tr>
+    <tr><td><code>2.7.0</code></td><td class="num">07-11</td><td>墙钟加速：implement 流水线（验证与下一段编码重叠）、代码外审∥运行验证默认并行、结果审计∥样本外并发、并行纪律入硬约束</td></tr>
+    <tr><td><code>2.6.0</code></td><td class="num">07-10</td><td>分诊判据修正（方法复杂度主轴）、经济模式、外审档位、核验分级（参数不明的诚实降级）</td></tr>
+    <tr><td><code>2.5.0</code></td><td class="num">07-10</td><td>复现结果单文件 HTML 展示页（确定性渲染，指标表可筛选、图表内嵌）</td></tr>
+    <tr><td><code>2.4.x</code></td><td class="num">07-09</td><td>样本外表现分析阶段 + 第 8 个 agent（quant-oos-analyst）；问卷分批修复</td></tr>
+    <tr><td><code>2.2–2.3</code></td><td class="num">07-09</td><td>配置项扩充：自有回测框架接入、偏差容忍</td></tr>
+    <tr><td><code>2.1.0</code></td><td class="num">07-09</td><td>插件化：可分发安装、setup 配置向导、双形态路径解耦</td></tr>
+    <tr><td><code>2.0</code></td><td class="num">07-07</td><td>v2 重构：12 阶段门禁状态机、多 agent 编排、codex 三审查点、防偷懒审计体系（test_v2 端到端验收 81/91）</td></tr>
+  </table></div>
+</section>
+
 <section id="maintainer">
   <h2>维护者说明</h2>
   <p>面向插件维护者（仓库所有者）的分发与同步约定；普通使用者可跳过本节。</p>
@@ -522,7 +562,7 @@
   <h2>术语速查</h2>
   <p>系统的文书（审计意见、门禁输出、覆盖矩阵）使用编号体系保证每条记录可追溯、可机器判定。日常使用不需要记它们——汇报都用人话，代号只在留痕文书里出现。查阅文书时对照下表：</p>
   <div class="tbl-scroll"><table>
-    <tr><th>代号</th><th>含义</th></tr>
+    <tr><th class='c-narrow'>代号</th><th class='c-wide'>含义</th></tr>
     <tr><td><code>G-IN / G-EX / G-PL / G-SA / G-IM / G-CA / G-VF / G-IT / G-RA / G-OS / G-FN</code></td><td>各阶段出口门禁（初始化/提取/规划/规格审计/实现/代码审计/验证/迭代/结果审计/样本外/报告），每个门禁含若干编号检查项（如 G-VF-3 = 验证门禁第 3 项：容差重算）</td></tr>
     <tr><td><code>D# / F# / B# / R# / SA#</code></td><td>研报要素 ID：数据(Data) / 因子或信号(Factor) / 回测设定(Backtest) / 结果(Result) / 稳健性分析(Sensitivity)——覆盖矩阵逐行追踪每条要素从提取到验证的状态</td></tr>
     <tr><td><code>CDX-S-## / CDX-C-## / CDX-R-##</code></td><td>codex 外审意见编号（三审查点：Spec / Code / Result）</td></tr>
