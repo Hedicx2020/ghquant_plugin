@@ -114,10 +114,13 @@
   tr:last-child td { border-bottom: none; }
   td:first-child, th:first-child { padding-left: 16px; }
   td:last-child, th:last-child { padding-right: 16px; }
-  td code, th code { white-space: nowrap; }
-  /* 列宽控制：短列不被均分拉宽，长文本列保证换行舒适 */
+  th code { white-space: nowrap; }
+  /* 正文单元格里的 code 允许按空格换行（长命令/代号串不再撑爆列宽），词内不打散 */
+  td code { white-space: normal; word-break: keep-all; overflow-wrap: anywhere; }
+  /* 列宽控制：narrow=真短标识列（版本/日期/评级/阶段名）；mid=中等内容列（可换行，约 12em）；wide=说明长文本列 */
   td.c-narrow, th.c-narrow { white-space: nowrap; width: 1%; }
-  td.c-wide, th.c-wide { min-width: 34ch; }
+  th.c-mid { width: 12em; white-space: normal; }
+  td.c-wide, th.c-wide { min-width: 18em; }
   .num { font-variant-numeric: tabular-nums; }
 
   /* ---------- Hero ---------- */
@@ -330,7 +333,7 @@
 
   <h3 id="stages">十一阶段与门禁：每一关查什么</h3>
   <div class="tbl-scroll"><table>
-    <tr><th class='c-narrow'>阶段</th><th class='c-narrow'>人话</th><th class='c-narrow'>谁干活</th><th class='c-wide'>出口门禁核验（举要）</th></tr>
+    <tr><th class='c-narrow'>阶段</th><th class='c-narrow'>人话</th><th class='c-mid'>谁干活</th><th class='c-wide'>出口门禁核验（举要）</th></tr>
     <tr><td><code>init</code></td><td>初始化</td><td>工具链</td><td>工作区骨架建立、PDF 转文本页数一致、状态文件就绪</td></tr>
     <tr><td><code>extract</code></td><td>研报提取</td><td>quant-extractor</td><td>规格三件套齐全、要素带页码引用、覆盖矩阵行数与要素守恒</td></tr>
     <tr><td><code>plan</code></td><td>复现规划</td><td>quant-planner</td><td>分诊字段合法、每条要素有数据映射与里程碑归属、歧义全登记</td></tr>
@@ -392,7 +395,7 @@
 
   <h3 id="audit">三层审计体系：防偷懒、防遗漏、防虚报</h3>
   <div class="tbl-scroll"><table>
-    <tr><th class='c-narrow'>层</th><th class='c-narrow'>执行者</th><th class='c-narrow'>防什么</th><th class='c-wide'>手段</th></tr>
+    <tr><th class='c-narrow'>层</th><th class='c-mid'>执行者</th><th class='c-mid'>防什么</th><th class='c-wide'>手段</th></tr>
     <tr><td><strong>外审三审查点</strong></td><td>codex CLI（read-only 沙箱，全难度必跑）</td><td>提取漏抄 / 实现走样 / 结论造假</td><td>规格审计（盲提取对照：codex 不看规格书独立抄一遍研报数值再逐格 diff）、代码审计（公式对照 + 未来函数）、结果审计（数字与产物一致性）。每条意见编号进回应总表，critical 必须修复 + 缩减复审通过。</td></tr>
     <tr><td><strong>内审</strong></td><td>quant-auditor</td><td>同上，独立视角</td><td>三模式对照审计；hard 难度逐里程碑插入实现忠实性审计；ml 类无视难度必审（训练泄漏数值验证抓不到）。</td></tr>
     <tr><td><strong>反虚报核查</strong></td><td>quant-auditor（result 模式）+ 机器检查项</td><td>「声称做了实际没做」</td><td>K 系列（K1–K8）：结果过于完美嫌疑、声称通过实际未改等；E 系列（E1–E6）证据链：运行日志、产物新鲜度、通过数亲自重数、图表逐张数值级核验。</td></tr>
@@ -441,7 +444,7 @@
 
   <h3 id="commands">子命令速查</h3>
   <div class="tbl-scroll"><table>
-    <tr><th class='c-narrow'>命令</th><th class='c-wide'>作用</th></tr>
+    <tr><th class='c-mid' style='width:19em'>命令</th><th class='c-wide'>作用</th></tr>
     <tr><td><code>/reproduce setup</code></td><td>首次配置向导（五项问卷 + 骨架落地 + 环境检测），幂等可重跑</td></tr>
     <tr><td><code>/reproduce reports/xxx.pdf</code></td><td>新起一份复现。可选参数：<code>--mode auto|interactive</code>、<code>--max-iter N</code>、<code>--id 自定义名</code>、<code>--difficulty easy|medium|hard</code>（覆盖自动分诊）</td></tr>
     <tr><td><code>/reproduce continue &lt;id&gt;</code></td><td>断点续跑：从状态文件定位第一个未完成阶段，幂等自愈后继续推进</td></tr>
@@ -562,7 +565,7 @@
   <h2>术语速查</h2>
   <p>系统的文书（审计意见、门禁输出、覆盖矩阵）使用编号体系保证每条记录可追溯、可机器判定。日常使用不需要记它们——汇报都用人话，代号只在留痕文书里出现。查阅文书时对照下表：</p>
   <div class="tbl-scroll"><table>
-    <tr><th class='c-narrow'>代号</th><th class='c-wide'>含义</th></tr>
+    <tr><th class='c-mid' style='width:16em'>代号</th><th class='c-wide'>含义</th></tr>
     <tr><td><code>G-IN / G-EX / G-PL / G-SA / G-IM / G-CA / G-VF / G-IT / G-RA / G-OS / G-FN</code></td><td>各阶段出口门禁（初始化/提取/规划/规格审计/实现/代码审计/验证/迭代/结果审计/样本外/报告），每个门禁含若干编号检查项（如 G-VF-3 = 验证门禁第 3 项：容差重算）</td></tr>
     <tr><td><code>D# / F# / B# / R# / SA#</code></td><td>研报要素 ID：数据(Data) / 因子或信号(Factor) / 回测设定(Backtest) / 结果(Result) / 稳健性分析(Sensitivity)——覆盖矩阵逐行追踪每条要素从提取到验证的状态</td></tr>
     <tr><td><code>CDX-S-## / CDX-C-## / CDX-R-##</code></td><td>codex 外审意见编号（三审查点：Spec / Code / Result）</td></tr>

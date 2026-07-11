@@ -2,6 +2,8 @@
 
 给定一份量化研报 PDF，按报告类型与难度自动分诊、复现策略代码与回测结果，产出与原文逐项对照、附可信度评级的最终报告。
 
+在线手册（外部可直接访问）：**https://hedicx2020.github.io/ghquant_plugin/docs/plugin-overview.html**
+
 本仓库同时是一个 **Claude Code 插件**（`quant-report-reproduce`）：既可以克隆后在仓库内直接使用（形态 A，维护者模式），也可以作为插件安装后在任意自己的目录中使用（形态 B，见下节）。
 
 ## 作为插件安装（推荐给其他使用者）
