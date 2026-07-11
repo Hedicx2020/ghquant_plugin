@@ -54,6 +54,7 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/<x>.py" ...
 - **经济模式派发规则**：cwd `.reproduce.json` 的 `economy=true` 时，派发 `quant-extractor` / `quant-verifier` / `quant-oos-analyst` 一律带 `model: "sonnet"` 覆盖（机械性工作：抄写结构化/跑脚本对数/延伸跑数）；`quant-planner` / `quant-coder` / `quant-auditor` / `quant-diagnoser` 任何模式下保持 opus（分诊裁决/写代码/对抗审计/归因推理，质量敏感）；`quant-reporter` 本就 sonnet。economy=false 或无配置时不加覆盖。
 - **外审档位规则**：cwd `.reproduce.json` 的 `audit_level=standard` 时，spec_audit / code_audit 的 codex 外审改为触发式（触发条件与 skipped 落档协议见对应执行卡）；**result_audit 的 codex 外审任何档位必跑**（反虚报是最后防线）。strict（默认）或无配置时三审查点全跑。
 - codex 三审查点 prompt 骨架：`templates/codex_prompts/{spec_audit,code_audit,result_audit,second_opinion}.md`
+- **codex 不可用的降级链（全局协议，正本在 `stages/spec_audit.md`「codex 降级链」节）**：用户未安装 / 额度耗尽 / 认证失效均不断链——调用前 `command -v codex` 速判；失败输出含额度/认证特征（usage limit/quota/429/401/login）跳过缩减重试直接降级；一级降级派 Claude 外审替身（general-purpose，执行同一份已填充 prompt，engine 记 `claude_fallback`，不受 economy 降配），二级才 skipped。任一失败性降级 → 报告评级封顶 B（audit_level=standard 未触发的配置性 skipped 不封顶）。
 - 通用模板：`templates/_spec_template.md`、`templates/_plan_template.md`、`templates/{factor,timing,allocation,fixed_income,ml}.md`、`templates/data_catalog.md`、`templates/standards.json`、`templates/audit/*`
 
 **STAGE_ORDER（写死在 tools/state.py，不得改名）**：

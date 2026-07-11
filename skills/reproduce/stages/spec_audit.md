@@ -47,7 +47,15 @@ VERDICT PASS → `set-stage <id> spec_audit done` → 进 implement。
 ## 失败处理
 
 - **critical / 未回应 major** → 回派 extractor（提取问题）或 planner（计划问题）定向修复后复审，修复意见复核列写 `pass`；**同一审查点审→修→复审最多 3 轮，仍有 critical → paused_blocked**（brief：修复轮 >2 即停）。
-- **codex 调用失败**（非零退出/超时/输出为空）→ **重试 1 次并缩减输入**（spec 审只喂 R 类章节 + 图表清单）。
-- **重试仍失败 → 两级降级**：
-  1. 一级：派**全新 Claude 子 agent 作外审替身**（同材料同 prompt，禁止读任何过程性文件），把结论写入 `spec_audit_codex.md`，`external_reviews` 该条 `engine` 记 `claude_fallback`。**替身输出同样必须包含 `=== SPEC_CODEX_BEGIN ===` / `=== SPEC_CODEX_END ===` 标记块**（G-SA-1 需要靠它切出 `spec_codex.md`，替身若漏写此标记则本步骤第 4 步无法切出盲提取清单，直接导致 G-SA-1 FAIL）。
-  2. 二级：替身也不可行 → `engine` 记 `skipped`，final_report 显著标注「该审查点外审缺失」，**hard 报告可信度评级封顶 B**。
+
+### codex 降级链（正本——code_audit / result_audit / iterate second_opinion 的失败处理均引用本节，只在各自卡保留差异项）
+
+适用场景：用户未安装 codex CLI、订阅额度耗尽、认证失效、调用超时——外审不因此断链。
+
+1. **调用前速判**：`command -v codex` 无输出（未安装）→ 不发起调用，直接进第 3 步一级降级。**会话内沿用**：本案例任一审查点已因「未安装」降级过（external_reviews 有 `engine=claude_fallback` 且 reason 记 CLI 缺失）→ 后续审查点直接走降级，不再逐次探测；因「额度/临时故障」降级的**不沿用**（额度可能恢复，每个审查点仍先试一次，失败即快速降级）。
+2. **失败分类（决定是否值得重试）**：调用非零退出/输出为空时看 stderr 与输出特征——
+   - 含 `usage limit` / `quota` / `429` / `401` / `402` / `login` / `unauthorized` 等**额度或认证特征** → 缩减输入无意义，**跳过重试直接降级**；
+   - 其他失败（超时/网络/输出截断）→ **重试 1 次并缩减输入**（spec 审只喂 R 类章节 + 图表清单），再失败进降级。
+3. **一级降级：Claude 外审替身**（subagent_type=`general-purpose`）。prompt = 该审查点**已填充的 codex prompt 正文**（`codex_prompt_*.md` 全文，骨架本身引擎无关）+ 替身附加约束四条：① 只读列出的输入文件，**禁止读任何过程性文件**（主会话叙事/agent 完成汇报/audit_responses 等）；② 输出契约与原 prompt 完全一致（本审查点须含 `=== SPEC_CODEX_BEGIN ===` / `=== SPEC_CODEX_END ===` 标记块——G-SA-1 靠它切出 `spec_codex.md`，漏写直接 FAIL）；③ 审查结论全文用 Write 写入原 codex 输出路径（本审查点为 `workspace/<id>/audit/spec_audit_codex.md`）；④ 不派发 agent、不调 skill。**替身是质量敏感角色，不受 economy 降配影响（保持 opus）**。`external_reviews` 该条 `engine` 记 `claude_fallback`，并在条目加 `"reason":"<cli_missing|quota|timeout|...>"`。
+4. **二级降级：skipped**：替身也不可行（罕见）→ 按 audit_level=standard 的 skipped 占位档格式落文件（`verdict:"skipped"` + reason + `findings:[]`），`engine` 记 `skipped`，final_report 显著标注「该审查点外审缺失」。
+5. **评级口径（与 quant-reporter 判据统一，不分难度）**：本链任一发生（claude_fallback 或失败性 skipped）→ 报告可信度评级**封顶 B**——替身保住的是审查覆盖（照样抓问题、照样逐条回应闭环），不恢复异构引擎交叉验证的可信度；audit_level=standard 未触发的**配置性 skipped 不在此列**（不封顶）。装好 codex / 额度恢复后无需任何配置，下次运行自动回到 codex。

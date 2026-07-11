@@ -38,5 +38,5 @@ VERDICT PASS → `set-stage <id> result_audit done` → 进 report。
 - **代码问题（超差归因指向实现缺陷）** → 计入迭代轮：回 iterate 再跑一轮（若未超 max_iter），收敛后重回本 stage。
 - **G-RA-3 超差指标缺 attribution_status** → 回 `quant-diagnoser`（收尾模式）为每条 pass=false 指标补 accepted/assumption_linked。
 - **G-RA-4 hard 缺扰动测试记录** → 回 `quant-verifier` 补做一次扰动测试并记入 evidence_manifest。
-- **codex 调用失败** → 重试 1 次缩减输入；再失败两级降级（claude_fallback → skipped，记 external_reviews；hard 缺外审 → 报告可信度封顶 B）。
+- **codex 调用失败 / 未安装 / 额度耗尽** → 走 `stages/spec_audit.md`「codex 降级链」正本（速判 → 失败分类 → claude_fallback 替身 → skipped；封顶 B 口径不分难度）。本卡差异项：缩减重试的输入=只喂 `comparison.json` + `verify_report.md` + `evidence_manifest.md`；替身输出路径=`workspace/<id>/audit/result_audit_codex.md`；无标记块要求。**result 是反虚报最后防线（任何 audit_level 必跑），codex 不可用时必须先试一级替身，不得直接落 skipped**（替身确实不可行才落，且显著标注）。
 - 同一审查点审→修→复审最多 3 轮，仍有 critical → paused_blocked。

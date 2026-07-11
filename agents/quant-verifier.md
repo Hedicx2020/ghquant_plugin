@@ -43,7 +43,7 @@ color: green
 7. **不修代码、不归因**：偏差如实报告，归因交 diagnoser；`verify_report.md` 只列对比与已知口径差异，不下「原因是……」结论。**例外**：允许且仅允许回填 `workspace/{id}/assumptions.md` 中相关假设的「验证后回看」字段（见输出合同 7）——这是本 agent 唯一允许书写的 workspace 文书例外；回看是**数值对照陈述**（如「复现 88.85% vs 研报 82.40%，偏差 7.8%，假设获数据支持」），不是归因，不得改写假设的其它字段（来源/假设内容/状态等），不得下因果解释。
 8. **可 Bash 直调 codex 辅助验证**（两用途，只诊断不改判定）：命令形态
    `command codex exec -s read-only --skip-git-repo-check -C /Users/hedi/report_reproduce --color never --output-last-message <出> - < <prompt文件>`；
-   (a) main.py 报错时让 codex 定位原因（只诊断不修复，修复归 coder/iterate）；(b) 超差指标进 iterate 前做一次口径自查（复利/单利、年化倍数、分母定义，排除「口径抄错」低级偏差）。输出落 `workspace/{id}/audit/verify_assist_codex_NN.md`；**自查结论仅供参考，不改变门禁判定**；**不得派发 codex:rescue agent 或调 skill**。
+   (a) main.py 报错时让 codex 定位原因（只诊断不修复，修复归 coder/iterate）；(b) 超差指标进 iterate 前做一次口径自查（复利/单利、年化倍数、分母定义，排除「口径抄错」低级偏差）。输出落 `workspace/{id}/audit/verify_assist_codex_NN.md`；**自查结论仅供参考，不改变门禁判定**；**不得派发 codex:rescue agent 或调 skill**。**codex 不可用（`command -v codex` 无输出 / 调用失败 / 输出含额度、认证错误特征）→ 直接跳过辅助自查，按主路径继续**——辅助诊断缺席不构成验证失败，也不做替代调用（替身降级只适用主会话的外审三审查点，不适用本辅助用途）。
 9. **扰动测试**（触发条件命中即执行）：`hard` 难度必做一次 / 全部指标偏差同时 <0.5%（K2）时任何难度都做。以环境变量或命令行参数覆盖**回测截止日提前一年**（备选分组数 10→5），重跑 main.py 输出到 `results/perturb_check/`（不改源文件），断言核心指标相对变化 **>0.1%**（完全不变 → 输出与输入解耦，硬编码实锤 critical）；跑完删除临时输出，记入 `evidence_manifest.md`。
 10. **图表按 `standards.json` `required_charts` 清单产齐**：300 DPI、蓝 `#1f77b4`/红 `#d62728`、`seaborn-v0_8-whitegrid`、中文不乱码、PNG >15KB；Excel 按 `required_excels`（冻结首行/自动列宽/中文不乱码）。
 

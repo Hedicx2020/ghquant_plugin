@@ -16,7 +16,8 @@
    ```
    command codex exec -s read-only --skip-git-repo-check -C /Users/hedi/report_reproduce --color never --output-last-message "workspace/<id>/iterations/iter_<NN>/codex_opinion.md" - < "workspace/<id>/iterations/iter_<NN>/codex_prompt_second_opinion.md"
    ```
-   > 后台跑 codex 期间只做本地记账类动作；**派 diagnoser 前必须 join codex**（等待 `iter_<NN>/codex_opinion.md` 落盘）——第二意见是防兜圈的关键输入，不得不等而派；步骤 5 的「如有」仅指 codex 调用失败降级的情形。
+   > 后台跑 codex 期间只做本地记账类动作；**派 diagnoser 前必须 join codex**（等待 `iter_<NN>/codex_opinion.md` 落盘）——第二意见是防兜圈的关键输入，不得不等而派。
+   > **codex 不可用（未安装/额度耗尽/调用失败）** → 走 `stages/spec_audit.md`「codex 降级链」的速判与失败分类，一级降级为 **Claude 替身第二意见**（subagent_type=`general-purpose`，prompt=已填充的 second_opinion prompt 正文 + 替身约束：只读列出的输入文件、禁读主会话叙事与本轮以外的过程性文件、输出契约同原 prompt、全文 Write 入 `iter_<NN>/codex_opinion.md`）——替身与 diagnoser 上下文互相隔离，防兜圈的独立视角价值保留。替身也不可行才允许缺席（步骤 5 的「如有」仅指此最终缺席情形），并在 `iteration_log.md` 记明缺席原因；second_opinion 不入 external_reviews（非三审查点），不影响评级封顶判断。
 
 5. **派 `quant-diagnoser`**（subagent_type=`quant-diagnoser`）。输入合同：`spec.md`、`plan.md`、`assumptions.md`、`src/<id>/`、`output/<id>/verify_report.md`、`output/<id>/results/comparison.json`（或本轮快照）、`iteration_log.md` + **全部历史 iter_NN/**、`iter_<NN>/codex_opinion.md`（如有）、本轮 `iter_<NN>` id。产 `iter_<NN>/diagnosis.md`（含 N≥2 的「## 已排除假设」节 + 末尾 `结论 ∈ {continue, stop_partial, blocked}`）。
 6. **按结论分派**：

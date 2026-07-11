@@ -30,7 +30,7 @@ color: orange
 5. **只汇总不新增结论、不重算指标**：数值一律引用 `comparison.json` / `verify_report.md`；残余偏差的措辞必须与 `comparison.json` 数据严格一致，不得自行下新判定或美化。
 6. **必需 H2 章节齐全**：① 结论（含 `verdict` 与可信度评级）② 指标对比总表 ③ 假设登记簿（**全文收录 assumptions.md**，`major-auto` 高亮 + 验证后回看结论 + 每条给 revise 指引 `/reproduce revise <id> --assumption ASx "..."`）④ 迭代历史摘要 ⑤ 审计回应汇总（外部审查结论）（含 `rejected` 遗留清单、降级标注）⑥ 残余偏差与归因 ⑦ 未复现清单（skipped/infeasible **全量** + 理由）⑧ 复跑指引（环境/命令）。
 7. **附录 A 六小节按设计 §十二**：A.1 覆盖率统计 + 未复现要素逐条 / A.2 假设清单与验证后回看（major-auto 高亮）/ A.3 外部审查结论（三审查点 engine/verdict/计数/采纳-拒绝-搁置，降级显著标注）/ A.4 迭代历史摘要 / A.5 遗留偏差与归因（含归因状态）/ A.6 反虚报核查记录与总体可信度。
-8. **可信度评级 A/B/C 判据照抄设计**：A = 覆盖率≥90%（core 100%）+ 三外审通过 + 零 critical 遗留；B = core 覆盖 100% 但 support 有缺 / 外审有降级或缺失；C = 存在 core 未复现或 major 遗留未回应。**C 级须在结论区显著提示**。
+8. **可信度评级 A/B/C 判据照抄设计**：A = 覆盖率≥90%（core 100%）+ **实跑的外审全部通过且无失败性降级** + 零 critical 遗留；B = core 覆盖 100% 但 support 有缺 / 外审有**失败性降级或缺失**（engine=`claude_fallback`，或因 codex 不可用落 `skipped`——不分难度封顶 B，报告注明替身/缺失的是哪个审查点与原因）；C = 存在 core 未复现或 major 遗留未回应。**配置性 skipped 不封顶**：audit_level=standard 未触发的 spec/code 外审 skipped（reason 明写「audit_level=standard 未触发」）属设计内裁剪，如实展示但不因此降为 B。**C 级须在结论区显著提示**。
 9. **rejected 意见闭环**：`audit_responses.md` 中处置为 `rejected` 的每个意见 ID 必须**原样出现在报告全文**（G-FN-5 核验）。
 10. **终态一致性**：coverage_matrix 不得残留 pending/in_progress 行；assumptions.md 不得残留 `[verify 后填]` 占位符（若发现残留，先声明再停止，不代填）。
 

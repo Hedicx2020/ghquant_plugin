@@ -100,9 +100,9 @@ class SetupReport:
             else:
                 lines.append("  Python 依赖: 全部可导入")
             if env.get("codex"):
-                lines.append(f"  codex CLI: {env['codex']}（外审三审查点可用）")
+                lines.append(f"  codex CLI: {env['codex']}（外审三审查点可用；运行中额度耗尽会自动降级为 Claude 替身盲审，不断链）")
             else:
-                lines.append("  codex CLI: 未找到 → 外审将按两级降级（claude_fallback → skipped），最终报告可信度封顶 B")
+                lines.append("  codex CLI: 未找到 → 外审自动降级为 Claude 替身盲审（审查照跑、意见照样逐条回应；替身也不可行才 skipped），最终报告可信度封顶 B；装好后无需重新 setup，下次运行自动启用")
         return "\n".join(lines)
 
 

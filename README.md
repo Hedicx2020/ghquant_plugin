@@ -30,7 +30,7 @@
 **环境要求**：
 - [uv](https://docs.astral.sh/uv/)（硬前置，所有工具经 `uv run` 调用）；依赖缺失时在工作目录 `uv sync`
 - Claude 订阅档位：子 agent 主力为 opus（7 个中 6 个），建议 Max 档位；可自行编辑安装副本中 `agents/*.md` 的 model 字段下调（复现质量自负）
-- codex CLI（软前置）：外部三审查点用；未安装会自动降级并在最终报告标注（可信度评级封顶 B）
+- codex CLI（软前置）：外部三审查点用；**未安装或额度耗尽都不断链**——自动降级为 Claude 替身盲审（同一审查 prompt、独立上下文、意见照样逐条回应闭环），替身也不可行才标记跳过；发生任一失败性降级时最终报告如实标注、可信度评级封顶 B。装好 codex / 额度恢复后无需重新配置，下次运行自动启用
 
 ## 快速开始（两种形态通用）
 
@@ -71,6 +71,7 @@
 
 ## 变更记录
 
+- 2026-07-11（v2.9.0）：codex 备用方案补强——外审降级链细化为可执行协议（正本收口在 spec_audit 执行卡）：① 调用前 `command -v codex` 速判，未安装零成本直降、会话内沿用不反复探测；② 失败特征分类：额度/认证类错误（usage limit/quota/429/401）跳过无意义的缩减重试直接降级；③ 一级降级 Claude 替身盲审规范化（general-purpose 执行同一份已填充审查 prompt、禁读过程性文件、直接写原输出路径、不受经济模式降配），二级才 skipped；④ result 审查点（反虚报最后防线）必须先试替身、不得直接 skipped；⑤ iterate 第二意见同链降级（替身独立上下文保留防兜圈价值）；⑥ verifier 辅助自查失败即跳过不替代；⑦ 评级口径统一：失败性降级/缺失（claude_fallback 或 skipped）不分难度封顶 B，audit_level=standard 未触发的配置性 skipped 不封顶。门禁只核产物文件与格式、不核 engine 字段，全链零代码变更。
 - 2026-07-11（v2.8.0）：实验模式（市场迁移复现）——`/reproduce reports/xxx.pdf --experimental`：海外报告原文市场数据本地不可得时，用本地等价数据替代（如美国 CPI → 中国 CPI），复现目标从「数值对齐原文」变为「方法在迁移市场是否成立」。数值对齐判定整体豁免（G-VF-3 只核产出完整、G-RA-3 无超差归因语义、iterate 天然跳过），替代数据逐条入假设登记簿（market-transplant），最终报告与 HTML 结果页强制显著声明（G-FN 核验「市场迁移」章节、结果页顶部醒目 banner）；反虚报照审（数字仍不能编）。strict 模式下 planner 发现整体不可得只能建议、经人工闸门裁决切换，agent 无权自行切换。
 
 - 2026-07-11（v2.7.0）：墙钟加速——① implement 流水线化：milestone 验证与下一 milestone 编码滚动重叠（medium 从完全串行改为流水线，hard 依赖链同享；含汇合分诊表：假 FAIL 复跑不占重派、下游缓验+增量适配、尾部条件封堵协议洞）；② code_audit∥verify 默认并行（easy/ml 例外，G-VF-6 新鲜度机器兜底作废规则）；③ result_audit∥oos 可选并发；④ milestone 拆分粒度收紧（hard 3~5 为宜、<100 行相邻同主题合并）；⑤ 并行纪律入硬约束（state.py 写命令严禁同批并行、同批 agent 写集不相交——顺带修复既有 hard 路径丢更新隐患）；⑥ iterate 卡 join codex 歧义修正。预期 medium 每跑省 25-55 分钟、hard 省 40-110+ 分钟；纯文案层，门禁与审计体系零变更。

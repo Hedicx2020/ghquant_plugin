@@ -231,3 +231,20 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/state.py" ...
 - **切换协议**：strict 下 planner 发现原文市场整体不可得但可替代 → 写明方案后置 feasibility: blocked 交人工裁决；用户确认后主会话 `set <id> reproduction_mode experimental` 续跑。
 - **展示**：render_report.py 顶部 warn 色 banner + hero「实验模式·市场迁移」徽章 + 指标表列头改「原文值（对照参考）/迁移复现值」。
 - **oos 兼容**：实验模式下样本外分析照常（验证迁移市场上方法的持续性）。
+
+## 十七、2026-07-11 增补（v2.9.0）：codex 备用方案补强（外审降级链细化）
+
+**问题**：用户可能未安装 codex CLI，或订阅额度中途耗尽。既有协议已有两级降级（claude_fallback → skipped）骨架，但存在六处盲区：额度耗尽会白做「缩减输入重试」（缩输入救不了配额）；未安装时每个审查点反复空调用；替身派发细节不明（subagent_type/prompt 来源/产物落盘方/economy 降配与否全靠现场发挥）；评级封顶口径三处不一致（reporter 判据「降级或缺失→B」vs spec_audit 卡「二级 skipped 才封顶且限 hard」vs result_audit 卡「hard 缺外审封顶 B」）；iterate 第二意见一边写「防兜圈关键输入必须 join」一边失败即缺席、无替身路径；verifier 辅助 codex 无失败条款。
+
+**方案（全部文案层，零代码/零门禁变更——check_gates 只核产物文件与 JSON 格式、不核 engine 字段，替身写同路径同格式天然过三关解析）**：
+
+- **正本收口**：降级链完整协议收口在 `stages/spec_audit.md`「codex 降级链」节，code_audit / result_audit / iterate 三卡引用正本、只保留差异项（缩减重试输入、替身输出路径、标记块要求）。SKILL.md 二节留 4 行全局指针。
+- **速判**：调用前 `command -v codex`，未安装零成本直降一级；「未安装」在案例内沿用（后续审查点不再探测），「额度/临时故障」不沿用（额度可能恢复，每审查点先试一次、失败即快速降级）。
+- **失败分类**：stderr/输出含 usage limit/quota/429/401/402/login 等额度认证特征 → 跳过缩减重试直接降级；超时/网络/截断类才缩减重试 1 次。
+- **替身规范**（一级降级）：subagent_type=`general-purpose`，prompt=该审查点已填充的 codex prompt 正文（骨架引擎无关，「苛刻审稿人」角色设定通用）+ 四条替身约束（只读列出的输入文件禁读过程性文件 / 输出契约与原 prompt 一致含标记块 / 全文 Write 入原 codex 输出路径 / 不派发不调 skill）；替身属质量敏感角色不受 economy 降配。external_reviews 记 engine=claude_fallback + reason。
+- **result 特殊地位**：反虚报最后防线，任何 audit_level 必须至少走到替身，不得直接 skipped。
+- **iterate second_opinion 同链**：一级替身出第二意见（独立上下文保留防兜圈价值），替身也不可行才允许缺席（「如有」的唯一语义），iteration_log 记缺席原因；不入 external_reviews、不影响评级。
+- **verifier 辅助自查**：codex 不可用直接跳过，辅助缺席不构成验证失败、不做替代调用（替身降级仅限主会话三审查点）。
+- **评级口径统一（以 reporter 判据为权威）**：失败性降级/缺失（claude_fallback 或因不可用落 skipped）不分难度封顶 B——替身保住审查覆盖、不恢复异构引擎交叉验证的可信度；**audit_level=standard 未触发的配置性 skipped 不封顶**（触发条件本身是风险导向的，未触发=低风险路径，result 必跑兜底；否则 standard 用户永远拿不到 A，档位失去意义）。装回 codex / 额度恢复即自动回主路径，无需配置。
+
+**边界如实**：替身与被审代码同为 Claude 家族，异构盲区（同源幻觉、同源口径偏好）无法靠替身消除——这正是封顶 B 的理由；用户长期无 codex 时评级上限即 B，这是诚实标注而非惩罚。

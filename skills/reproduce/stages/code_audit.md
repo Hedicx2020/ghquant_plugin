@@ -49,4 +49,4 @@ VERDICT PASS → `set-stage <id> code_audit done` → 进 verify。
 
 - **critical**（未来函数/硬编码/方向反/空壳 not_found）→ 回 `quant-coder` 修复（只改问题文件）→ codex 复审（复审输入=修复 diff + 原意见 + 定位文件，缩减 prompt）→ 复核列写 `pass`。**同一审查点审→修→复审最多 3 轮，仍有 critical → paused_blocked**。修复计入迭代账（若已进 verify 后回来，见 iterate）。
 - **G-CA-3 命中 not_found** → 对应实现是空壳，回 coder 真正实现该要素，矩阵状态回 in_progress → done；**coder 补实现后必须重派 `quant-auditor mode=code` 覆盖重写对应的 `impl_audit_m{X}.md`（不是在旧文件上增补一行了事）**，复审干净（不再命中「判定: not_found」）才能重过 G-CA 门禁——否则旧文件里残留的 `判定: not_found` 行会让门禁永远 FAIL，即便实现已经修好（陈旧文件死锁）。
-- **codex 调用失败** → 重试 1 次缩减输入（代码审只喂 `strategy.py`）；再失败两级降级（claude_fallback → skipped，同 spec_audit 失败处理，engine 记入 external_reviews）。
+- **codex 调用失败 / 未安装 / 额度耗尽** → 走 `stages/spec_audit.md`「codex 降级链」正本（速判 → 失败分类 → claude_fallback 替身 → skipped）。本卡差异项：缩减重试的输入=只喂 `strategy.py`；替身输出路径=`workspace/<id>/audit/code_audit_codex.md`；无标记块要求。
