@@ -117,9 +117,11 @@
   th code { white-space: nowrap; }
   /* 正文单元格里的 code 允许按空格换行（长命令/代号串不再撑爆列宽），词内不打散 */
   td code { white-space: normal; word-break: keep-all; overflow-wrap: anywhere; }
-  /* 列宽控制：narrow=真短标识列（版本/日期/评级/阶段名）；mid=中等内容列（可换行，约 12em）；wide=说明长文本列 */
+  /* 列宽控制：narrow=真短标识列（版本/日期/评级/阶段名/字段名）；mid=中等内容列（可换行，下限 10em，宽度随内容）；wide=说明长文本列 */
   td.c-narrow, th.c-narrow { white-space: nowrap; width: 1%; }
-  th.c-mid { width: 12em; white-space: normal; }
+  /* narrow 列里的 code 是短标识（字段名/阶段名），必须整体不换行——否则被 width:1% 挤压 + overflow-wrap:anywhere 会断成逐字竖柱 */
+  td.c-narrow code { white-space: nowrap; }
+  th.c-mid { min-width: 10em; white-space: normal; }
   td.c-wide, th.c-wide { min-width: 18em; }
   .num { font-variant-numeric: tabular-nums; }
 
