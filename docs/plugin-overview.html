@@ -115,11 +115,15 @@
   td:first-child, th:first-child { padding-left: 16px; }
   td:last-child, th:last-child { padding-right: 16px; }
   th code { white-space: nowrap; }
-  /* 正文单元格里的 code 允许按空格换行（长命令/代号串不再撑爆列宽），词内不打散 */
-  td code { white-space: normal; word-break: keep-all; overflow-wrap: anywhere; }
-  /* 列宽控制：narrow=真短标识列（版本/日期/评级/阶段名/字段名）；mid=中等内容列（可换行，下限 10em，宽度随内容）；wide=说明长文本列 */
+  /* 正文单元格里的 code 允许按空格换行（长命令/代号串不再撑爆列宽）。
+     断词策略用 break-word 而非 anywhere：break-word 的断词机会不计入表格
+     min-content 列宽计算——列宽按整词分配、词内不被压断；anywhere 会让
+     被压窄的列把 code 断成逐字符竖柱 */
+  td code { white-space: normal; word-break: keep-all; overflow-wrap: break-word; }
+  /* 列宽控制：narrow=真短标识列（版本/日期/评级/阶段名/字段名）；mid=中等内容列（可换行，下限 10em，宽度随内容）；wide=说明长文本列。
+     c-narrow 必须同时标在该列的 th 与全部 td 上（nowrap 不作用于「列」，
+     只标表头时数据格的中文/code 仍会被 width:1% 压成逐字竖排） */
   td.c-narrow, th.c-narrow { white-space: nowrap; width: 1%; }
-  /* narrow 列里的 code 是短标识（字段名/阶段名），必须整体不换行——否则被 width:1% 挤压 + overflow-wrap:anywhere 会断成逐字竖柱 */
   td.c-narrow code { white-space: nowrap; }
   th.c-mid { min-width: 10em; white-space: normal; }
   td.c-wide, th.c-wide { min-width: 18em; }
@@ -302,13 +306,13 @@
   <h3 id="setup5">配置详解（问卷六项 + 配置文件项）</h3>
   <div class="tbl-scroll"><table>
     <tr><th class='c-narrow'>配置项</th><th class='c-narrow'>字段</th><th class='c-narrow'>默认</th><th class='c-wide'>含义与影响</th></tr>
-    <tr><td><strong>数据路径</strong></td><td><code>data_root</code></td><td><code>~/local_data</code></td><td>本地 parquet 数据库根目录。<code>common/data_loader.py</code> 从这里读行情、财务等数据。</td></tr>
-    <tr><td><strong>执行模式</strong></td><td><code>default_mode</code></td><td><code>auto</code></td><td><code>auto</code>：全自动优先——研报有歧义时按最合理假设放行并高亮登记，跑完统一人工 review，可事后定向重跑。<code>interactive</code>：遇关键（blocking 级）歧义暂停，人工裁决后继续。</td></tr>
-    <tr><td><strong>最大迭代次数</strong></td><td><code>default_max_iter</code></td><td>按难度自动</td><td>指标未达标时自动迭代修正的轮数上限。默认 easy 3 / medium 5 / hard 6，可用 1–10 的整数全局覆盖。轮次越多复现越充分，耗时与成本越高。</td></tr>
-    <tr><td><strong>回测框架</strong></td><td><code>backtest_framework</code></td><td>内置 <code>common/</code></td><td>可指定你自有回测框架的目录路径（工具校验存在性）。指定后，复现代码的回测执行层<strong>优先调用你的框架</strong>，内置库仅补缺口；输出产物与门禁要求不变。</td></tr>
-    <tr><td><strong>偏差容忍</strong></td><td><code>default_max_rel_dev</code></td><td>按内置标准</td><td>你能接受的复现值与原报告的偏差。默认走 <code>standards.json</code> 分类型精细容差；自定义（0.5%–50%）后，所有按<strong>相对偏差</strong>判定的指标统一用该容忍度，达标门禁与最终报告一致生效。</td></tr>
-    <tr><td><strong>经济模式</strong></td><td><code>economy</code></td><td>关闭</td><td>开启后机械性角色（提取 / 验证 / 样本外分析）派发降为 sonnet，token 约降三成；写码 / 审计 / 归因等质量敏感角色保持 opus 不受影响。</td></tr>
-    <tr><td><strong>外审档位</strong></td><td><code>audit_level</code></td><td><code>strict</code></td><td>配置文件项（不进问卷）。<code>standard</code> 时规格/代码外审改为触发式（关键歧义、首次类型、hard、ml 才跑，跳过时明示留档），<strong>结果外审任何档位必跑</strong>——反虚报是最后防线。</td></tr>
+    <tr><td class="c-narrow"><strong>数据路径</strong></td><td class="c-narrow"><code>data_root</code></td><td class="c-narrow"><code>~/local_data</code></td><td>本地 parquet 数据库根目录。<code>common/data_loader.py</code> 从这里读行情、财务等数据。</td></tr>
+    <tr><td class="c-narrow"><strong>执行模式</strong></td><td class="c-narrow"><code>default_mode</code></td><td class="c-narrow"><code>auto</code></td><td><code>auto</code>：全自动优先——研报有歧义时按最合理假设放行并高亮登记，跑完统一人工 review，可事后定向重跑。<code>interactive</code>：遇关键（blocking 级）歧义暂停，人工裁决后继续。</td></tr>
+    <tr><td class="c-narrow"><strong>最大迭代次数</strong></td><td class="c-narrow"><code>default_max_iter</code></td><td class="c-narrow">按难度自动</td><td>指标未达标时自动迭代修正的轮数上限。默认 easy 3 / medium 5 / hard 6，可用 1–10 的整数全局覆盖。轮次越多复现越充分，耗时与成本越高。</td></tr>
+    <tr><td class="c-narrow"><strong>回测框架</strong></td><td class="c-narrow"><code>backtest_framework</code></td><td class="c-narrow">内置 <code>common/</code></td><td>可指定你自有回测框架的目录路径（工具校验存在性）。指定后，复现代码的回测执行层<strong>优先调用你的框架</strong>，内置库仅补缺口；输出产物与门禁要求不变。</td></tr>
+    <tr><td class="c-narrow"><strong>偏差容忍</strong></td><td class="c-narrow"><code>default_max_rel_dev</code></td><td class="c-narrow">按内置标准</td><td>你能接受的复现值与原报告的偏差。默认走 <code>standards.json</code> 分类型精细容差；自定义（0.5%–50%）后，所有按<strong>相对偏差</strong>判定的指标统一用该容忍度，达标门禁与最终报告一致生效。</td></tr>
+    <tr><td class="c-narrow"><strong>经济模式</strong></td><td class="c-narrow"><code>economy</code></td><td class="c-narrow">关闭</td><td>开启后机械性角色（提取 / 验证 / 样本外分析）派发降为 sonnet，token 约降三成；写码 / 审计 / 归因等质量敏感角色保持 opus 不受影响。</td></tr>
+    <tr><td class="c-narrow"><strong>外审档位</strong></td><td class="c-narrow"><code>audit_level</code></td><td class="c-narrow"><code>strict</code></td><td>配置文件项（不进问卷）。<code>standard</code> 时规格/代码外审改为触发式（关键歧义、首次类型、hard、ml 才跑，跳过时明示留档），<strong>结果外审任何档位必跑</strong>——反虚报是最后防线。</td></tr>
   </table></div>
   <div class="note">
     <strong>偏差是「相对偏差」</strong>：判定式为 |复现值 − 研报值| ÷ |研报值|。研报年化 10%、容忍 5% ⇒ 允许区间 <span class="num">9.5% ~ 10.5%</span>（不是 5%~15%）。研报值越小同样容忍越苛刻，所以近零指标（如因子 IC）在内置标准里配有绝对偏差兜底（abs_eps），自定义容忍不改变这些特殊判定的语义。
@@ -336,18 +340,18 @@
   <h3 id="stages">十一阶段与门禁：每一关查什么</h3>
   <div class="tbl-scroll"><table>
     <tr><th class='c-narrow'>阶段</th><th class='c-narrow'>人话</th><th class='c-mid'>谁干活</th><th class='c-wide'>出口门禁核验（举要）</th></tr>
-    <tr><td><code>init</code></td><td>初始化</td><td>工具链</td><td>工作区骨架建立、PDF 转文本页数一致、状态文件就绪</td></tr>
-    <tr><td><code>extract</code></td><td>研报提取</td><td>quant-extractor</td><td>规格三件套齐全、要素带页码引用、覆盖矩阵行数与要素守恒</td></tr>
-    <tr><td><code>plan</code></td><td>复现规划</td><td>quant-planner</td><td>分诊字段合法、每条要素有数据映射与里程碑归属、歧义全登记</td></tr>
-    <tr><td><code>spec_audit</code></td><td>规格审计</td><td>codex 外审 + 内审</td><td>盲提取对照零漏抄、审计意见逐条回应闭环</td></tr>
-    <tr><td><code>implement</code></td><td>代码实现</td><td>quant-coder（可并行）</td><td>代码可编译、逐里程碑完成登记、矩阵回填真实实现位置</td></tr>
-    <tr><td><code>code_audit</code></td><td>代码审计</td><td>codex 外审 + 内审</td><td>公式逐要素对照、未来函数/数据对齐核查、意见闭环</td></tr>
-    <tr><td><code>verify</code></td><td>运行验证</td><td>quant-verifier</td><td>亲自跑通 <code>main.py</code>、逐项对数重算容差、图表/Excel 产物齐全新鲜</td></tr>
-    <tr><td><code>iterate</code></td><td>迭代修正</td><td>diagnoser + coder + verifier</td><td>每轮三件套（诊断/修改/复验对数）齐全、防兜圈规则、超差项全归因</td></tr>
-    <tr><td><code>result_audit</code></td><td>结果审计</td><td>codex 外审 + 反虚报核查</td><td>结论没有编：数字与产物一致、归因真实、无 open critical</td></tr>
-    <tr><td><code>oos</code></td><td>样本外分析</td><td>quant-oos-analyst</td><td>复现达标（pass/partial）才跑：策略原样延伸到研报区间之后的数据，样本外区间零重叠、结论枚举、短样本警示</td></tr>
-    <tr><td><code>report</code></td><td>报告汇总</td><td>quant-reporter + 渲染工具</td><td>八大必需章节齐全、假设登记簿全收录、无遗留占位符；并渲染单文件 HTML 展示页（指标表可筛选、图表内嵌）</td></tr>
-    <tr><td><code>review</code></td><td>人工评审</td><td><strong>你</strong></td><td>唯一人工阶段：读报告后 <code>accept</code> 收尾或 <code>revise</code> 定向重跑</td></tr>
+    <tr><td class="c-narrow"><code>init</code></td><td class="c-narrow">初始化</td><td>工具链</td><td>工作区骨架建立、PDF 转文本页数一致、状态文件就绪</td></tr>
+    <tr><td class="c-narrow"><code>extract</code></td><td class="c-narrow">研报提取</td><td>quant-extractor</td><td>规格三件套齐全、要素带页码引用、覆盖矩阵行数与要素守恒</td></tr>
+    <tr><td class="c-narrow"><code>plan</code></td><td class="c-narrow">复现规划</td><td>quant-planner</td><td>分诊字段合法、每条要素有数据映射与里程碑归属、歧义全登记</td></tr>
+    <tr><td class="c-narrow"><code>spec_audit</code></td><td class="c-narrow">规格审计</td><td>codex 外审 + 内审</td><td>盲提取对照零漏抄、审计意见逐条回应闭环</td></tr>
+    <tr><td class="c-narrow"><code>implement</code></td><td class="c-narrow">代码实现</td><td>quant-coder（可并行）</td><td>代码可编译、逐里程碑完成登记、矩阵回填真实实现位置</td></tr>
+    <tr><td class="c-narrow"><code>code_audit</code></td><td class="c-narrow">代码审计</td><td>codex 外审 + 内审</td><td>公式逐要素对照、未来函数/数据对齐核查、意见闭环</td></tr>
+    <tr><td class="c-narrow"><code>verify</code></td><td class="c-narrow">运行验证</td><td>quant-verifier</td><td>亲自跑通 <code>main.py</code>、逐项对数重算容差、图表/Excel 产物齐全新鲜</td></tr>
+    <tr><td class="c-narrow"><code>iterate</code></td><td class="c-narrow">迭代修正</td><td>diagnoser + coder + verifier</td><td>每轮三件套（诊断/修改/复验对数）齐全、防兜圈规则、超差项全归因</td></tr>
+    <tr><td class="c-narrow"><code>result_audit</code></td><td class="c-narrow">结果审计</td><td>codex 外审 + 反虚报核查</td><td>结论没有编：数字与产物一致、归因真实、无 open critical</td></tr>
+    <tr><td class="c-narrow"><code>oos</code></td><td class="c-narrow">样本外分析</td><td>quant-oos-analyst</td><td>复现达标（pass/partial）才跑：策略原样延伸到研报区间之后的数据，样本外区间零重叠、结论枚举、短样本警示</td></tr>
+    <tr><td class="c-narrow"><code>report</code></td><td class="c-narrow">报告汇总</td><td>quant-reporter + 渲染工具</td><td>八大必需章节齐全、假设登记簿全收录、无遗留占位符；并渲染单文件 HTML 展示页（指标表可筛选、图表内嵌）</td></tr>
+    <tr><td class="c-narrow"><code>review</code></td><td class="c-narrow">人工评审</td><td><strong>你</strong></td><td>唯一人工阶段：读报告后 <code>accept</code> 收尾或 <code>revise</code> 定向重跑</td></tr>
   </table></div>
 
   <h3 id="agents">七个子 agent：各司其职、互相制衡</h3>
@@ -398,9 +402,9 @@
   <h3 id="audit">三层审计体系：防偷懒、防遗漏、防虚报</h3>
   <div class="tbl-scroll"><table>
     <tr><th class='c-narrow'>层</th><th class='c-mid'>执行者</th><th class='c-mid'>防什么</th><th class='c-wide'>手段</th></tr>
-    <tr><td><strong>外审三审查点</strong></td><td>codex CLI（read-only 沙箱，全难度必跑）</td><td>提取漏抄 / 实现走样 / 结论造假</td><td>规格审计（盲提取对照：codex 不看规格书独立抄一遍研报数值再逐格 diff）、代码审计（公式对照 + 未来函数）、结果审计（数字与产物一致性）。每条意见编号进回应总表，critical 必须修复 + 缩减复审通过。</td></tr>
-    <tr><td><strong>内审</strong></td><td>quant-auditor</td><td>同上，独立视角</td><td>三模式对照审计；hard 难度逐里程碑插入实现忠实性审计；ml 类无视难度必审（训练泄漏数值验证抓不到）。</td></tr>
-    <tr><td><strong>反虚报核查</strong></td><td>quant-auditor（result 模式）+ 机器检查项</td><td>「声称做了实际没做」</td><td>K 系列（K1–K8）：结果过于完美嫌疑、声称通过实际未改等；E 系列（E1–E6）证据链：运行日志、产物新鲜度、通过数亲自重数、图表逐张数值级核验。</td></tr>
+    <tr><td class="c-narrow"><strong>外审三审查点</strong></td><td>codex CLI（read-only 沙箱，全难度必跑）</td><td>提取漏抄 / 实现走样 / 结论造假</td><td>规格审计（盲提取对照：codex 不看规格书独立抄一遍研报数值再逐格 diff）、代码审计（公式对照 + 未来函数）、结果审计（数字与产物一致性）。每条意见编号进回应总表，critical 必须修复 + 缩减复审通过。</td></tr>
+    <tr><td class="c-narrow"><strong>内审</strong></td><td>quant-auditor</td><td>同上，独立视角</td><td>三模式对照审计；hard 难度逐里程碑插入实现忠实性审计；ml 类无视难度必审（训练泄漏数值验证抓不到）。</td></tr>
+    <tr><td class="c-narrow"><strong>反虚报核查</strong></td><td>quant-auditor（result 模式）+ 机器检查项</td><td>「声称做了实际没做」</td><td>K 系列（K1–K8）：结果过于完美嫌疑、声称通过实际未改等；E 系列（E1–E6）证据链：运行日志、产物新鲜度、通过数亲自重数、图表逐张数值级核验。</td></tr>
   </table></div>
 
   <h3 id="iterate">迭代引擎与人工闸门</h3>
@@ -420,9 +424,9 @@
   <p>最终报告给出 A / B / C 可信度评级：</p>
   <div class="tbl-scroll"><table>
     <tr><th class='c-narrow'>评级</th><th class='c-wide'>判据</th></tr>
-    <tr><td><strong>A</strong></td><td>覆盖率 ≥ 90%（核心要素 100%）＋ 三外审通过 ＋ 零 critical 遗留</td></tr>
-    <tr><td><strong>B</strong></td><td>核心要素覆盖 100%，但支线有缺，或外审有失败性降级（codex 不可用改由 Claude 替身盲审，或替身也不可行被跳过）；外审档位 standard 未触发的配置性跳过不算降级、不封顶</td></tr>
-    <tr><td><strong>C</strong></td><td>存在核心要素未复现或 major 意见遗留未回应——报告结论区显著提示成因</td></tr>
+    <tr><td class="c-narrow"><strong>A</strong></td><td>覆盖率 ≥ 90%（核心要素 100%）＋ 三外审通过 ＋ 零 critical 遗留</td></tr>
+    <tr><td class="c-narrow"><strong>B</strong></td><td>核心要素覆盖 100%，但支线有缺，或外审有失败性降级（codex 不可用改由 Claude 替身盲审，或替身也不可行被跳过）；外审档位 standard 未触发的配置性跳过不算降级、不封顶</td></tr>
+    <tr><td class="c-narrow"><strong>C</strong></td><td>存在核心要素未复现或 major 意见遗留未回应——报告结论区显著提示成因</td></tr>
   </table></div>
   <div class="note amber">评级 C 不一定意味着复现质量差：数据客观缺失（如某指数系列本地零覆盖，经穷尽核实）导致核心支线不可行时，字面判据同样触发 C——报告会写明成因与主线结论是否受影响，残余偏差 100% 归因后才能出报告。</div>
 </section>
@@ -545,16 +549,16 @@
   <h2>版本演进</h2>
   <div class="tbl-scroll"><table>
     <tr><th class="c-narrow">版本</th><th class="c-narrow">日期</th><th class="c-wide">要点</th></tr>
-    <tr><td><code>2.10.0</code></td><td class="num">07-11</td><td>案例统一编号：新案例自动分配 rNNN_短名 形式 id，全部子命令接受编号缩写（r3/r003/3），status 输出编号排序一览表</td></tr>
-    <tr><td><code>2.9.0</code></td><td class="num">07-11</td><td>codex 备用方案补强：未安装/额度耗尽自动降级 Claude 替身盲审（速判直降、额度类报错免重试、替身规范化），评级封顶口径统一</td></tr>
-    <tr><td><code>2.8.0</code></td><td class="num">07-11</td><td>实验模式（市场迁移复现）：等价数据替代 + 数值判定豁免 + 强制显著声明</td></tr>
-    <tr><td><code>2.7.0</code></td><td class="num">07-11</td><td>墙钟加速：implement 流水线（验证与下一段编码重叠）、代码外审∥运行验证默认并行、结果审计∥样本外并发、并行纪律入硬约束</td></tr>
-    <tr><td><code>2.6.0</code></td><td class="num">07-10</td><td>分诊判据修正（方法复杂度主轴）、经济模式、外审档位、核验分级（参数不明的诚实降级）</td></tr>
-    <tr><td><code>2.5.0</code></td><td class="num">07-10</td><td>复现结果单文件 HTML 展示页（确定性渲染，指标表可筛选、图表内嵌）</td></tr>
-    <tr><td><code>2.4.x</code></td><td class="num">07-09</td><td>样本外表现分析阶段 + 第 8 个 agent（quant-oos-analyst）；问卷分批修复</td></tr>
-    <tr><td><code>2.2–2.3</code></td><td class="num">07-09</td><td>配置项扩充：自有回测框架接入、偏差容忍</td></tr>
-    <tr><td><code>2.1.0</code></td><td class="num">07-09</td><td>插件化：可分发安装、setup 配置向导、双形态路径解耦</td></tr>
-    <tr><td><code>2.0</code></td><td class="num">07-07</td><td>v2 重构：12 阶段门禁状态机、多 agent 编排、codex 三审查点、防偷懒审计体系（test_v2 端到端验收 81/91）</td></tr>
+    <tr><td class="c-narrow"><code>2.10.0</code></td><td class="num c-narrow">07-11</td><td>案例统一编号：新案例自动分配 rNNN_短名 形式 id，全部子命令接受编号缩写（r3/r003/3），status 输出编号排序一览表</td></tr>
+    <tr><td class="c-narrow"><code>2.9.0</code></td><td class="num c-narrow">07-11</td><td>codex 备用方案补强：未安装/额度耗尽自动降级 Claude 替身盲审（速判直降、额度类报错免重试、替身规范化），评级封顶口径统一</td></tr>
+    <tr><td class="c-narrow"><code>2.8.0</code></td><td class="num c-narrow">07-11</td><td>实验模式（市场迁移复现）：等价数据替代 + 数值判定豁免 + 强制显著声明</td></tr>
+    <tr><td class="c-narrow"><code>2.7.0</code></td><td class="num c-narrow">07-11</td><td>墙钟加速：implement 流水线（验证与下一段编码重叠）、代码外审∥运行验证默认并行、结果审计∥样本外并发、并行纪律入硬约束</td></tr>
+    <tr><td class="c-narrow"><code>2.6.0</code></td><td class="num c-narrow">07-10</td><td>分诊判据修正（方法复杂度主轴）、经济模式、外审档位、核验分级（参数不明的诚实降级）</td></tr>
+    <tr><td class="c-narrow"><code>2.5.0</code></td><td class="num c-narrow">07-10</td><td>复现结果单文件 HTML 展示页（确定性渲染，指标表可筛选、图表内嵌）</td></tr>
+    <tr><td class="c-narrow"><code>2.4.x</code></td><td class="num c-narrow">07-09</td><td>样本外表现分析阶段 + 第 8 个 agent（quant-oos-analyst）；问卷分批修复</td></tr>
+    <tr><td class="c-narrow"><code>2.2–2.3</code></td><td class="num c-narrow">07-09</td><td>配置项扩充：自有回测框架接入、偏差容忍</td></tr>
+    <tr><td class="c-narrow"><code>2.1.0</code></td><td class="num c-narrow">07-09</td><td>插件化：可分发安装、setup 配置向导、双形态路径解耦</td></tr>
+    <tr><td class="c-narrow"><code>2.0</code></td><td class="num c-narrow">07-07</td><td>v2 重构：12 阶段门禁状态机、多 agent 编排、codex 三审查点、防偷懒审计体系（test_v2 端到端验收 81/91）</td></tr>
   </table></div>
 </section>
 
