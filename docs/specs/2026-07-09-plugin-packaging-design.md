@@ -260,3 +260,16 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/state.py" ...
 - **兼容**：既有案例不迁移（在跑案例改 id 要动 workspace/src/output 三处目录 + state 内路径 + 代码 import，风险大收益小）；旧式 id 照常用、可前缀缩写；`--id` 显式指定不强加编号。两个子命令均只读，不违反 state.py「唯一写入口」架构（编号在 init 落盘时才被占用；并发起两个新案例不在设计内）。
 
 **边界如实**：next-id 只扫描不锁号，同时起两个新案例会拿到同号——单用户串行起跑场景不设防；resolve 的编号匹配不 fallback 到「rNN 开头的非编号 id」歧义场景（id 规范排除了数字开头，实际不冲突）。
+
+## 十九、2026-07-12 增补（v2.11.0）：术语人话化（客户可读性）
+
+**问题**：外部客户看不懂 G-XX（门禁）、CDX-X-##（外审意见）、K/E 系列等代号，对照手册术语表也麻烦。用户拍板：手册单页人话化+悬浮释义（不拆双页）；复现产物（final_report.md + final_report.html）一起改。
+
+**边界（先于方案确立）**：内部审计文书与 state.json 枚举零改动——代号是机器解析依赖（`_parse_audit_responses` 按 `CDX-` 前缀分拣），只改展示层不改数据层；check_gates.py 不改。实施前双重核实的「不可动清单」：G-FN-2 的 H2 关键词子串、G-FN-5 的 rejected `CDX-X-NN` 原样出现、G-FN-7 的「指标对比总表」字面量、render_report 的 `_grade_from_report` 评级提取正则（「可信度评级」四字后 ≤24 字符内即评级字母）。
+
+**三个界面的落地**：
+- **手册**：`.term[data-tip]` + 共享 `#tt` 悬浮层（position:fixed 免受 tbl-scroll/track-scroll 的 overflow 裁剪——absolute 伪元素方案在这些容器首末行必被裁；约 25 行内联 JS 只做定位：pointerover/focusin/touchstart 显示、scroll/Escape 收起、视口边界钳制）。22 处挂点：轨道 11 门禁 pill（tip 文案抄阶段表末列，不造新口径）+ 正文 11 处（K/E 系列、外审三审查点、stop_partial/blocked、paused_blocked、失败性降级、market-transplant、major-auto×2 等）。无 JS 降级：虚线仍标识术语、术语表节兜底（引言注明悬停用法）。阶段表不挂（已有人话列，挂了是噪音）；代码块内代号不挂（破坏观感，紧邻正文已释义）。
+- **结果页（render_report.py）**：7 个展示层映射 dict（VERDICT/TYPE/DIFFICULTY/CHECKPOINT/ENGINE/REVIEW_VERDICT/ATTRIBUTION_CN），`_cn()` 统一「中文为主+原始值括注」，`.get(v,v)` 兜底未知枚举原样透传不吞值。8 处渲染点：hero 判定、类型难度、KPI 卡、归因列、指标状态（达标/超差）、样本外基线、外审台账（表头中文化+降级引擎 warn pill 凸显+先按原始值判色后换文案——`v.startswith("pass")` 顺序反了 pass_with_issues 掉色）、footer。
+- **最终报告（quant-reporter.md 硬约束第 11 条 a–g + checklist 两项）**：H2 关键词在行内可加人话后缀；代号首现附中文说明；审计回应汇总表必含「这条意见说什么·我们怎么处理」人话列（只复述不新增结论）；rejected 句式固定（代号原样保 G-FN-5）；附录 A.3 列头取值中文化；**评级句式固定「可信度评级：X（一句话判据）」**（渲染器正则契约——前置判据句「可信度评级（A/B/C 三档）」会让徽章误抓 A）；状态枚举中文化首现括注。report 执行卡三处配套（主会话转述用固定中文对照防 reporter 自造译名/点收加验三点/失败处理加徽章误抓分支）。
+
+**边界如实**：悬浮释义在 iOS 页面缩放下 fixed 坐标有轻微偏差（max-width 340 + 边界钳制兜住，不引 visualViewport 保持极简）；reporter 为 sonnet 档，11 条措辞全部写成机械可执行句式，不留自由裁量。

@@ -150,6 +150,30 @@ def _png_gallery(results_dir: Path) -> list[tuple[str, str]]:
 
 
 # ---------------------------------------------------------------------------
+# 枚举值人话映射（展示层专用：中文为主、原始值括注；.get(v, v) 兜底，
+# 未知值原样可见不吞。数据层（state.json / comparison.json）枚举不动。
+# ---------------------------------------------------------------------------
+
+VERDICT_CN = {"pass": "达标", "partial": "部分达标", "fail": "未达标"}
+TYPE_CN = {"factor": "选股因子", "timing": "择时", "allocation": "资产配置",
+           "fixed_income": "固定收益", "ml": "机器学习"}
+DIFFICULTY_CN = {"easy": "简单", "medium": "中等", "hard": "困难"}
+CHECKPOINT_CN = {"spec": "规格审查", "code": "代码审查", "result": "结果审查"}
+ENGINE_CN = {"codex": "codex 异构外审", "claude_fallback": "Claude 替身（降级外审）",
+             "skipped": "外审缺失（跳过）"}
+REVIEW_VERDICT_CN = {"pass": "通过", "pass_with_issues": "有意见通过",
+                     "fail": "曾出阻断问题（已修复闭环）", "skipped": "跳过"}
+ATTRIBUTION_CN = {"accepted": "残差已归因接受", "assumption_linked": "已挂钩假设条目"}
+
+
+def _cn(mapping: dict, v) -> str:
+    """中文为主 + 原始值括注；未知枚举原样返回（不吞值）。"""
+    s = str(v)
+    label = mapping.get(s)
+    return f"{label}（{s}）" if label else s
+
+
+# ---------------------------------------------------------------------------
 # 渲染
 # ---------------------------------------------------------------------------
 
@@ -257,12 +281,14 @@ def render(root: Path, report_id: str) -> Path:
     B.append("<div class='hero-meta'>")
     if state.get("reproduction_mode") == "experimental":
         B.append("<span class='pill warn'>实验模式 · 市场迁移</span>")
-    B.append(f"<span class='pill {result_pill}'>verdict: {esc(str(result))}</span>")
+    B.append(f"<span class='pill {result_pill}'>复现判定：{esc(_cn(VERDICT_CN, result))}</span>")
     if grade:
         gp = {"A": "pass", "B": "warn", "C": "fail"}.get(grade, "dim")
         B.append(f"<span class='pill {gp}'>可信度评级 {grade}</span>")
     if state.get("type"):
-        B.append(f"<span class='pill dim'>{esc(str(state.get('type')))} · {esc(str(state.get('difficulty') or '-'))}</span>")
+        diff = state.get("difficulty")
+        diff_s = f" · 难度：{esc(DIFFICULTY_CN.get(str(diff), str(diff)))}" if diff else ""
+        B.append(f"<span class='pill dim'>{esc(_cn(TYPE_CN, state.get('type')))}{diff_s}</span>")
     B.append(f"<span class='pill dim'>生成于 {esc(str(state.get('updated_at') or ''))}</span>")
     B.append("</div>")
 
@@ -271,7 +297,7 @@ def render(root: Path, report_id: str) -> Path:
     if pass_count is not None and total:
         B.append(f"<div class='kpi'><div class='k-label'>指标达标</div><div class='k-value'>{pass_count}/{total}</div><div class='k-sub'>comparison.json</div></div>")
     if cov.get("total"):
-        B.append(f"<div class='kpi'><div class='k-label'>要素覆盖</div><div class='k-value'>{cov.get('done', 0)}/{cov['total']}</div><div class='k-sub'>skipped {cov.get('skipped', 0)} · infeasible {cov.get('infeasible', 0)}</div></div>")
+        B.append(f"<div class='kpi'><div class='k-label'>要素覆盖</div><div class='k-value'>{cov.get('done', 0)}/{cov['total']}</div><div class='k-sub'>主动跳过 {cov.get('skipped', 0)} · 客观不可行 {cov.get('infeasible', 0)}</div></div>")
     if it.get("current") is not None:
         B.append(f"<div class='kpi'><div class='k-label'>迭代轮次</div><div class='k-value'>{it.get('current', 0)}/{it.get('max') or '-'}</div><div class='k-sub'>自动修正</div></div>")
     if oos:
@@ -309,13 +335,14 @@ def render(root: Path, report_id: str) -> Path:
         rel_s = f"{rel:.2%}" if isinstance(rel, (int, float)) and not isinstance(rel, bool) else "-"
         att = m.get("attribution_status") or ""
         note = m.get("attribution_note") or ""
-        att_cell = f"<span class='pill dim'>{esc(att)}</span> {esc(note[:80])}" if att else ""
+        att_cell = (f"<span class='pill dim'>{esc(ATTRIBUTION_CN.get(att, att))}</span> "
+                    f"<code>{esc(att)}</code> {esc(note[:80])}") if att else ""
         vl = m.get("verification_level") or "full"
         vl_label = {"full": "全量", "directional": "方向", "magnitude": "量级", "unverifiable": "不可核验"}.get(vl, vl)
         vl_cell = f"<span class='pill {'dim' if vl == 'full' else 'warn'}'>{esc(vl_label)}</span>"
         B.append(f"<tr{row_cls} data-s='{s}'><td><code>{esc(str(m.get('key', '?')))}</code></td>"
                  f"<td>{_fmt(rep_v)}</td><td>{_fmt(rec_v)}</td><td>{rel_s}</td><td>{vl_cell}</td>"
-                 f"<td><span class='pill {s}'>{'PASS' if p is True else 'FAIL'}</span></td><td>{att_cell}</td></tr>")
+                 f"<td><span class='pill {s}'>{'达标' if p is True else '超差'}</span></td><td>{att_cell}</td></tr>")
     B.append("</tbody></table></div></section>")
 
     # ---- 图表画廊 ----
@@ -335,7 +362,7 @@ def render(root: Path, report_id: str) -> Path:
         B.append("<section><h2>样本外表现</h2>")
         B.append(f"<p>样本内截至 <code>{esc(str(oos.get('in_sample_end', '-')))}</code>，样本外区间 "
                  f"<code>{esc(str(oos.get('oos_start', '-')))} ~ {esc(str(oos.get('oos_end', '-')))}</code>"
-                 f"（{esc(str(oos.get('oos_days', '-')))} 个交易日），基线 {esc(str(oos.get('baseline', '-')))}，"
+                 f"（{esc(str(oos.get('oos_days', '-')))} 个交易日），样本内基线：{esc(_cn(VERDICT_CN, oos.get('baseline', '-')))}，"
                  f"结论：<strong>{esc(str(oos.get('conclusion', '-')))}</strong></p>")
         om = oos.get("metrics") or []
         if om:
@@ -350,14 +377,19 @@ def render(root: Path, report_id: str) -> Path:
 
     # ---- 审计台账 ----
     if reviews:
-        B.append("<section><h2>外部审查台账</h2><div class='tbl-scroll'><table><tr><th>审查点</th><th>引擎</th><th>结论</th><th>critical</th><th>major</th><th>minor</th></tr>")
+        B.append("<section><h2>外部审查台账</h2>"
+                 "<p>复现过程中三道独立审查（提取是否漏抄 / 实现是否忠实原文 / 结论是否属实）的结论汇总：</p>"
+                 "<div class='tbl-scroll'><table><tr><th>审查点</th><th>审查引擎</th><th>结论</th><th>阻断 critical</th><th>必答 major</th><th>备查 minor</th></tr>")
         for r in reviews:
             v = str(r.get("verdict", "-"))
-            vp = "pass" if v.startswith("pass") else ("fail" if v == "fail" else "dim")
-            B.append(f"<tr><td><code>{esc(str(r.get('checkpoint', '-')))}</code></td><td>{esc(str(r.get('engine', '-')))}</td>"
-                     f"<td><span class='pill {vp}'>{esc(v)}</span></td>"
+            vp = "pass" if v.startswith("pass") else ("fail" if v == "fail" else "dim")  # 先按原始值判色，再换中文文案
+            eng = str(r.get("engine", "-"))
+            ep = "warn" if eng in ("claude_fallback", "skipped") else "dim"  # 降级引擎显著标注
+            B.append(f"<tr><td>{esc(CHECKPOINT_CN.get(str(r.get('checkpoint')), str(r.get('checkpoint', '-'))))} <code>{esc(str(r.get('checkpoint', '-')))}</code></td>"
+                     f"<td><span class='pill {ep}'>{esc(ENGINE_CN.get(eng, eng))}</span></td>"
+                     f"<td><span class='pill {vp}'>{esc(REVIEW_VERDICT_CN.get(v, v))}</span></td>"
                      f"<td>{r.get('critical', 0)}</td><td>{r.get('major', 0)}</td><td>{r.get('minor', 0)}</td></tr>")
-        B.append("</table></div><p class='note'>fail 结论代表该审查点曾抓出 critical 问题——按协议均已修复并经缩减复审通过后才可能走到本报告（详见 audit_responses.md）。</p></section>")
+        B.append("</table></div><p class='note'>「曾出阻断问题」代表该审查点曾抓出必须修复的 critical 意见——按协议均已修复并经复审通过后才可能走到本报告（每条意见的原文与处置见 audit_responses.md）。</p></section>")
 
     # ---- 假设登记簿 / 最终报告全文（折叠收录） ----
     B.append("<section><h2>文书收录</h2>")
@@ -369,8 +401,8 @@ def render(root: Path, report_id: str) -> Path:
         B.append("<p class='note'>未找到 assumptions.md / final_report.md。</p>")
     B.append("</section>")
 
-    B.append(f"<footer><span>report_id: <code>{esc(report_id)}</code></span>"
-             f"<span>verdict: {esc(str(result))}{' · 评级 ' + grade if grade else ''}</span>"
+    B.append(f"<footer><span>案例: <code>{esc(report_id)}</code></span>"
+             f"<span>复现判定：{esc(_cn(VERDICT_CN, result))}{' · 评级 ' + grade if grade else ''}</span>"
              f"<span>quant-report-reproduce</span></footer>")
 
     doc = (f"<!doctype html><html lang='zh-CN'><head><meta charset='utf-8'>"

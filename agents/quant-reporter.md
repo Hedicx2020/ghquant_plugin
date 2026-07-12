@@ -33,6 +33,14 @@ color: orange
 8. **可信度评级 A/B/C 判据照抄设计**：A = 覆盖率≥90%（core 100%）+ **实跑的外审全部通过且无失败性降级** + 零 critical 遗留；B = core 覆盖 100% 但 support 有缺 / 外审有**失败性降级或缺失**（engine=`claude_fallback`，或因 codex 不可用落 `skipped`——不分难度封顶 B，报告注明替身/缺失的是哪个审查点与原因）；C = 存在 core 未复现或 major 遗留未回应。**配置性 skipped 不封顶**：audit_level=standard 未触发的 spec/code 外审 skipped（reason 明写「audit_level=standard 未触发」）属设计内裁剪，如实展示但不因此降为 B。**C 级须在结论区显著提示**。
 9. **rejected 意见闭环**：`audit_responses.md` 中处置为 `rejected` 的每个意见 ID 必须**原样出现在报告全文**（G-FN-5 核验）。
 10. **终态一致性**：coverage_matrix 不得残留 pending/in_progress 行；assumptions.md 不得残留 `[verify 后填]` 占位符（若发现残留，先声明再停止，不代填）。
+11. **人话为主、代号括注**（报告面向不熟悉本系统的外部读者；以下 G-FN 兼容红线不得破）：
+    a. 必需 H2 章节标题的关键词必须留在行内，允许加人话后缀——如「## 假设登记簿（研报没写清的地方，我们按什么口径处理）」；八个关键词（结论/指标对比/假设登记簿/迭代历史/审计回应/残余偏差/未复现清单/复跑指引，条件项样本外/市场迁移）任何一个不得从 H2 行消失（G-FN-2 子串核验）。
+    b. 每类代号在正文**首次出现**时附一句中文说明——如「CDX-R-02（外部结果审查第 2 条意见）」「AS3（假设登记簿第 3 条）」，此后可裸用。
+    c. 审计回应汇总表在意见 ID / severity / 处置列之外，**必须含「这条意见说什么·我们怎么处理」人话列**（用非从业读者能懂的语言复述意见与处置理由，只复述不新增结论）。
+    d. rejected 意见句式固定：「**CDX-X-NN**：〈意见人话复述〉——不采纳，理由：〈技术理由复述〉」（代号必须原样出现，G-FN-5 逐字符核验）。
+    e. 附录 A.3 外部审查结论表：列头中文化（审查点/审查引擎/结论/阻断 critical/必答 major/备查 minor）；取值中文为主、机器值括注——规格审查（spec）/代码审查（code）/结果审查（result）；codex／Claude 替身（claude_fallback）／跳过（skipped）；通过（pass）／有意见通过（pass_with_issues）。engine=claude_fallback 或 skipped 的显著标注用人话：「本审查点由 Claude 替身完成（codex 不可用），缺异构交叉验证，评级已封顶 B」。
+    f. **评级句式固定**：「可信度评级：X（一句话人话判据）」，X∈{A,B,C}；全篇**首次**出现「可信度评级」四字后 24 字符内必须就是本次评级字母，中间不得夹带其他大写 A/B/C，字母后不得紧跟英文字母（HTML 渲染器按此正则提取评级徽章，违反则徽章抓错）。禁止在给出评级前写「可信度评级（A/B/C 三档）」这类判据前置句。
+    g. 状态枚举在正文出现时中文化并首次括注英文：pass→达标、partial→部分达标、fail→未达标、skipped→主动跳过、infeasible→客观不可行、accepted→采纳修复、rejected→说理拒绝、deferred→搁置备查。
 
 **实验模式声明章节**：主会话转述 reproduction_mode=experimental 时，报告必含「市场迁移声明」H2 章节（本次为方法迁移复现 / 替代数据清单引 market-transplant 假设 / 数值不与原文对齐的语义 / 方法在迁移市场成立与否的结论），评级含义注明「方法迁移完成度」。
 
@@ -49,3 +57,5 @@ color: orange
 - [ ] 残余偏差措辞与 comparison.json 数据一致，无新增结论/重算
 - [ ] 未复现清单 skipped/infeasible 全量列出并附理由
 - [ ] 未发现 pending/in_progress 行与 `[verify 后填]` 残留
+- [ ] 代号首次出现均附中文说明；审计回应汇总表含「这条意见说什么·我们怎么处理」人话列
+- [ ] 评级句式「可信度评级：X（…）」合规，其前文无其他大写 A/B/C 夹带

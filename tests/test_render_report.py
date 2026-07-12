@@ -63,6 +63,14 @@ def test_render_produces_selfcontained_html(tmp_path):
     assert "引擎口径差异" in t
     # 评级从 final_report.md 提取
     assert "可信度评级 B" in t
+    # 枚举人话化：中文为主、原始值括注并存（展示层映射，数据层枚举不动）
+    assert "部分达标" in t and "partial" in t          # hero verdict
+    assert "择时" in t and "timing" in t               # type 括注
+    assert "难度：困难" in t                            # difficulty 纯中文
+    assert "结果审查" in t                              # 外审台账 checkpoint
+    assert "codex 异构外审" in t                        # 外审台账 engine
+    assert "曾出阻断问题" in t                          # 审查 verdict=fail 的人话
+    assert "残差已归因接受" in t                        # attribution_status 映射
     # PNG base64 内嵌（自包含）
     assert "data:image/png;base64," in t
     expected_b64 = base64.b64encode(b"\x89PNG\r\n" + b"\x00" * 100).decode("ascii")
@@ -105,6 +113,18 @@ def test_html_escapes_content(tmp_path):
     t = rr.render(tmp_path, "demo").read_text(encoding="utf-8")
     assert "<script>alert(1)</script>" not in t
     assert "&lt;script&gt;" in t
+
+
+def test_render_unknown_enum_values_pass_through(tmp_path):
+    """未知枚举值原样可见（.get(v, v) 兜底），不被映射吞掉。"""
+    _fixture(tmp_path)
+    ws = tmp_path / "workspace" / "demo"
+    state = json.loads((ws / "state.json").read_text(encoding="utf-8"))
+    state["external_reviews"].append({"checkpoint": "result", "engine": "weird_engine",
+                                      "verdict": "odd_verdict", "critical": 0, "major": 0, "minor": 0})
+    (ws / "state.json").write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    t = rr.render(tmp_path, "demo").read_text(encoding="utf-8")
+    assert "weird_engine" in t and "odd_verdict" in t
 
 
 def test_render_shows_verification_level_layers(tmp_path):

@@ -97,6 +97,17 @@
   .pill.dim  { background: #eef0f2; color: var(--dim); border: 1px solid var(--line); }
   .pill.warn { background: var(--warn-wash); color: var(--warn); border: 1px solid #e3d3ac; }
 
+  /* ---------- 术语悬浮释义（.term 挂 data-tip；#tt 为共享 fixed 悬浮层，免受 tbl-scroll/track-scroll 裁剪） ---------- */
+  .term { border-bottom: 1px dotted var(--accent-deep); cursor: help; }
+  .pill.term { border-bottom-style: solid; }
+  .term:hover, .term:focus-visible { background: var(--accent-wash); }
+  .term:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #tt { position: fixed; z-index: 999; max-width: 340px;
+    background: #10202e; color: #dce8f2; font-size: 12.5px; line-height: 1.65;
+    padding: 8px 12px; border-radius: 6px; box-shadow: 0 6px 20px rgba(16,32,46,.28);
+    pointer-events: none; opacity: 0; visibility: hidden; transition: opacity .12s; }
+  #tt.on { opacity: 1; visibility: visible; }
+
   /* ---------- 表格（v2.8 布局优化：斑马纹 / 悬停 / 粘性表头 / 列宽控制） ---------- */
   .tbl-scroll { overflow-x: auto; margin: 14px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--card); }
   table { border-collapse: collapse; width: 100%; font-size: 13.5px; line-height: 1.6; }
@@ -241,7 +252,7 @@
   <h1>quant-report-reproduce<br>量化研报复现流水线</h1>
   <p class="lede">给它一份量化研报 PDF，它产出与原文逐项对齐的策略代码、回测结果，和一份带可信度评级的复现报告——中间的提取、规划、实现、验证、审计、迭代，全部由带门禁的多 agent 流水线自动完成。</p>
   <div class="hero-meta">
-    <span class="pill gate">v2.10.0</span>
+    <span class="pill gate">v2.11.0</span>
     <span class="pill dim">1 skill + 8 agents</span>
     <span class="pill dim">12 阶段门禁状态机</span>
     <span class="pill dim">codex 三审查点外审</span>
@@ -265,17 +276,17 @@
   <p>一份研报从 PDF 到最终报告要过 12 个阶段。每个阶段结束时由机器门禁（<code>check_gates</code>）逐项核验产物，<span class="pill pass">PASS</span> 才放行，<span class="pill fail">FAIL</span> 按预设分支修复重来——口头声称完成无效，判定只认文件和数字。</p>
   <div class="track-scroll">
     <div class="track">
-      <div class="stage"><div class="s-num">01</div><div class="s-name">init</div><div class="s-cn">初始化</div><div class="s-gate"><span class="pill gate">G-IN</span></div></div>
-      <div class="stage"><div class="s-num">02</div><div class="s-name">extract</div><div class="s-cn">研报提取</div><div class="s-gate"><span class="pill gate">G-EX</span></div></div>
-      <div class="stage"><div class="s-num">03</div><div class="s-name">plan</div><div class="s-cn">复现规划</div><div class="s-gate"><span class="pill gate">G-PL</span></div></div>
-      <div class="stage"><div class="s-num">04</div><div class="s-name">spec_audit</div><div class="s-cn">规格审计</div><div class="s-gate"><span class="pill gate">G-SA</span></div></div>
-      <div class="stage"><div class="s-num">05</div><div class="s-name">implement</div><div class="s-cn">代码实现</div><div class="s-gate"><span class="pill gate">G-IM</span></div></div>
-      <div class="stage"><div class="s-num">06</div><div class="s-name">code_audit</div><div class="s-cn">代码审计</div><div class="s-gate"><span class="pill gate">G-CA</span></div></div>
-      <div class="stage"><div class="s-num">07</div><div class="s-name">verify</div><div class="s-cn">运行验证</div><div class="s-gate"><span class="pill gate">G-VF</span></div></div>
-      <div class="stage cond"><div class="s-num">08</div><div class="s-name">iterate</div><div class="s-cn">迭代修正</div><div class="s-gate"><span class="pill gate">G-IT</span></div></div>
-      <div class="stage"><div class="s-num">09</div><div class="s-name">result_audit</div><div class="s-cn">结果审计</div><div class="s-gate"><span class="pill gate">G-RA</span></div></div>
-      <div class="stage cond"><div class="s-num">10</div><div class="s-name">oos</div><div class="s-cn">样本外分析</div><div class="s-gate"><span class="pill gate">G-OS</span></div></div>
-      <div class="stage"><div class="s-num">11</div><div class="s-name">report</div><div class="s-cn">报告汇总</div><div class="s-gate"><span class="pill gate">G-FN</span></div></div>
+      <div class="stage"><div class="s-num">01</div><div class="s-name">init</div><div class="s-cn">初始化</div><div class="s-gate"><span class="pill gate term" tabindex="0" data-tip="初始化出口门禁：工作区骨架建立、PDF 转文本页数一致、状态文件就绪">G-IN</span></div></div>
+      <div class="stage"><div class="s-num">02</div><div class="s-name">extract</div><div class="s-cn">研报提取</div><div class="s-gate"><span class="pill gate term" tabindex="0" data-tip="研报提取出口门禁：规格三件套齐全、要素带页码引用、覆盖矩阵行数与要素守恒">G-EX</span></div></div>
+      <div class="stage"><div class="s-num">03</div><div class="s-name">plan</div><div class="s-cn">复现规划</div><div class="s-gate"><span class="pill gate term" tabindex="0" data-tip="复现规划出口门禁：分诊字段合法、每条要素有数据映射与里程碑归属、歧义全登记">G-PL</span></div></div>
+      <div class="stage"><div class="s-num">04</div><div class="s-name">spec_audit</div><div class="s-cn">规格审计</div><div class="s-gate"><span class="pill gate term" tabindex="0" data-tip="规格审计出口门禁：盲提取对照零漏抄、审计意见逐条回应闭环">G-SA</span></div></div>
+      <div class="stage"><div class="s-num">05</div><div class="s-name">implement</div><div class="s-cn">代码实现</div><div class="s-gate"><span class="pill gate term" tabindex="0" data-tip="代码实现出口门禁：代码可编译、逐里程碑完成登记、矩阵回填真实实现位置">G-IM</span></div></div>
+      <div class="stage"><div class="s-num">06</div><div class="s-name">code_audit</div><div class="s-cn">代码审计</div><div class="s-gate"><span class="pill gate term" tabindex="0" data-tip="代码审计出口门禁：公式逐要素对照、未来函数与数据对齐核查、意见闭环">G-CA</span></div></div>
+      <div class="stage"><div class="s-num">07</div><div class="s-name">verify</div><div class="s-cn">运行验证</div><div class="s-gate"><span class="pill gate term" tabindex="0" data-tip="运行验证出口门禁：亲自跑通 main.py、逐项对数重算容差、图表与 Excel 产物齐全新鲜">G-VF</span></div></div>
+      <div class="stage cond"><div class="s-num">08</div><div class="s-name">iterate</div><div class="s-cn">迭代修正</div><div class="s-gate"><span class="pill gate term" tabindex="0" data-tip="迭代修正出口门禁：每轮三件套（诊断/修改/复验对数）齐全、防兜圈规则、超差项全归因">G-IT</span></div></div>
+      <div class="stage"><div class="s-num">09</div><div class="s-name">result_audit</div><div class="s-cn">结果审计</div><div class="s-gate"><span class="pill gate term" tabindex="0" data-tip="结果审计出口门禁：结论没有编——数字与产物一致、归因真实、无未闭环的阻断意见">G-RA</span></div></div>
+      <div class="stage cond"><div class="s-num">10</div><div class="s-name">oos</div><div class="s-cn">样本外分析</div><div class="s-gate"><span class="pill gate term" tabindex="0" data-tip="样本外分析出口门禁：复现达标才跑，样本外区间与研报区间零重叠、结论四选一、短样本强制警示">G-OS</span></div></div>
+      <div class="stage"><div class="s-num">11</div><div class="s-name">report</div><div class="s-cn">报告汇总</div><div class="s-gate"><span class="pill gate term" tabindex="0" data-tip="报告汇总出口门禁：八大必需章节齐全、假设登记簿全收录、无遗留占位符、结果页渲染就绪">G-FN</span></div></div>
       <div class="stage human"><div class="s-num">12</div><div class="s-name">review</div><div class="s-cn">人工评审</div><div class="s-gate"><span class="pill warn">人工闸门</span></div></div>
     </div>
   </div>
@@ -402,20 +413,20 @@
   <h3 id="audit">三层审计体系：防偷懒、防遗漏、防虚报</h3>
   <div class="tbl-scroll"><table>
     <tr><th class='c-narrow'>层</th><th class='c-mid'>执行者</th><th class='c-mid'>防什么</th><th class='c-wide'>手段</th></tr>
-    <tr><td class="c-narrow"><strong>外审三审查点</strong></td><td>codex CLI（read-only 沙箱，全难度必跑）</td><td>提取漏抄 / 实现走样 / 结论造假</td><td>规格审计（盲提取对照：codex 不看规格书独立抄一遍研报数值再逐格 diff）、代码审计（公式对照 + 未来函数）、结果审计（数字与产物一致性）。每条意见编号进回应总表，critical 必须修复 + 缩减复审通过。</td></tr>
+    <tr><td class="c-narrow"><strong><span class="term" tabindex="0" data-tip="三道外部审查关卡：规格审查（提取有没有漏抄原文）、代码审查（实现是否忠实公式、有无未来函数）、结果审查（结论数字是否与产物一致）。文书中意见编号为 CDX-S/C/R-##">外审三审查点</span></strong></td><td>codex CLI（read-only 沙箱，全难度必跑）</td><td>提取漏抄 / 实现走样 / 结论造假</td><td>规格审计（盲提取对照：codex 不看规格书独立抄一遍研报数值再逐格 diff）、代码审计（公式对照 + 未来函数）、结果审计（数字与产物一致性）。每条意见编号进回应总表，critical 必须修复 + 缩减复审通过。</td></tr>
     <tr><td class="c-narrow"><strong>内审</strong></td><td>quant-auditor</td><td>同上，独立视角</td><td>三模式对照审计；hard 难度逐里程碑插入实现忠实性审计；ml 类无视难度必审（训练泄漏数值验证抓不到）。</td></tr>
-    <tr><td class="c-narrow"><strong>反虚报核查</strong></td><td>quant-auditor（result 模式）+ 机器检查项</td><td>「声称做了实际没做」</td><td>K 系列（K1–K8）：结果过于完美嫌疑、声称通过实际未改等；E 系列（E1–E6）证据链：运行日志、产物新鲜度、通过数亲自重数、图表逐张数值级核验。</td></tr>
+    <tr><td class="c-narrow"><strong>反虚报核查</strong></td><td>quant-auditor（result 模式）+ 机器检查项</td><td>「声称做了实际没做」</td><td><span class="term" tabindex="0" data-tip="反虚报检查 8 项：如结果与研报完美一致嫌疑（K1）、声称修复但代码未变（K2）、覆盖率虚标、跳过项理由造假等——专抓「说做了实际没做」">K 系列（K1–K8）</span>：结果过于完美嫌疑、声称通过实际未改等；<span class="term" tabindex="0" data-tip="证据链检查 6 项：运行日志完整、产物晚于代码生成（新鲜度）、通过数亲自重数、图表与数据一致、时间戳单调等——保证每个数字可追溯">E 系列（E1–E6）证据链</span>：运行日志、产物新鲜度、通过数亲自重数、图表逐张数值级核验。</td></tr>
   </table></div>
 
   <h3 id="iterate">迭代引擎与人工闸门</h3>
   <p>首轮验证如有指标超差，进入迭代：每轮由 diagnoser 归因 → coder 定向修改 → verifier 全量重跑对数，三件套（诊断 / 修改记录 / 复验对比）落档留痕。迭代受两道约束：</p>
   <ul>
     <li><strong>轮数上限</strong>：难度默认 3/5/6 轮，或你在 setup 配置的全局值；</li>
-    <li><strong>防兜圈规则</strong>：同一指标连续三轮无实质改善触发红线，diagnoser 必须改判 <code>stop_partial</code>（接受局部达标，残余项逐条归因）或 <code>blocked</code>（上报阻塞），不许无限重试。</li>
+    <li><strong>防兜圈规则</strong>：同一指标连续三轮无实质改善触发红线，diagnoser 必须改判 <code class="term" tabindex="0" data-tip="迭代结论之一：接受部分达标收尾——修不动的残余偏差逐条说明原因后出报告，不再空耗轮次">stop_partial</code>（接受局部达标，残余项逐条归因）或 <code class="term" tabindex="0" data-tip="迭代结论之一：缺关键信息或数据、自动修不下去——挂起等人工裁决">blocked</code>（上报阻塞），不许无限重试。</li>
   </ul>
   <p>整条流水线只有两个人工闸门，任何自动驱动（包括 <code>/goal</code> 无人值守）都不得冲过：</p>
   <ul>
-    <li><span class="pill warn">paused_blocked</span> 遇到必须人工裁决的问题（如关键公式原文缺失、数据无法获取）时挂起，呈候选方案等你拍板；</li>
+    <li><span class="pill warn term" tabindex="0" data-tip="挂起状态：流水线遇到必须人工拍板的问题（关键口径缺失、数据不可得）时暂停，把候选方案呈给你，裁决后继续">paused_blocked</span> 遇到必须人工裁决的问题（如关键公式原文缺失、数据无法获取）时挂起，呈候选方案等你拍板；</li>
     <li><span class="pill warn">awaiting_review</span> 最终报告完成后等你评审——<code>accept</code> 收尾或 <code>revise</code> 定向重跑，系统绝不自行验收。</li>
   </ul>
 
@@ -425,7 +436,7 @@
   <div class="tbl-scroll"><table>
     <tr><th class='c-narrow'>评级</th><th class='c-wide'>判据</th></tr>
     <tr><td class="c-narrow"><strong>A</strong></td><td>覆盖率 ≥ 90%（核心要素 100%）＋ 三外审通过 ＋ 零 critical 遗留</td></tr>
-    <tr><td class="c-narrow"><strong>B</strong></td><td>核心要素覆盖 100%，但支线有缺，或外审有失败性降级（codex 不可用改由 Claude 替身盲审，或替身也不可行被跳过）；外审档位 standard 未触发的配置性跳过不算降级、不封顶</td></tr>
+    <tr><td class="c-narrow"><strong>B</strong></td><td>核心要素覆盖 100%，但支线有缺，或外审有<span class="term" tabindex="0" data-tip="指外审引擎降级：文书中对应 engine=claude_fallback（Claude 替身盲审）或 skipped（跳过）字段——缺了异构引擎交叉验证，评级封顶 B">失败性降级</span>（codex 不可用改由 Claude 替身盲审，或替身也不可行被跳过）；外审档位 standard 未触发的配置性跳过不算降级、不封顶</td></tr>
     <tr><td class="c-narrow"><strong>C</strong></td><td>存在核心要素未复现或 major 意见遗留未回应——报告结论区显著提示成因</td></tr>
   </table></div>
   <div class="note amber">评级 C 不一定意味着复现质量差：数据客观缺失（如某指数系列本地零覆盖，经穷尽核实）导致核心支线不可行时，字面判据同样触发 C——报告会写明成因与主线结论是否受影响，残余偏差 100% 归因后才能出报告。</div>
@@ -437,7 +448,7 @@
   <div class="tbl-scroll"><table>
     <tr><th class="c-narrow">维度</th><th>严格模式 strict（默认）</th><th>实验模式 experimental（市场迁移）</th></tr>
     <tr><td class="c-narrow"><strong>目标</strong></td><td>复现值与原文数值在容差内对齐</td><td>验证「该方法在迁移市场是否成立」——效应存在与否都是有效结论</td></tr>
-    <tr><td class="c-narrow"><strong>数据</strong></td><td>按原文数据源（本地缺失→降级或阻塞）</td><td>等价替代并逐条留痕：美国 CPI → 中国 CPI、SPX → 沪深300……全部登记假设登记簿（market-transplant 条目）</td></tr>
+    <tr><td class="c-narrow"><strong>数据</strong></td><td>按原文数据源（本地缺失→降级或阻塞）</td><td>等价替代并逐条留痕：美国 CPI → 中国 CPI、SPX → 沪深300……全部登记假设登记簿（<span class="term" tabindex="0" data-tip="市场迁移类假设的登记标签：记录「原文数据 → 本地等价替代」的每一处替换及理由，最终报告逐条可查">market-transplant</span> 条目）</td></tr>
     <tr><td class="c-narrow"><strong>达标判定</strong></td><td>逐指标容差重算（相对偏差/绝对偏差/同号/量级），超差触发迭代修正</td><td>数值对齐判定整体豁免——只核每个原文指标有迁移市场产出；原文值仅作对照参考；迭代阶段天然跳过</td></tr>
     <tr><td class="c-narrow"><strong>不变的部分</strong></td><td colspan="2">提取忠实性、代码审计（公式对照/未来函数）、<strong>反虚报核查</strong>（数字与产物一致、结论不夸大）、样本外分析、人工评审闸门——两种模式完全一致</td></tr>
     <tr><td class="c-narrow"><strong>明确提示</strong></td><td>—</td><td><strong>强制</strong>：结果页顶部醒目声明框 + 徽章，最终报告必含「市场迁移声明」章节（门禁核验，缺失过不了报告关）</td></tr>
@@ -463,7 +474,7 @@
   <p><strong>场景一：新起复现 + 无人值守。</strong>起跑后系统会打印一条可复制的 <code>/goal</code> 命令，粘贴即启用跨会话自主推进——推进到四个终态之一（等待评审 / 完成 / 局部完成 / 阻塞挂起）自动停下汇报。目标措辞被刻意设计成「到达终态即停」而非「复现成功」，防止驱动层为达标冲撞人工闸门。</p>
   <pre><code>/reproduce reports/treasury_timing.pdf
 <span class="cmt"># → init 完成后照提示粘贴 /goal 命令，然后可以去干别的</span></code></pre>
-  <p><strong>场景二：评审后改假设。</strong>报告完成后系统挂起等你评审。假设登记簿里每条自动假设（尤其高亮的 major-auto 级）都附了一条现成的 revise 命令——不认同就复制改口径：</p>
+  <p><strong>场景二：评审后改假设。</strong>报告完成后系统挂起等你评审。假设登记簿里每条自动假设（尤其高亮的 <span class="term" tabindex="0" data-tip="自动模式下影响较大的假设：系统按最合理口径先行放行并高亮登记，报告里重点提示你复核">major-auto</span> 级）都附了一条现成的 revise 命令——不认同就复制改口径：</p>
   <pre><code>/reproduce revise treasury_timing --assumption AS4 "涨跌幅采用结算价口径而非收盘价"
 <span class="cmt"># → planner 改假设 → 按影响面只重跑受影响链路 → 报告增量更新 → 回到评审</span></code></pre>
   <p><strong>场景三：断点续跑。</strong>会话中断、机器重启都不丢进度——状态文件是唯一真相源：</p>
@@ -517,7 +528,7 @@
   </details>
   <details>
     <summary>研报某处写得含糊，系统怎么处理？</summary>
-    <div><p>提取阶段登记为歧义（分级：blocking / major / minor）。auto 模式下按最合理解释设为假设、高亮登记（major-auto），跑完统一在报告里呈现，每条附 revise 命令供你改口径重跑；interactive 模式下 blocking 级歧义直接挂起（paused_blocked），把候选解释与影响呈给你裁决后继续。</p></div>
+    <div><p>提取阶段登记为歧义（分级：blocking / major / minor）。auto 模式下按最合理解释设为假设、高亮登记（<span class="term" tabindex="0" data-tip="自动模式下影响较大的假设：按最合理口径放行并高亮，等你评审时重点复核">major-auto</span>），跑完统一在报告里呈现，每条附 revise 命令供你改口径重跑；interactive 模式下 blocking 级歧义直接挂起（<span class="term" tabindex="0" data-tip="挂起状态：暂停并呈候选方案等人工拍板，裁决后从断点继续">paused_blocked</span>），把候选解释与影响呈给你裁决后继续。</p></div>
   </details>
   <details>
     <summary>我有自己的回测框架，怎么让它用我的？</summary>
@@ -549,6 +560,7 @@
   <h2>版本演进</h2>
   <div class="tbl-scroll"><table>
     <tr><th class="c-narrow">版本</th><th class="c-narrow">日期</th><th class="c-wide">要点</th></tr>
+    <tr><td class="c-narrow"><code>2.11.0</code></td><td class="num c-narrow">07-12</td><td>术语人话化：手册代号悬浮释义（22 处）、结果页枚举值中文化（判定/审查台账/归因）、最终报告人话化硬约束（代号首现附中文说明、审计表加人话列）</td></tr>
     <tr><td class="c-narrow"><code>2.10.0</code></td><td class="num c-narrow">07-11</td><td>案例统一编号：新案例自动分配 rNNN_短名 形式 id，全部子命令接受编号缩写（r3/r003/3），status 输出编号排序一览表</td></tr>
     <tr><td class="c-narrow"><code>2.9.0</code></td><td class="num c-narrow">07-11</td><td>codex 备用方案补强：未安装/额度耗尽自动降级 Claude 替身盲审（速判直降、额度类报错免重试、替身规范化），评级封顶口径统一</td></tr>
     <tr><td class="c-narrow"><code>2.8.0</code></td><td class="num c-narrow">07-11</td><td>实验模式（市场迁移复现）：等价数据替代 + 数值判定豁免 + 强制显著声明</td></tr>
@@ -576,7 +588,7 @@
 
 <section id="glossary">
   <h2>术语速查</h2>
-  <p>系统的文书（审计意见、门禁输出、覆盖矩阵）使用编号体系保证每条记录可追溯、可机器判定。日常使用不需要记它们——汇报都用人话，代号只在留痕文书里出现。查阅文书时对照下表：</p>
+  <p>系统的文书（审计意见、门禁输出、覆盖矩阵）使用编号体系保证每条记录可追溯、可机器判定。日常使用不需要记它们——汇报都用人话，代号只在留痕文书里出现。<strong>正文中带虚线下划线的代号，鼠标悬停或轻点即可就地查看释义</strong>；本表为完整对照，供查阅文书时使用：</p>
   <div class="tbl-scroll"><table>
     <tr><th class='c-mid' style='width:16em'>代号</th><th class='c-wide'>含义</th></tr>
     <tr><td><code>G-IN / G-EX / G-PL / G-SA / G-IM / G-CA / G-VF / G-IT / G-RA / G-OS / G-FN</code></td><td>各阶段出口门禁（初始化/提取/规划/规格审计/实现/代码审计/验证/迭代/结果审计/样本外/报告），每个门禁含若干编号检查项（如 G-VF-3 = 验证门禁第 3 项：容差重算）</td></tr>
@@ -595,9 +607,30 @@
 </section>
 
 <footer>
-  <span>quant-report-reproduce v2.8.0</span>
+  <span>quant-report-reproduce v2.11.0</span>
   <span><a href="https://github.com/Hedicx2020/ghquant_plugin">github.com/Hedicx2020/ghquant_plugin</a></span>
   <span>12 阶段门禁状态机 · 8 子 agent · codex 三审查点 · 样本外延伸分析</span>
 </footer>
 </main>
 </div>
+<div id="tt" role="tooltip" aria-hidden="true"></div>
+<script>
+(function () {
+  var tt = document.getElementById('tt');
+  function show(el) {
+    tt.textContent = el.getAttribute('data-tip'); tt.classList.add('on');
+    tt.setAttribute('aria-hidden', 'false');
+    var r = el.getBoundingClientRect(), w = tt.offsetWidth, h = tt.offsetHeight;
+    var x = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2));
+    var y = r.top - h - 8; if (y < 8) y = r.bottom + 8;
+    tt.style.left = x + 'px'; tt.style.top = y + 'px';
+  }
+  function hide() { tt.classList.remove('on'); tt.setAttribute('aria-hidden', 'true'); }
+  function on(ev, fn) { document.addEventListener(ev, fn, ev === 'touchstart' ? { passive: true } : false); }
+  on('pointerover', function (e) { var t = e.target.closest('.term'); t ? show(t) : hide(); });
+  on('focusin',     function (e) { var t = e.target.closest('.term'); t ? show(t) : hide(); });
+  on('touchstart',  function (e) { var t = e.target.closest('.term'); t ? show(t) : hide(); });
+  addEventListener('scroll', hide, true);
+  addEventListener('keydown', function (e) { if (e.key === 'Escape') hide(); });
+})();
+</script>
