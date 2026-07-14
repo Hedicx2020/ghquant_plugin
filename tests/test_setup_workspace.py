@@ -15,6 +15,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 
 import setup_workspace as sw  # noqa: E402
 
+_REAL_CHECK_ENV = sw.check_env
+
 
 @pytest.fixture(autouse=True)
 def _no_real_env_check(monkeypatch):
@@ -45,6 +47,9 @@ def test_fresh_setup_creates_everything(tmp_path):
     assert (tmp_path / "templates" / "standards.json").is_file()
     assert (tmp_path / "common" / "data_loader.py").is_file()
     assert report.copied and not report.skipped_existing
+    installed_agents = sorted((tmp_path / ".codex" / "agents").glob("quant-*.toml"))
+    assert len(installed_agents) == 8
+    assert any(p.startswith(".codex/agents/") for p in report.copied)
     # pyproject 与目录树
     assert report.pyproject_action == "created"
     assert "pandas>=2.0" in (tmp_path / "pyproject.toml").read_text(encoding="utf-8")
@@ -131,6 +136,36 @@ def test_render_text_codex_missing_shows_degradation_note(tmp_path):
     text = report.render_text()
     assert "封顶 B" in text
     assert "uv sync" in text
+
+
+def test_check_env_detects_both_external_review_clis(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        sw.shutil,
+        "which",
+        lambda name: f"/fake/{name}" if name in {"uv", "codex", "claude"} else None,
+    )
+    monkeypatch.setattr(
+        sw.subprocess,
+        "run",
+        lambda *args, **kwargs: type("Proc", (), {"returncode": 0, "stdout": ""})(),
+    )
+    report = sw.SetupReport(target=str(tmp_path))
+    _REAL_CHECK_ENV(tmp_path, report)
+    assert report.env["codex"] == "/fake/codex"
+    assert report.env["claude"] == "/fake/claude"
+
+
+def test_render_text_explains_symmetric_external_review(tmp_path):
+    report = sw.SetupReport(target=str(tmp_path))
+    report.env = {
+        "uv": "/fake/uv",
+        "codex": "/fake/codex",
+        "claude": "/fake/claude",
+        "missing_deps": [],
+    }
+    text = report.render_text()
+    assert "Claude Code 主编排 → Codex 异构外审可用" in text
+    assert "Codex 主编排 → Claude Code 异构外审可用" in text
 
 
 def test_backtest_framework_default_null(tmp_path):

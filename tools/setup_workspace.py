@@ -2,10 +2,10 @@
 
 职责（全部幂等，可重复运行）：
 1. 生成 `.reproduce.json` 配置（数据路径 / 执行模式 / 最大迭代次数 / 插件根记录）
-2. 种子拷贝：插件根的 `templates/`、`common/` → 用户目录（已存在文件跳过，列「插件侧较新」清单）
+2. 种子拷贝：`templates/`、`common/` 与 `.codex/agents/` → 用户目录（已存在文件跳过）
 3. 生成精简 `pyproject.toml`（目标目录无该文件时）
 4. 建目录树：`reports/ workspace/ src/ output/`（含 .gitkeep）
-5. 环境检测（只报告不阻塞）：uv / Python 依赖 / codex CLI
+5. 环境检测（只报告不阻塞）：uv / Python 依赖 / codex CLI / claude CLI
 
 设计依据：docs/specs/2026-07-09-plugin-packaging-design.md §四、§五、§七。
 本工具只被主会话（编排者）调用；子 agent 不得导入。
@@ -100,9 +100,13 @@ class SetupReport:
             else:
                 lines.append("  Python 依赖: 全部可导入")
             if env.get("codex"):
-                lines.append(f"  codex CLI: {env['codex']}（外审三审查点可用；运行中额度耗尽会自动降级为 Claude 替身盲审，不断链）")
+                lines.append(f"  Claude Code 主编排 → Codex 异构外审可用: {env['codex']}")
             else:
-                lines.append("  codex CLI: 未找到 → 外审自动降级为 Claude 替身盲审（审查照跑、意见照样逐条回应；替身也不可行才 skipped），最终报告可信度封顶 B；装好后无需重新 setup，下次运行自动启用")
+                lines.append("  Claude Code 主编排 → Codex CLI 未找到，将降级为 Claude 同宿主独立盲审，可信度封顶 B")
+            if env.get("claude"):
+                lines.append(f"  Codex 主编排 → Claude Code 异构外审可用: {env['claude']}")
+            else:
+                lines.append("  Codex 主编排 → Claude CLI 未找到，将降级为 Codex 同宿主独立盲审，可信度封顶 B")
         return "\n".join(lines)
 
 
@@ -170,6 +174,26 @@ def copy_seeds(target: Path, report: SetupReport) -> None:
             report.copied.append(str(rel))
 
 
+def copy_codex_agents(target: Path, report: SetupReport) -> None:
+    """安装 Codex 项目级 agent；沿用种子文件的保守不覆盖策略。"""
+
+    root = plugin_root()
+    source_dir = root / ".codex" / "agents"
+    if not source_dir.is_dir():
+        return
+    for src in sorted(source_dir.glob("quant-*.toml")):
+        rel = src.relative_to(root)
+        dst = target / rel
+        if dst.exists():
+            report.skipped_existing.append(str(rel))
+            if src.stat().st_mtime > dst.stat().st_mtime:
+                report.plugin_newer.append(str(rel))
+            continue
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
+        report.copied.append(str(rel))
+
+
 def write_pyproject(target: Path, report: SetupReport) -> None:
     pp = target / "pyproject.toml"
     if pp.is_file():
@@ -209,6 +233,7 @@ def check_env(target: Path, report: SetupReport) -> None:
     env: dict = {}
     env["uv"] = shutil.which("uv")
     env["codex"] = shutil.which("codex")
+    env["claude"] = shutil.which("claude")
     missing: list[str] = []
     if env["uv"]:
         probe = "\n".join(
@@ -239,6 +264,7 @@ def run_setup(target: Path, data_root: str, mode: str, max_iter: int | None,
     if not check_only:
         write_config(target, data_root, mode, max_iter, backtest_framework, max_rel_dev, economy, audit_level, force_config, report)
         copy_seeds(target, report)
+        copy_codex_agents(target, report)
         write_pyproject(target, report)
         make_dirs(target, report)
     check_env(target, report)
