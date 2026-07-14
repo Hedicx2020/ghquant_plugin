@@ -290,7 +290,7 @@ Expected: FAIL because Codex manifest/adapters do not exist and stage cards call
 
 - [ ] **Step 3: Implement manifests and adapters**
 
-Codex manifest must contain `name/version/description/author/skills/interface`. Keep Claude marketplace strict-clean at `.claude-plugin/marketplace.json`; create `.agents/plugins/marketplace.json` with Git URL source, `policy.installation=AVAILABLE`, `policy.authentication=ON_INSTALL`, and category `Developer Tools`. Claude manifest version becomes `2.12.0` with dual-host description.
+Codex manifest must contain `name/version/description/author/skills/interface`. Keep Claude marketplace strict-clean at `.claude-plugin/marketplace.json`; create `.agents/plugins/marketplace.json` with local source `./` (the current marketplace snapshot root), `policy.installation=AVAILABLE`, `policy.authentication=ON_INSTALL`, and category `Developer Tools`. Claude manifest version becomes `2.12.0` with dual-host description.
 
 Claude adapter specifies Agent tool dispatch and Claude same-host fallback. Codex adapter specifies collaboration dispatch with no inherited history for blind reviews and Codex same-host fallback. Both explicitly prohibit subagent nesting and state writes.
 

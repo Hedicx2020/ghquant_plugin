@@ -111,7 +111,7 @@ skills/reproduce/
 .codex/agents/*.toml
 ```
 
-Codex 清单使用同一插件名 `quant-report-reproduce`，显式声明 `skills: "./skills/"`。Claude 与 Codex 各维护一份仅含分发元数据的 marketplace：Claude 使用 `.claude-plugin/marketplace.json`，Codex 使用 `.agents/plugins/marketplace.json`。后者以 Git URL 指向仓库根插件并包含安装策略、认证策略和分类字段；两份 marketplace 不复制任何 skill、agent 或业务逻辑。分开清单的原因是 Claude Code 严格校验不接受 Codex 的 `policy` 字段。
+Codex 清单使用同一插件名 `quant-report-reproduce`，显式声明 `skills: "./skills/"`。Claude 与 Codex 各维护一份仅含分发元数据的 marketplace：Claude 使用 `.claude-plugin/marketplace.json`，Codex 使用 `.agents/plugins/marketplace.json`。后者以本地源 `./` 指向当前 marketplace 快照的仓库根插件，并包含安装策略、认证策略和分类字段；这样用 `--ref` 安装某个 Git 分支时，插件与 marketplace 始终来自同一快照，不会意外回落到 `main`。两份 marketplace 不复制任何 skill、agent 或业务逻辑。分开清单的原因是 Claude Code 严格校验不接受 Codex 的 `policy` 字段。
 
 仓库现有大写 `.Codex/` 不作为正式分发路径。macOS 大小写不敏感且用户全局 ignore 可能匹配 `.codex/`，实施时需用显式路径加入版本控制。
 

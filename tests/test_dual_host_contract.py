@@ -25,8 +25,7 @@ def test_host_specific_marketplaces_point_to_same_plugin():
     codex_entry = codex["plugins"][0]
     assert codex["name"] == "hedi-quant-codex"
     assert codex_entry["name"] == claude_entry["name"] == "quant-report-reproduce"
-    assert codex_entry["source"]["source"] == "url"
-    assert codex_entry["source"]["url"] == "https://github.com/Hedicx2020/ghquant_plugin.git"
+    assert codex_entry["source"] == {"source": "local", "path": "./"}
     assert codex_entry["policy"] == {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}
     assert codex_entry["category"] == "Developer Tools"
 
