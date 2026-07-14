@@ -3,16 +3,12 @@
   "owner": {
     "name": "Hedi"
   },
+  "description": "量化研报复现插件市场",
   "plugins": [
     {
       "name": "quant-report-reproduce",
       "source": "./",
-      "description": "Claude Code 与 Codex 双宿主量化研报复现流水线：12 阶段门禁、8 个量化角色与异构外审。",
-      "policy": {
-        "installation": "AVAILABLE",
-        "authentication": "ON_INSTALL"
-      },
-      "category": "Developer Tools"
+      "description": "Claude Code 与 Codex 双宿主量化研报复现流水线：12 阶段门禁、8 个量化角色与异构外审。"
     }
   ]
 }

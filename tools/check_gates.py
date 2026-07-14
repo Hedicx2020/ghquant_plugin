@@ -546,12 +546,12 @@ def check_plan(root: Path, report_id: str) -> list[CheckResult]:
 
 
 # ---------------------------------------------------------------------------
-# codex 外审三关（G-SA / G-CA / G-RA）共用解析
+# 异构外审三关（G-SA / G-CA / G-RA）共用解析
 # ---------------------------------------------------------------------------
 
 
 def _parse_codex_output(path: Path) -> tuple[Optional[int], Optional[str]]:
-    """解析 codex 审查输出，返回 (issues 数, verdict)。
+    """解析异构外审输出，返回 (issues 数, verdict)。
 
     约定（供 templates/codex_prompts 与 review_schema.json 对齐）：优先整份 JSON
     或文中 ```json 代码块，形如 {"verdict": ..., "findings": [...]}；否则退化为
@@ -822,7 +822,7 @@ def check_result_audit(root: Path, report_id: str) -> list[CheckResult]:
         results.append(CheckResult(f"{gid}-4", "扰动测试有记录（仅触发时要求，本难度未强制）", True, "非 hard 难度，仅 K2 触发时要求"))
 
     # 三审查点（G-SA/G-CA/G-RA）回应协议统一：audit_responses.md 中该审查点的回应
-    # 行数必须与 codex 输出 verdict json（或降级的 markdown 表格）的 issues 数一致，
+    # 行数必须与外审输出 verdict json（或降级的 markdown 表格）的 issues 数一致，
     # 防止 codex 提了 N 条意见、回应表只写了 M < N 条却蒙混过关。
     issues_count, _verdict = _parse_codex_output(result_audit_external)
     if issues_count is None:

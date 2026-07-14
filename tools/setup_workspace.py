@@ -282,7 +282,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--economy", action="store_true",
                         help="经济模式：机械性角色（extractor/verifier/oos-analyst）派发降为 sonnet，质量敏感角色保持 opus")
     parser.add_argument("--audit-level", default="strict", choices=["strict", "standard"],
-                        help="外审档位：strict=codex 三审查点全跑（默认）；standard=spec/code 审查点触发式、result 必跑")
+                        help="外审档位：strict=异构外审三审查点全跑（默认）；standard=spec/code 审查点触发式、result 必跑")
     parser.add_argument("--max-rel-dev", default=None,
                         help="可接受的与原报告的偏差（小数，0.005-0.5，如 0.1=10%%，对所有相对偏差判定统一生效）；留空=按 standards.json 分类型精细容差")
     parser.add_argument("--force-config", action="store_true", help="覆盖已存在的 .reproduce.json（默认保留）")

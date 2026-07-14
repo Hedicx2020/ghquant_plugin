@@ -4,6 +4,8 @@
 > 前置：v2 十一阶段门禁状态机已交付（见 `2026-07-07-reproduce-v2-design.md`），test_v2 端到端验收进行中。
 > 实施闸门：涉及在跑流程的核心文件（`.claude/skills/reproduce/`、`tools/`）的修改，一律等 test_v2 验收 G-FN 门禁通过后动手。
 
+> **2026-07-14 增补**：v2.12.0 已把分发目标扩展为 Claude Code / Codex 双宿主。本文件保留 v2.1 的历史决策；双宿主清单、运行时宿主识别、对称异构外审、Codex agent 生成与新旧产物兼容，以 `2026-07-14-claude-codex-dual-host-design.md` 为准。
+
 ## 一、目标与用户故事
 
 - **分发目标**：任何 Claude Code 用户安装本插件后，在自己的任意项目目录内敲 `/reproduce`，即可获得完整的研报复现流水线（11 阶段状态机 + 7 子 agent + codex 三审查点 + 门禁工具链）。
