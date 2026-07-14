@@ -1,6 +1,6 @@
 # 审计回应总表 audit_responses.md 骨架
 
-> 落盘于 `workspace/{report_id}/audit/audit_responses.md`；收录 codex 三审查点（spec_audit / code_audit / result_audit）**全部**意见的逐条回应。**同一张表，跨审查点累计追加**，不建三张分表——`tools/check_gates.py` 的 `_parse_audit_responses` 扫描整份文件里所有行，按意见ID前缀（`CDX-S-` / `CDX-C-` / `CDX-R-`）分拣归属审查点。
+> 落盘于 `workspace/{report_id}/audit/audit_responses.md`；收录三道异构外审（spec/code/result）全部意见的逐条回应。意见 ID 的 `CDX-` 前缀为历史稳定合同，不代表实际引擎；同一张表跨检查点累计追加。
 
 ---
 
@@ -30,4 +30,4 @@
 
 ## 行数门禁提示（三审查点共用同一契约）
 
-`tools/check_gates.py` G-SA-4 / G-CA-4 / G-RA-5 要求：本表中属于某审查点前缀（`CDX-S-` / `CDX-C-` / `CDX-R-`）的回应行数，必须**恰好等于**对应 `{point}_audit_codex.md` 解析出的 issues 数（优先解析整份或 fenced ```json``` 块中的 `findings` 数组长度；解析不到 JSON 时退化为该文件全文 markdown 表格的非空行数）。**一条 codex 意见对应一条回应行，不允许合并、不允许省略**——即便某条意见判断为无需处理，也要写一行 `处置=rejected` 并给理由，不能直接漏掉不写。
+`tools/check_gates.py` 要求回应行数恰好等于对应 `{point}_audit_external.md`（历史案例回退 `{point}_audit_codex.md`）解析出的 issues 数。一条外审意见对应一条回应行，不允许合并或省略。

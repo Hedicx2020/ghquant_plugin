@@ -28,7 +28,7 @@
    - `workspace/<id>/audit/evidence_manifest.md`（E1–E6 + 触发的扰动测试记录）
    - 回填后的 `coverage_matrix.md`「验证结果」列
    - `assumptions.md` 的「验证后回看」字段（占位符 `[verify 后填]` 必须全部替换）
-   - 若调 codex 辅助：`workspace/<id>/audit/verify_assist_codex_NN.md`
+   - 若调异构引擎辅助：`workspace/<id>/audit/verify_assist_external_NN.md`
 
 ## 出口门禁
 

@@ -12,14 +12,13 @@
 1. **状态先行**：`uv run python tools/state.py set-stage <id> iterate running`
 2. **推进轮次计数 + 建目录**：`N = state.iteration.current + 1` → **先** `uv run python tools/state.py set <id> iteration.current <N>` **后**建 `workspace/<id>/iterations/iter_<NN>/`（两位补零，如 iter_01）——顺序不可颠倒：唯有先记数，本轮才对 `check_gates` 的 G-IT-1（按 `iteration.current` 决定检查到哪个 `iter_NN`）可见，避免中途中断续跑时被误判为「真空 PASS」（见 SKILL.md 3.2 的 iterate 豁免条款）。**全卡 N 统一定义为「自增后的 `iteration.current`」**，即本轮（进行中或已完成）的轮次号，下述步骤 3–8 均在此定义下使用 N。
 3. **快照 comparison**：把当前 `output/<id>/results/comparison.json` 拷进 `iter_<NN>/comparison.json`。
-4. **（N≥2）后台 codex 第二意见**：填 `templates/codex_prompts/second_opinion.md`（占位符 `{report_id}/{type}/{iteration_current}/{iteration_max}/{trigger_reason}/{comparison_path}/{failing_metrics_summary}/{iteration_history_paths}/{NN}/{workspace}`）→ 落盘 `iter_<NN>/codex_prompt_second_opinion.md` → 调 codex（Bash，`timeout` 600000，可 `run_in_background`）：
+4. **（N≥2）后台异构第二意见**：填 `templates/codex_prompts/second_opinion.md` → 落 `iter_<NN>/external_prompt_second_opinion.md` → 调异构引擎（可后台执行）：
    ```
-   command codex exec -s read-only --skip-git-repo-check -C /Users/hedi/report_reproduce --color never --output-last-message "workspace/<id>/iterations/iter_<NN>/codex_opinion.md" - < "workspace/<id>/iterations/iter_<NN>/codex_prompt_second_opinion.md"
+   REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/external_review.py" --engine <EXTERNAL_ENGINE> --prompt "workspace/<id>/iterations/iter_<NN>/external_prompt_second_opinion.md" --output "workspace/<id>/iterations/iter_<NN>/second_opinion_external.md" --cwd "$PWD" --timeout 600
    ```
-   > 后台跑 codex 期间只做本地记账类动作；**派 diagnoser 前必须 join codex**（等待 `iter_<NN>/codex_opinion.md` 落盘）——第二意见是防兜圈的关键输入，不得不等而派。
-   > **codex 不可用（未安装/额度耗尽/调用失败）** → 走 `stages/spec_audit.md`「codex 降级链」的速判与失败分类，一级降级为 **Claude 替身第二意见**（subagent_type=`general-purpose`，prompt=已填充的 second_opinion prompt 正文 + 替身约束：只读列出的输入文件、禁读主会话叙事与本轮以外的过程性文件、输出契约同原 prompt、全文 Write 入 `iter_<NN>/codex_opinion.md`）——替身与 diagnoser 上下文互相隔离，防兜圈的独立视角价值保留。替身也不可行才允许缺席（步骤 5 的「如有」仅指此最终缺席情形），并在 `iteration_log.md` 记明缺席原因；second_opinion 不入 external_reviews（非三审查点），不影响评级封顶判断。
+   > 派 diagnoser 前必须等待 `second_opinion_external.md`。外部 CLI 失败时按宿主适配卡派同宿主独立第二意见；替身也失败才允许缺席，并在 iteration_log 记原因。第二意见不入 external_reviews，不影响评级。
 
-5. **派 `quant-diagnoser`**（subagent_type=`quant-diagnoser`）。输入合同：`spec.md`、`plan.md`、`assumptions.md`、`src/<id>/`、`output/<id>/verify_report.md`、`output/<id>/results/comparison.json`（或本轮快照）、`iteration_log.md` + **全部历史 iter_NN/**、`iter_<NN>/codex_opinion.md`（如有）、本轮 `iter_<NN>` id。产 `iter_<NN>/diagnosis.md`（含 N≥2 的「## 已排除假设」节 + 末尾 `结论 ∈ {continue, stop_partial, blocked}`）。
+5. **派 `quant-diagnoser`**。输入合同：`spec.md`、`plan.md`、`assumptions.md`、`src/<id>/`、验证结果、iteration_log + 全部历史、`iter_<NN>/second_opinion_external.md`（如有）及本轮 id。输出合同不变。
 6. **按结论分派**：
    - **continue** → 派 `quant-coder`（迭代轮输入含 `iter_<NN>/diagnosis.md`，**只改 diagnosis 列明的文件范围**），产 `iter_<NN>/changes.md` → 派 `quant-verifier` 重跑 → 覆盖 `output/<id>/results/comparison.json`，并把重跑后的拷进 `iter_<NN>/comparison.json`。
    - **stop_partial** → diagnoser 已为每条 pass=false 指标写入 `attribution_status`（accepted/assumption_linked），进「超限 partial 出口」。
@@ -50,6 +49,6 @@ VERDICT PASS → `set-stage <id> iterate done` → 进 result_audit。
 
 ## 失败处理
 
-- **防兜圈**由 diagnoser（五规则：历史强制回顾 / 假设唯一性 / 连续 2 轮无改善升级调 codex / 小步修改 / 同指标 3 轮红线自动 stop_partial）+ G-IT 共同保证；主会话不得越过 diagnoser 自行改代码。
+- **防兜圈**由 diagnoser（历史强制回顾 / 假设唯一性 / 连续 2 轮无改善升级调异构第二意见 / 小步修改 / 同指标 3 轮红线）+ G-IT 保证；主会话不得自行改代码。
 - G-IT-1 三件套缺（如 continue 轮缺 changes.md）→ 补齐对应产物（**缺 changes 回 coder，仅 continue 轮适用**——stop_partial/blocked 轮本就豁免 changes.md，缺失不算失败，见上「G-IT-1」与「三出口」；缺 diagnosis 回 diagnoser，缺 comparison 回 verifier）。
 - 断点续跑：读最大 iter_NN 三件套完整性决定从诊断/修正/重跑续起（见 SKILL.md 3.2）。

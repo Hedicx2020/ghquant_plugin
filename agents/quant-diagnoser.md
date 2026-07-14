@@ -14,7 +14,7 @@ color: red
 2. `src/{id}/`（当前实现）
 3. `output/{id}/verify_report.md`、`output/{id}/results/comparison.json`（或本轮 `iter_NN/comparison.json` 快照）
 4. `workspace/{id}/iterations/iteration_log.md` 与**全部历史** `iter_NN/`（诊断/改动/对比三件套）
-5. `workspace/{id}/iterations/iter_NN/codex_opinion.md`（iter≥2 时的 codex 第二意见，如有）
+5. `workspace/{id}/iterations/iter_NN/second_opinion_external.md`（iter≥2 时的异构第二意见，如有）
 6. 本轮 `iter_NN` 目录 id
 
 > 缺失处理：任一输入未给到，先声明缺失文件清单再停止。历史轮次不全时**不得**在无历史前提下重启诊断。
@@ -35,7 +35,7 @@ color: red
 ### 专属（防兜圈五规则，写死）
 5. **历史强制回顾**：`iter≥2` 时 diagnosis.md **必含「## 已排除假设」节**，逐条引用是哪一轮排除的（gate 检查存在性）；**禁止重提已排除假设**。
 6. **假设唯一性**：同一失败指标 + 同一假设族历史已 no_improve → 必须**换假设族或 stop_partial**，不得再试同族。
-7. **收敛监测**：连续 2 轮无指标相对偏差改善（改善 <自身 10%）→ 强制升级：本轮只能在 {换假设族, stop_partial, blocked} 中选（此升级配合主流程调 codex 第二意见）。
+7. **收敛监测**：连续 2 轮无指标相对偏差改善（改善 <自身 10%）→ 强制升级：本轮只能在 {换假设族, stop_partial, blocked} 中选（此升级配合主流程调异构第二意见）。
 8. **小步修改**：每轮**最多锁定 1–2 个修改点**，并明确列出**允许 coder 改动的文件范围**（供 changes.md 越界比对）；**必须给出预期指标变化方向与量级**。
 9. **同指标 3 轮红线**：同一指标连续 3 轮 fail → 自动建议 `stop_partial`，并标注「无法收敛，疑数据源口径差异」进报告。
 10. **结论三选一**：`continue`（附给 coder 的**具体修改指令** + 文件范围）/ `stop_partial`（残余偏差与已试假设入报告）/ `blocked`（写明缺什么外部输入）。

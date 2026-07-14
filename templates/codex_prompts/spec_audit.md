@@ -1,17 +1,15 @@
 <!--
 本文件是 prompt 骨架，占位符为花括号形式（{report_id}/{workspace}/...）。
 主会话按当次报告填充全部占位符、落盘为
-workspace/{report_id}/audit/codex_prompt_spec.md 后，整份文件内容经 stdin
-传给 `codex exec`（-s read-only，只读沙箱，禁止改仓库）。
+workspace/{report_id}/audit/external_prompt_spec.md 后，由双宿主共享执行器只读调用异构引擎。
 调用约定：
-  command codex exec -s read-only --skip-git-repo-check \
-    -C /Users/hedi/report_reproduce --color never \
-    --output-last-message "workspace/{report_id}/audit/spec_audit_codex.md" \
-    - < "workspace/{report_id}/audit/codex_prompt_spec.md"
-下面 "===== 传给 codex 的正文开始 =====" 之后的内容即完整 prompt 正文。
+  uv run python tools/external_review.py --engine <EXTERNAL_ENGINE> \
+    --prompt "workspace/{report_id}/audit/external_prompt_spec.md" \
+    --output "workspace/{report_id}/audit/spec_audit_external.md" --cwd . --timeout 600
+下面 "===== 传给外审引擎的正文开始 =====" 之后的内容即完整 prompt 正文。
 -->
 
-===== 传给 codex 的正文开始 =====
+===== 传给外审引擎的正文开始 =====
 
 # 角色
 
@@ -41,7 +39,7 @@ workspace/{report_id}/audit/codex_prompt_spec.md 后，整份文件内容经 std
 - `medium`：对全部结果表做盲抄（数值原样记录），D/F/B/R/SA 五类都要覆盖。
 - `hard`：全量盲提取，五类要素逐条列出，不遗漏任何一页的公式/参数/结果。
 
-阶段一产出请用如下明确分隔标记包裹（供主会话事后原样切出存为 `spec_codex.md`，不要省略首尾标记行）：
+阶段一产出请用如下历史兼容分隔标记包裹（主会话切出存为 `spec_external.md`，标记名为稳定机器合同，不代表实际引擎）：
 
 ```
 === SPEC_CODEX_BEGIN ===
@@ -73,7 +71,7 @@ workspace/{report_id}/audit/codex_prompt_spec.md 后，整份文件内容经 std
 
 # 输出契约（严格遵守，决定门禁能否解析你的意见）
 
-**关键约束**：调用方只保留你**最后一条消息**（`--output-last-message`）。你的**最后一条消息**必须同时包含：先阶段一的 `=== SPEC_CODEX_BEGIN ===` / `=== SPEC_CODEX_END ===` 标记块（原样保留，供主会话切出存为 `spec_codex.md`），紧接着是阶段二的 JSON 结果对象（或降级的 markdown 表格+`VERDICT:` 行）——**两者都必须出现在同一条消息内，缺一即视为未完成**。不要把阶段一标记块单独发在早于最后一条消息的位置，那样会随中间消息一起被丢弃。
+**关键约束**：最终输出必须同时包含阶段一的 `SPEC_CODEX` 历史兼容标记块（供切出 `spec_external.md`）和阶段二 JSON；缺一即未完成。
 
 优先且默认：输出**一个 JSON 对象**（可以是纯 JSON，也可以包裹在一个标注 json 语言的 fenced code block 内），结构对应 `templates/audit/review_schema.json`：
 
