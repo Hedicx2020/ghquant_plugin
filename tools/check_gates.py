@@ -591,6 +591,24 @@ def _parse_codex_output(path: Path) -> tuple[Optional[int], Optional[str]]:
     return len(cdx_rows), (verdict_match.group(1) if verdict_match else None)
 
 
+def _external_audit_path(audit_dir: Path, checkpoint: str) -> Path:
+    """返回外审产物路径：新名称优先，历史 ``*_codex.md`` 兼容。"""
+
+    if checkpoint not in {"spec", "code", "result"}:
+        raise ValueError(f"未知外审检查点: {checkpoint}")
+    current = audit_dir / f"{checkpoint}_audit_external.md"
+    legacy = audit_dir / f"{checkpoint}_audit_codex.md"
+    return current if current.is_file() or not legacy.is_file() else legacy
+
+
+def _external_spec_path(spec_dir: Path) -> Path:
+    """返回外部盲提取规格路径，新名称优先并兼容 ``spec_codex.md``。"""
+
+    current = spec_dir / "spec_external.md"
+    legacy = spec_dir / "spec_codex.md"
+    return current if current.is_file() or not legacy.is_file() else legacy
+
+
 def _parse_audit_responses(path: Path, prefix: str) -> list[dict[str, str]]:
     if not path.is_file():
         return []
@@ -617,15 +635,15 @@ def check_spec_audit(root: Path, report_id: str) -> list[CheckResult]:
     spec_dir = root / "workspace" / report_id / "spec"
     audit_dir = root / "workspace" / report_id / "audit"
 
-    spec_codex = spec_dir / "spec_codex.md"
+    spec_external = _external_spec_path(spec_dir)
     extract_diff = spec_dir / "extract_diff.md"
-    spec_audit_codex = audit_dir / "spec_audit_codex.md"
+    spec_audit_external = _external_audit_path(audit_dir, "spec")
     responses_path = audit_dir / "audit_responses.md"
 
-    must_exist = {"spec_codex.md": spec_codex, "extract_diff.md": extract_diff, "spec_audit_codex.md": spec_audit_codex}
+    must_exist = {"spec_external.md": spec_external, "extract_diff.md": extract_diff, "spec_audit_external.md": spec_audit_external}
     missing = [name for name, p in must_exist.items() if not p.is_file()]
     results.append(
-        CheckResult(f"{gid}-1", "codex 盲提取/diff/审查产物齐（全难度必跑）", not missing, f"缺失: {missing}" if missing else "")
+        CheckResult(f"{gid}-1", "外部盲提取/diff/审查产物齐", not missing, f"缺失: {missing}" if missing else "")
     )
 
     extract_audit = audit_dir / "extract_audit.md"
@@ -643,10 +661,10 @@ def check_spec_audit(root: Path, report_id: str) -> list[CheckResult]:
     else:
         results.append(CheckResult(f"{gid}-3", "extract_diff.md 所有 DIF 行裁决列非空", False, "extract_diff.md 不存在"))
 
-    issues_count, _verdict = _parse_codex_output(spec_audit_codex)
+    issues_count, _verdict = _parse_codex_output(spec_audit_external)
     response_rows = _parse_audit_responses(responses_path, "CDX-S-")
     if issues_count is None:
-        results.append(CheckResult(f"{gid}-4", "audit_responses.md 回应行数 == spec 审查 issues 数", False, "spec_audit_codex.md 无法解析"))
+        results.append(CheckResult(f"{gid}-4", "audit_responses.md 回应行数 == spec 审查 issues 数", False, "spec_audit_external.md 无法解析"))
     else:
         results.append(
             CheckResult(
@@ -688,13 +706,13 @@ def check_code_audit(root: Path, report_id: str) -> list[CheckResult]:
     tags = set(state.get("tags") or [])
 
     audit_dir = root / "workspace" / report_id / "audit"
-    code_audit_codex = audit_dir / "code_audit_codex.md"
+    code_audit_external = _external_audit_path(audit_dir, "code")
     responses_path = audit_dir / "audit_responses.md"
 
-    must_exist = {"code_audit_codex.md": code_audit_codex, "audit_responses.md": responses_path}
+    must_exist = {"code_audit_external.md": code_audit_external, "audit_responses.md": responses_path}
     missing = [name for name, p in must_exist.items() if not p.is_file()]
     results.append(
-        CheckResult(f"{gid}-1", "code_audit_codex.md / audit_responses.md 存在（codex 全难度必跑）", not missing, f"缺失: {missing}" if missing else "")
+        CheckResult(f"{gid}-1", "code_audit_external.md / audit_responses.md 存在（外审按档位执行）", not missing, f"缺失: {missing}" if missing else "")
     )
 
     impl_audit_files = sorted(audit_dir.glob("impl_audit_m*.md"))
@@ -714,10 +732,10 @@ def check_code_audit(root: Path, report_id: str) -> list[CheckResult]:
         )
     )
 
-    issues_count, _verdict = _parse_codex_output(code_audit_codex)
+    issues_count, _verdict = _parse_codex_output(code_audit_external)
     response_rows = _parse_audit_responses(responses_path, "CDX-C-")
     if issues_count is None:
-        results.append(CheckResult(f"{gid}-4", "audit_responses.md 回应行数 == code 审查 issues 数", False, "code_audit_codex.md 无法解析"))
+        results.append(CheckResult(f"{gid}-4", "audit_responses.md 回应行数 == code 审查 issues 数", False, "code_audit_external.md 无法解析"))
     else:
         results.append(
             CheckResult(
@@ -751,13 +769,13 @@ def check_result_audit(root: Path, report_id: str) -> list[CheckResult]:
     standards = load_standards(root)
 
     audit_dir = root / "workspace" / report_id / "audit"
-    result_audit_codex = audit_dir / "result_audit_codex.md"
+    result_audit_external = _external_audit_path(audit_dir, "result")
     responses_path = audit_dir / "audit_responses.md"
 
-    must_exist = {"result_audit_codex.md": result_audit_codex, "audit_responses.md": responses_path}
+    must_exist = {"result_audit_external.md": result_audit_external, "audit_responses.md": responses_path}
     missing = [name for name, p in must_exist.items() if not p.is_file()]
     results.append(
-        CheckResult(f"{gid}-1", "result_audit_codex.md / audit_responses.md 存在（codex 全难度必跑）", not missing, f"缺失: {missing}" if missing else "")
+        CheckResult(f"{gid}-1", "result_audit_external.md / audit_responses.md 存在（结果外审必跑）", not missing, f"缺失: {missing}" if missing else "")
     )
 
     response_rows = _parse_audit_responses(responses_path, "CDX-R-")
@@ -806,9 +824,9 @@ def check_result_audit(root: Path, report_id: str) -> list[CheckResult]:
     # 三审查点（G-SA/G-CA/G-RA）回应协议统一：audit_responses.md 中该审查点的回应
     # 行数必须与 codex 输出 verdict json（或降级的 markdown 表格）的 issues 数一致，
     # 防止 codex 提了 N 条意见、回应表只写了 M < N 条却蒙混过关。
-    issues_count, _verdict = _parse_codex_output(result_audit_codex)
+    issues_count, _verdict = _parse_codex_output(result_audit_external)
     if issues_count is None:
-        results.append(CheckResult(f"{gid}-5", "audit_responses.md 回应行数 == result 审查 issues 数", False, "result_audit_codex.md 无法解析"))
+        results.append(CheckResult(f"{gid}-5", "audit_responses.md 回应行数 == result 审查 issues 数", False, "result_audit_external.md 无法解析"))
     else:
         results.append(
             CheckResult(

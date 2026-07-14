@@ -209,6 +209,29 @@ def test_parse_codex_output_bare_json_zero_findings(tmp_path: Path) -> None:
     assert verdict == "pass"
 
 
+def test_external_audit_path_prefers_new_name(tmp_path: Path) -> None:
+    old = tmp_path / "code_audit_codex.md"
+    new = tmp_path / "code_audit_external.md"
+    old.write_text("old", encoding="utf-8")
+    new.write_text("new", encoding="utf-8")
+    assert cg._external_audit_path(tmp_path, "code") == new
+
+
+def test_external_audit_path_falls_back_to_legacy_name(tmp_path: Path) -> None:
+    old = tmp_path / "result_audit_codex.md"
+    old.write_text("old", encoding="utf-8")
+    assert cg._external_audit_path(tmp_path, "result") == old
+
+
+def test_external_spec_path_prefers_new_name_and_supports_legacy(tmp_path: Path) -> None:
+    legacy = tmp_path / "spec_codex.md"
+    legacy.write_text("legacy", encoding="utf-8")
+    assert cg._external_spec_path(tmp_path) == legacy
+    current = tmp_path / "spec_external.md"
+    current.write_text("current", encoding="utf-8")
+    assert cg._external_spec_path(tmp_path) == current
+
+
 # ---------------------------------------------------------------------------
 # G-EX：计数一致 / 不一致
 # ---------------------------------------------------------------------------

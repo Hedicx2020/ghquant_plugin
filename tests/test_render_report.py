@@ -127,6 +127,34 @@ def test_render_unknown_enum_values_pass_through(tmp_path):
     assert "weird_engine" in t and "odd_verdict" in t
 
 
+@pytest.mark.parametrize(
+    ("engine", "label"),
+    [
+        ("codex_external", "Codex 异构外审"),
+        ("claude_external", "Claude Code 异构外审"),
+        ("same_host_fallback", "同宿主替身（降级外审）"),
+    ],
+)
+def test_render_external_engine_labels(tmp_path, engine, label):
+    _fixture(tmp_path)
+    state_path = tmp_path / "workspace" / "demo" / "state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["external_reviews"][0]["engine"] = engine
+    state_path.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    text = rr.render(tmp_path, "demo").read_text(encoding="utf-8")
+    assert label in text
+
+
+def test_same_host_fallback_uses_warning_style(tmp_path):
+    _fixture(tmp_path)
+    state_path = tmp_path / "workspace" / "demo" / "state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["external_reviews"][0]["engine"] = "same_host_fallback"
+    state_path.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    text = rr.render(tmp_path, "demo").read_text(encoding="utf-8")
+    assert "pill warn'>同宿主替身（降级外审）" in text
+
+
 def test_render_shows_verification_level_layers(tmp_path):
     """降级核验项在指标表与分层说明中透明展示。"""
     _fixture(tmp_path)
