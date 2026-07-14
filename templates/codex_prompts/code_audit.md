@@ -1,17 +1,15 @@
 <!--
 本文件是 prompt 骨架，占位符为花括号形式（{report_id}/{workspace}/...）。
 主会话按当次报告填充全部占位符、落盘为
-workspace/{report_id}/audit/codex_prompt_code.md 后，整份文件内容经 stdin
-传给 `codex exec`（-s read-only，只读沙箱，禁止改仓库）。
+workspace/{report_id}/audit/external_prompt_code.md 后，由共享执行器只读调用异构引擎。
 调用约定：
-  command codex exec -s read-only --skip-git-repo-check \
-    -C /Users/hedi/report_reproduce --color never \
-    --output-last-message "workspace/{report_id}/audit/code_audit_codex.md" \
-    - < "workspace/{report_id}/audit/codex_prompt_code.md"
-下面 "===== 传给 codex 的正文开始 =====" 之后的内容即完整 prompt 正文。
+  uv run python tools/external_review.py --engine <EXTERNAL_ENGINE> \
+    --prompt "workspace/{report_id}/audit/external_prompt_code.md" \
+    --output "workspace/{report_id}/audit/code_audit_external.md" --cwd . --timeout 600
+下面 "===== 传给外审引擎的正文开始 =====" 之后的内容即完整 prompt 正文。
 -->
 
-===== 传给 codex 的正文开始 =====
+===== 传给外审引擎的正文开始 =====
 
 # 角色
 

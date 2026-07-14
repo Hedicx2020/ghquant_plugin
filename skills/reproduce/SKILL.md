@@ -1,24 +1,31 @@
 ---
 name: reproduce
-description: "研报复现主编排——从 PDF 到与原报告对齐的复现产物，11 阶段门禁状态机（触发词：复现研报、reproduce、复现 <pdf>）"
-argument-hint: "<pdf_path> | continue <id> | status [id] | revise <id> ... | accept <id>"
+description: "研报复现主编排——Claude Code/Codex 双宿主、异构外审、12 阶段门禁状态机；用于复现量化研报 PDF、续跑案例和查询状态。"
 ---
 
 # /reproduce 主编排
 
-你是研报复现流水线的**编排大脑（orchestrator）**。你不亲自生产内容，只做四件事：派发子 agent、审门禁、调 codex、写编排记录（state.json 与各 responses 表）。内容产物（spec/plan/代码/结果/诊断/报告）一律出自子 agent；达标判定一律出自 `tools/check_gates.py` 依据 `templates/standards.json` 重算。
+你是研报复现流水线的**编排大脑（orchestrator）**。你不亲自生产内容，只做四件事：派发子 agent、审门禁、调异构外审、写编排记录（state.json 与各 responses 表）。内容产物（spec/plan/代码/结果/诊断/报告）一律出自子 agent；达标判定一律出自 `tools/check_gates.py` 依据 `templates/standards.json` 重算。
 
-**执行卡按需读取**：11 个 stage 的详细动作在 `stages/{stage}.md`，**进入某 stage 时才读那一张**，不要一次性读完 11 张。本文件只放全局协议、路由与规则。
+**执行卡按需读取**：12 个 stage 的详细动作在 `stages/{stage}.md`，**进入某 stage 时才读那一张**，不要一次性读完。本文件只放全局协议、路由与规则。
+
+## 零、宿主识别（每次进入 skill 只做一次）
+
+1. 当前会话有 Codex 协作代理工具 → `HOST=codex`、`EXTERNAL_ENGINE=claude`、`EXTERNAL_ENGINE_STATE=claude_external`，完整读取 `adapters/codex.md`。
+2. 当前会话有 Claude Code Agent/Task 工具 → `HOST=claude_code`、`EXTERNAL_ENGINE=codex`、`EXTERNAL_ENGINE_STATE=codex_external`，完整读取 `adapters/claude_code.md`。
+3. 两类能力都不存在或无法唯一判断 → 停止并说明宿主不受支持；不得静默改成同源审查。
+
+后续阶段卡中的 `<EXTERNAL_ENGINE>`、`<EXTERNAL_ENGINE_STATE>` 与“按宿主适配卡派发”均使用本节确定的值。同一工作目录可由两个宿主交替使用，不把宿主写入 `.reproduce.json`。
 
 ---
 
 ## 一、六条硬规则（置顶，最高优先级，任何 stage 不得违背）
 
 1. **门禁即代码**：任何 stage 结束必须运行 `check_gates` 并把输出**原样贴进回复**；FAIL 禁止进下一 stage、禁止口头声称通过。（唯一例外：verify 阶段仅 G-VF-3 达标项 FAIL 时按 `stages/verify.md` 的说明进入 iterate，属设计内路径）
-2. **编排与生产分离**：主会话只派发、审门禁、调 codex、写编排记录；**严禁亲自撰写 spec / plan / 代码 / 验证结论 / 最终报告**（extract_diff/audit_responses 等记账表由主会话按审计结论登记，不属内容生产）。
+2. **编排与生产分离**：主会话只派发、审门禁、调异构外审、写编排记录；**严禁亲自撰写 spec / plan / 代码 / 验证结论 / 最终报告**（extract_diff/audit_responses 等记账表由主会话按审计结论登记，不属内容生产）。
 3. **产物合同逐一点收**：agent 返回后逐一 `ls` 验证其输出合同文件，缺一即该步失败（不看 agent 自述，看文件是否真的在）。
 4. **状态先行**：stage 开始/结束先写 state（`set-stage running` / `set-stage done`），杜绝"跑完再补账"。
-5. **审计逐条回应**：issue 全量编号入 `audit_responses.md`，gate 校验回应行数与 codex issues 数一致且 critical/major 闭环；不允许"总体没问题"式含糊回应。
+5. **审计逐条回应**：issue 全量编号入 `audit_responses.md`，gate 校验回应行数与外审 issues 数一致且 critical/major 闭环；不允许"总体没问题"式含糊回应。
 6. **达标判定唯一出口**：pass/partial 只能由 `check_gates` 依据 `standards.json` 重算得出；任何 agent 自述结论仅供参考。
 
 ---
@@ -50,11 +57,12 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/<x>.py" ...
 - 状态写入口（唯一）：`uv run python tools/state.py {init|show|set-stage|set|record-event|milestone|gate} ...`
 - 门禁判定：`uv run python tools/check_gates.py <id> --stage <stage> [--assert-done] [--record]`
 - PDF 转文本：`uv run python tools/pdf_extract.py <pdf_path> <out_dir>`
+- 异构外审执行：`uv run python tools/external_review.py --engine <EXTERNAL_ENGINE> --prompt <prompt> --output <output> --cwd "$PWD" --timeout 600`
 - 8 个子 agent（`Agent` 工具，`subagent_type`）：`quant-extractor` / `quant-planner` / `quant-auditor`（派发时在 prompt 里指明 `mode=spec|code|result`）/ `quant-coder` / `quant-verifier` / `quant-diagnoser` / `quant-oos-analyst`（复现达标后的样本外延伸分析）/ `quant-reporter`
 - **经济模式派发规则**：cwd `.reproduce.json` 的 `economy=true` 时，派发 `quant-extractor` / `quant-verifier` / `quant-oos-analyst` 一律带 `model: "sonnet"` 覆盖（机械性工作：抄写结构化/跑脚本对数/延伸跑数）；`quant-planner` / `quant-coder` / `quant-auditor` / `quant-diagnoser` 任何模式下保持 opus（分诊裁决/写代码/对抗审计/归因推理，质量敏感）；`quant-reporter` 本就 sonnet。economy=false 或无配置时不加覆盖。
-- **外审档位规则**：cwd `.reproduce.json` 的 `audit_level=standard` 时，spec_audit / code_audit 的 codex 外审改为触发式（触发条件与 skipped 落档协议见对应执行卡）；**result_audit 的 codex 外审任何档位必跑**（反虚报是最后防线）。strict（默认）或无配置时三审查点全跑。
-- codex 三审查点 prompt 骨架：`templates/codex_prompts/{spec_audit,code_audit,result_audit,second_opinion}.md`
-- **codex 不可用的降级链（全局协议，正本在 `stages/spec_audit.md`「codex 降级链」节）**：用户未安装 / 额度耗尽 / 认证失效均不断链——调用前 `command -v codex` 速判；失败输出含额度/认证特征（usage limit/quota/429/401/login）跳过缩减重试直接降级；一级降级派 Claude 外审替身（general-purpose，执行同一份已填充 prompt，engine 记 `claude_fallback`，不受 economy 降配），二级才 skipped。任一失败性降级 → 报告评级封顶 B（audit_level=standard 未触发的配置性 skipped 不封顶）。
+- **外审档位规则**：cwd `.reproduce.json` 的 `audit_level=standard` 时，spec_audit / code_audit 的异构外审改为触发式；**result_audit 的外审任何档位必跑**。strict（默认）或无配置时三审查点全跑。
+- 外审 prompt 骨架（目录名因历史兼容保留）：`templates/codex_prompts/{spec_audit,code_audit,result_audit,second_opinion}.md`
+- **外审不可用降级链**：`external_review.py` 返回非 success 时按 `stages/spec_audit.md` 正本处理；一级按当前宿主适配卡做同宿主独立盲审，engine 记 `same_host_fallback`，二级才 `skipped`。任一失败性降级 → 报告评级封顶 B；audit_level=standard 未触发的配置性 skipped 不封顶。
 - 通用模板：`templates/_spec_template.md`、`templates/_plan_template.md`、`templates/{factor,timing,allocation,fixed_income,ml}.md`、`templates/data_catalog.md`、`templates/standards.json`、`templates/audit/*`
 
 **STAGE_ORDER（写死在 tools/state.py，不得改名）**：
@@ -87,7 +95,7 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/<x>.py" ...
 
 ### 3.0 `setup`（首次使用配置向导，幂等可重跑）
 
-按 `stages/setup.md` 执行卡走：AskUserQuestion 收六项配置（数据路径 / auto 或 interactive 执行模式 / 最大迭代次数 / 回测框架 / 偏差容忍 / 经济模式；另有配置文件项 audit_level 不进问卷）→ 调 `setup_workspace.py` 一次完成落地（.reproduce.json + templates/common 种子 + pyproject + 目录树）→ 转述环境检测报告（uv / Python 依赖 / codex CLI）→ 引导用户维护 `templates/data_catalog.md`。`backtest_framework` 的消费点在 plan / implement 执行卡（planner 复用规划与 coder 合同：用户框架优先、`common/` 补缺口）；`default_max_rel_dev` 的消费点在 `check_gates`（load_standards 自动读取，统一替换相对偏差上限）与 verify 执行卡（verifier 对数口径同步）。
+按 `stages/setup.md` 执行卡走：收六项配置 → 调 `setup_workspace.py` 落地 `.reproduce.json`、templates/common、`.codex/agents`、pyproject 与目录树 → 转述 uv / Python / codex / claude 环境检测 → 引导用户维护 `templates/data_catalog.md`。
 
 ### 3.1 `<pdf_path> [--mode auto|interactive] [--max-iter N] [--id name] [--difficulty easy|medium|hard] [--experimental]`
 
@@ -127,7 +135,7 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/<x>.py" ...
 
    | 影响面 | 重跑链路 |
    |--------|---------|
-   | data / method | 受影响 milestone 的 implement → codex 增量 code_audit → verify → result_audit → report |
+   | data / method | 受影响 milestone 的 implement → 异构增量 code_audit → verify → result_audit → report |
    | param / trading | implement（config 级）→ verify → result_audit（轻量）→ report |
    | output | verify（重出图表/Excel）→ report |
 
@@ -148,7 +156,7 @@ review 通过收尾：`set-stage <id> review done` → 按 verdict 定终态：`
 1. **读执行卡**：`Read stages/{current}.md`（按需，只读这一张）。
 2. **前置断言**（init 除外）：`uv run python tools/check_gates.py <id> --stage <prev> --assert-done`，FAIL 则说明上一 stage 未真正 done，回上一 stage 修复，不得强推。
 3. **状态先行**：`uv run python tools/state.py set-stage <id> {current} running`。
-4. **动作序列**：按执行卡派 agent / 调 codex / 跑工具（并行只按第五节规则）。
+4. **动作序列**：按执行卡派 agent / 调异构外审 / 跑工具（并行只按第五节规则）。
 5. **逐一点收**：对执行卡列出的每个输出合同文件 `ls -la` 核在（含 >0 字节 / 图表 >15KB 等硬指标由门禁兜底）；缺一即该步失败，带缺失清单重派。
 6. **出口门禁**：`uv run python tools/check_gates.py <id> --stage {current} --record`，**把完整输出（每行 [PASS|FAIL] 与末行 VERDICT）原样贴进回复**。
 7. **放行**：VERDICT PASS → `set-stage <id> {current} done` → 前进到下一 stage；FAIL → 按该执行卡「失败处理」分支处理。（唯一例外同硬规则1：verify 阶段仅 G-VF-3 达标项 FAIL 时的「FAIL → 进 iterate」按 `stages/verify.md` 处理，属设计内路径，不算违反本条）
@@ -163,28 +171,28 @@ review 通过收尾：`set-stage <id> review done` → 按 verdict 定终态：`
 允许的并行仅限以下五处，其余一律串行：
 
 1. **hard 难度无依赖 milestone 多 coder**：`implement` 阶段，deps 互不相关的 milestone 可同时派多个 `quant-coder`（一条消息内多个 Agent 调用）。
-2. **spec_audit 双通道**：codex 盲提取审查（Bash 直调）∥ `quant-auditor mode=spec` 内审（Agent，medium+ 才有内审）——同时发起，两者都返回后汇合统一过 G-SA。
-3. **code_audit ∥ verify**（**medium/hard 默认并行**；easy 或 `tags` 含 ml 维持串行——ml 外审抓 critical 先验高，先审后跑省大概率作废的全跑）：verifier 派发**前移至 code_audit 阶段**，与 codex（Bash）同批发起；**verify 阶段的记账与门禁次序不变**——汇合后先过 G-CA → `set-stage verify running` → 点收已返回的 verify 产物 → 过 G-VF。**作废规则**：G-CA 处置引发任何 `src/` 改动（critical 修复或涉码 major 处置）→ 本次预跑 verify 产物作废（G-VF-6 新鲜度机器兜底会判 FAIL），重派 verifier，不得拿旧产物过门。economy 用户可选择维持串行，避免作废时浪费一次全跑。
+2. **spec_audit 双通道**：异构盲提取审查 ∥ `quant-auditor mode=spec` 内审（medium+）——同时发起，两者都返回后汇合统一过 G-SA。
+3. **code_audit ∥ verify**（**medium/hard 默认并行**；easy 或 `tags` 含 ml 维持串行）：verifier 前移至 code_audit，与异构外审同批发起；汇合后先过 G-CA，再点收 verify。G-CA 处置引发 `src/` 改动时预跑结果作废并重派 verifier。
 4. **implement 流水线（medium/hard 默认）**：milestone mN 的验证环节（medium：verifier；hard：auditor(code)→verifier 链）与 mN+1 的编码同批派发重叠（滚动批次，深度 1：任一时刻至多一个 milestone 的验证链 + 一个 milestone 的编码在途；hard 的无依赖多 coder 并行不受此限、可叠加）。**多个 milestone 的 verifier 不得同批**（共写 verify_report.md）；多个 auditor 可同批（各写各的 impl_audit_m{mid}.md）。汇合分诊与尾部条件见 `stages/implement.md`「流水线汇合协议」。
 5. **result_audit ∥ oos**（可选提速）：oos-analyst 的全部输入在 result_audit 开始前已冻结（verdict 已定）；触发判定前移，与 result_audit 双通道同批加派。**汇合后先过 G-RA**——若有数字不实类 critical（回 verify 重出 comparison）则 oos 产物作废重跑（基线已变）；G-RA 干净 → oos 阶段照常 `set-stage running` → 直接点收 → G-OS。
 
-硬约束：子 agent 不得再派 agent / 调 skill / 启动 Task 工具（API 400 根源）；`codex exec` 是外部进程调用、非 agent 嵌套，只有主会话与 `quant-verifier`（辅助验证用途）可 Bash 直调。
+硬约束：子 agent 不得再派 agent / 调 skill / 启动 Task 工具；正式外审 CLI 只由主会话经 `external_review.py` 调用。`quant-verifier` 的诊断性辅助调用不属于三审查点且不得替代门禁。
 **并行纪律（任何并行点一体适用）**：
 - **state.py 写命令严禁同批并行**：同一汇合点的多笔记账用单个 Bash 调用内 `&&` 串联（state.json 为整文件读改写、无锁，同批并行的两个写命令必丢一笔更新）。
 - **同批 agent 的输出文件集必须不相交**：会共写同一文件的两个 agent（如两个 milestone 的 verifier 共写 verify_report.md）不得同批发起。
 
 ---
 
-## 六、难度裁剪矩阵（check_gates 内置本矩阵；codex 三审查点全难度必跑）
+## 六、难度裁剪矩阵（check_gates 内置本矩阵；strict 时三道异构外审全难度必跑）
 
 | 机制 | easy | medium | hard |
 |------|------|--------|------|
-| spec_audit：codex（含盲提取协议） | 必跑（轻量：R 表逐格 + 图表编号连续性） | 必跑（盲抄全部结果表数值 + 全维度） | 必跑（全量盲提取 diff + 全维度） |
+| spec_audit：异构外审（含盲提取协议） | 必跑（轻量：R 表逐格 + 图表编号连续性） | 必跑（盲抄全部结果表数值 + 全维度） | 必跑（全量盲提取 diff + 全维度） |
 | spec_audit：auditor(spec) 内审 | 跳过 | 必跑 | 必跑 |
 | implement 编排 | 单 coder 一次实现 | 逐 milestone 派发，验证与下一编码流水线重叠 | 按 milestone 派独立 coder，无依赖并行 + 依赖链流水线重叠 |
 | milestone 级 verify | 跳过（并入 final verify） | 每 milestone | 每 milestone |
 | auditor(code) 实现忠实性审计 | 并入 verify（抽 2 条核心要素） | 逐条核对 core 要素（含 ml tag 时全量） | 逐条核对全部要素，每 milestone |
-| code_audit / result_audit：codex | 必跑 | 必跑 | 必跑 |
+| code_audit / result_audit：异构外审 | 必跑 | 必跑 | 必跑 |
 | auditor(result) 反虚报核查 | 仅触发时 | 仅触发时 | 必跑 |
 | 扰动测试 | 仅触发（K1/K2 命中） | 仅触发 | 必做一次 |
 | iterate 默认 max_iter | 3 | 5 | 6 |

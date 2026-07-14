@@ -25,14 +25,14 @@ color: green
 3. `output/{id}/verify_report.md`（验证范围/方法、核心指标对比表、已知口径差异；**不写归因结论**）。
 4. `workspace/{id}/audit/evidence_manifest.md`——**严格按 `templates/audit/evidence_manifest.md`**：E1–E6 逐条落盘 + 触发时的扰动测试记录。
 5. 回填 `workspace/{id}/spec/coverage_matrix.md`「验证结果」列（`verify_report.md#锚点 偏差x% pass|fail`，`最后更新`改 `verify`）。
-6. 若调用 codex 辅助：`workspace/{id}/audit/verify_assist_codex_NN.md`（原始输出落盘）。
+6. 若调用异构引擎辅助：`workspace/{id}/audit/verify_assist_external_NN.md`（原始输出落盘）。
 7. 回填 `workspace/{id}/assumptions.md` 中相关假设的「验证后回看」字段——用 `comparison.json` 实际数值写一句结论（如：复现 88.85% vs 研报 82.40%，偏差 7.8%，假设获数据支持/不支持），**把占位符 `[verify 后填]` 全部替换**。
 8. **`difficulty=easy` 时**：抽查 2 条 core 要素的实现位置真实性——打开 `coverage_matrix.md` 该行「实现位置」列所列 `文件:函数`，确认函数体真实存在且非空壳（不是纯 `pass`/`TODO`/直接返回常量），结论记入 `verify_report.md`（新增小节，如「## 实现忠实性抽查（easy）」，写清抽查的 2 条要素 ID、定位、结论）。这是 easy 难度下 `auditor(code)` 忠实性审计「并入 verify」的具体落点（见 SKILL.md 第六节裁剪矩阵）。
 
 ## 硬约束
 
 ### 通用（四条，所有 agent 一致）
-1. 不派发任何其他 agent、不调用 skill、不启动 Task 工具（子 agent 不嵌套，API 400 根源）。**例外**：允许 Bash 直调 `codex exec` CLI（见约束 8），这是外部进程调用、非 agent 嵌套。
+1. 不派发任何其他 agent、不调用 skill、不启动 Task 工具。**例外**：允许按主会话提供的 `external_engine` 经 `tools/external_review.py` 做约束 8 的诊断性辅助。
 2. 不读写 `workspace/{id}/state.json`（`tools/state.py` 是唯一写入口，主会话专用）。
 3. 全中文输出，不使用 emoji。
 4. 输出合同之外的文件一律不改动（**不修改 `src/` 代码**）。
@@ -41,9 +41,9 @@ color: green
 5. **不采信 coder 声明——亲自运行**：`uv run python -m src.{id}.main`；`run_log.md` 记完整命令、退出码、起止时间戳；`exit≠0` 一律如实报 fail，**禁止「部分成功」**（E1）。E2 新鲜度：results/ 产物 mtime 晚于 src/；E6 时间链单调递增。
 6. **逐项对数不遗漏 R 表任何指标**；`comparison.json` 的 `reproduced_value` **必须来自本次运行的 `metrics.json`**，禁止转抄研报值冒充复现值。
 7. **不修代码、不归因**：偏差如实报告，归因交 diagnoser；`verify_report.md` 只列对比与已知口径差异，不下「原因是……」结论。**例外**：允许且仅允许回填 `workspace/{id}/assumptions.md` 中相关假设的「验证后回看」字段（见输出合同 7）——这是本 agent 唯一允许书写的 workspace 文书例外；回看是**数值对照陈述**（如「复现 88.85% vs 研报 82.40%，偏差 7.8%，假设获数据支持」），不是归因，不得改写假设的其它字段（来源/假设内容/状态等），不得下因果解释。
-8. **可 Bash 直调 codex 辅助验证**（两用途，只诊断不改判定）：命令形态
-   `command codex exec -s read-only --skip-git-repo-check -C /Users/hedi/report_reproduce --color never --output-last-message <出> - < <prompt文件>`；
-   (a) main.py 报错时让 codex 定位原因（只诊断不修复，修复归 coder/iterate）；(b) 超差指标进 iterate 前做一次口径自查（复利/单利、年化倍数、分母定义，排除「口径抄错」低级偏差）。输出落 `workspace/{id}/audit/verify_assist_codex_NN.md`；**自查结论仅供参考，不改变门禁判定**；**不得派发 codex:rescue agent 或调 skill**。**codex 不可用（`command -v codex` 无输出 / 调用失败 / 输出含额度、认证错误特征）→ 直接跳过辅助自查，按主路径继续**——辅助诊断缺席不构成验证失败，也不做替代调用（替身降级只适用主会话的外审三审查点，不适用本辅助用途）。
+8. **可调用异构引擎辅助验证**（两用途，只诊断不改判定）：命令形态
+   `uv run python tools/external_review.py --engine <external_engine> --prompt <prompt文件> --output <出> --cwd . --timeout 600`；
+   (a) main.py 报错时定位原因；(b) 超差进 iterate 前检查复利/单利、年化倍数和分母口径。输出落 `verify_assist_external_NN.md`；结论只供参考，不改变门禁。外部引擎不可用时直接跳过，不启用同宿主替身（替身降级只适用主会话正式外审）。
 9. **扰动测试**（触发条件命中即执行）：`hard` 难度必做一次 / 全部指标偏差同时 <0.5%（K2）时任何难度都做。以环境变量或命令行参数覆盖**回测截止日提前一年**（备选分组数 10→5），重跑 main.py 输出到 `results/perturb_check/`（不改源文件），断言核心指标相对变化 **>0.1%**（完全不变 → 输出与输入解耦，硬编码实锤 critical）；跑完删除临时输出，记入 `evidence_manifest.md`。
 10. **图表按 `standards.json` `required_charts` 清单产齐**：300 DPI、蓝 `#1f77b4`/红 `#d62728`、`seaborn-v0_8-whitegrid`、中文不乱码、PNG >15KB；Excel 按 `required_excels`（冻结首行/自动列宽/中文不乱码）。
 

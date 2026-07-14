@@ -1,0 +1,31 @@
+{
+  "name": "quant-report-reproduce",
+  "version": "2.12.0",
+  "description": "Claude Code 与 Codex 双宿主量化研报复现流水线，内置 12 阶段门禁、8 个量化角色和异构外审。",
+  "author": {
+    "name": "Hedi"
+  },
+  "keywords": [
+    "quant",
+    "research",
+    "backtest",
+    "report-reproduction"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Quant Report Reproduce",
+    "shortDescription": "量化研报复现与异构外审",
+    "longDescription": "从量化研报 PDF 提取规格、实现策略、运行回测并通过异构模型审查生成可信度报告。",
+    "developerName": "Hedi",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "使用 reproduce 复现这份量化研报。",
+      "查看当前研报复现任务的状态。"
+    ],
+    "brandColor": "#1F77B4"
+  }
+}

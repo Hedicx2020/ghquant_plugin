@@ -1,13 +1,12 @@
 <!--
 本文件是 prompt 骨架，占位符为花括号形式（{report_id}/{workspace}/...）。
 主会话按当次报告与当前迭代轮次填充全部占位符、落盘为
-workspace/{report_id}/iterations/iter_{NN}/codex_prompt_second_opinion.md 后，
-整份文件内容经 stdin 传给 `codex exec`（-s read-only，只读沙箱，禁止改仓库）。
+workspace/{report_id}/iterations/iter_{NN}/external_prompt_second_opinion.md 后，
+由共享执行器只读调用异构引擎。
 调用约定：
-  command codex exec -s read-only --skip-git-repo-check \
-    -C /Users/hedi/report_reproduce --color never \
-    --output-last-message "workspace/{report_id}/iterations/iter_{NN}/codex_opinion.md" \
-    - < "workspace/{report_id}/iterations/iter_{NN}/codex_prompt_second_opinion.md"
+  uv run python tools/external_review.py --engine <EXTERNAL_ENGINE> \
+    --prompt "workspace/{report_id}/iterations/iter_{NN}/external_prompt_second_opinion.md" \
+    --output "workspace/{report_id}/iterations/iter_{NN}/second_opinion_external.md" --cwd . --timeout 600
 
 调用时机：iter >= 2 时的迭代诊断（后台并行）；或连续 2 轮无指标相对偏差改善超其
 自身 10%（防兜圈规则 #3）触发的强制升级场景。
@@ -16,10 +15,10 @@ workspace/{report_id}/iterations/iter_{NN}/codex_prompt_second_opinion.md 后，
 templates/audit/review_schema.json 的 checkpoint 枚举不含本场景，
 不强制套用该 schema——本文件末尾使用自定义的、语义更贴合"假设排序"
 任务的结构化格式（详见下方"输出契约"）。三条防幻觉约束依旧适用。
-下面 "===== 传给 codex 的正文开始 =====" 之后的内容即完整 prompt 正文。
+下面 "===== 传给外审引擎的正文开始 =====" 之后的内容即完整 prompt 正文。
 -->
 
-===== 传给 codex 的正文开始 =====
+===== 传给外审引擎的正文开始 =====
 
 # 角色
 
