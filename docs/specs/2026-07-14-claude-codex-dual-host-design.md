@@ -107,11 +107,10 @@ skills/reproduce/
 
 ```text
 .codex-plugin/plugin.json
-.agents/plugins/marketplace.json
 .codex/agents/*.toml
 ```
 
-Codex 清单使用同一插件名 `quant-report-reproduce`，显式声明 `skills: "./skills/"`。仓库级 marketplace 指向当前仓库根插件，并包含 Codex 要求的安装策略、认证策略和分类字段。
+Codex 清单使用同一插件名 `quant-report-reproduce`，显式声明 `skills: "./skills/"`。Codex 官方手册支持读取仓库现有的 `.claude-plugin/marketplace.json` 作为 legacy-compatible marketplace，因此不再新增第二份 marketplace；现有清单补齐 Codex 所需的安装策略、认证策略和分类字段，同时保留 Claude Code 可识别的根级 `source: "./"`。
 
 仓库现有大写 `.Codex/` 不作为正式分发路径。macOS 大小写不敏感且用户全局 ignore 可能匹配 `.codex/`，实施时需用显式路径加入版本控制。
 
