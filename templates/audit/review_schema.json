@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "codex 审查结构化输出 schema",
+  "title": "异构外审结构化输出 schema",
   "description": "供 Claude Code/Codex 异构外审统一使用；spec/code/result 三检查点遵循本 schema。check_gates 优先解析 JSON 的 findings/verdict，失败时退化为 markdown 表格和 VERDICT 行。",
   "type": "object",
   "required": ["checkpoint", "verdict", "findings"],

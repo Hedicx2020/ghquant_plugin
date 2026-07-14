@@ -244,6 +244,7 @@ git commit -m "feat: 兼容宿主无关外审产物"
 **Files:**
 - Create: `.codex-plugin/plugin.json`
 - Modify: `.claude-plugin/marketplace.json`
+- Create: `.agents/plugins/marketplace.json`
 - Create: `skills/reproduce/adapters/claude_code.md`
 - Create: `skills/reproduce/adapters/codex.md`
 - Modify: `skills/reproduce/SKILL.md`
@@ -289,7 +290,7 @@ Expected: FAIL because Codex manifest/adapters do not exist and stage cards call
 
 - [ ] **Step 3: Implement manifests and adapters**
 
-Codex manifest must contain `name/version/description/author/skills/interface`. Reuse the officially supported legacy-compatible `.claude-plugin/marketplace.json`, retain root source `./`, and add `policy.installation=AVAILABLE`, `policy.authentication=ON_INSTALL`, category `Developer Tools`. Claude manifest version becomes `2.12.0` with dual-host description.
+Codex manifest must contain `name/version/description/author/skills/interface`. Keep Claude marketplace strict-clean at `.claude-plugin/marketplace.json`; create `.agents/plugins/marketplace.json` with Git URL source, `policy.installation=AVAILABLE`, `policy.authentication=ON_INSTALL`, and category `Developer Tools`. Claude manifest version becomes `2.12.0` with dual-host description.
 
 Claude adapter specifies Agent tool dispatch and Claude same-host fallback. Codex adapter specifies collaboration dispatch with no inherited history for blind reviews and Codex same-host fallback. Both explicitly prohibit subagent nesting and state writes.
 
@@ -311,7 +312,7 @@ Run: `python3 /Users/hedi/.codex/skills/.system/skill-creator/scripts/quick_vali
 Expected: skill validation succeeds.
 
 ```bash
-git add .codex-plugin .claude-plugin/plugin.json .claude-plugin/marketplace.json skills/reproduce templates/codex_prompts tests/test_dual_host_contract.py
+git add .codex-plugin .claude-plugin .agents/plugins/marketplace.json skills/reproduce templates/codex_prompts tests/test_dual_host_contract.py
 git commit -m "feat: 增加 Claude 与 Codex 双宿主入口"
 ```
 

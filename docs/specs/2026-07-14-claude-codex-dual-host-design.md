@@ -1,7 +1,7 @@
 # Claude Code / Codex 双宿主兼容设计
 
 **日期**：2026-07-14  
-**状态**：已确认，待实施  
+**状态**：已实施
 **目标版本**：v2.12.0
 
 ## 一、目标
@@ -107,10 +107,11 @@ skills/reproduce/
 
 ```text
 .codex-plugin/plugin.json
+.agents/plugins/marketplace.json
 .codex/agents/*.toml
 ```
 
-Codex 清单使用同一插件名 `quant-report-reproduce`，显式声明 `skills: "./skills/"`。Codex 官方手册支持读取仓库现有的 `.claude-plugin/marketplace.json` 作为 legacy-compatible marketplace，因此不再新增第二份 marketplace；现有清单补齐 Codex 所需的安装策略、认证策略和分类字段，同时保留 Claude Code 可识别的根级 `source: "./"`。
+Codex 清单使用同一插件名 `quant-report-reproduce`，显式声明 `skills: "./skills/"`。Claude 与 Codex 各维护一份仅含分发元数据的 marketplace：Claude 使用 `.claude-plugin/marketplace.json`，Codex 使用 `.agents/plugins/marketplace.json`。后者以 Git URL 指向仓库根插件并包含安装策略、认证策略和分类字段；两份 marketplace 不复制任何 skill、agent 或业务逻辑。分开清单的原因是 Claude Code 严格校验不接受 Codex 的 `policy` 字段。
 
 仓库现有大写 `.Codex/` 不作为正式分发路径。macOS 大小写不敏感且用户全局 ignore 可能匹配 `.codex/`，实施时需用显式路径加入版本控制。
 
@@ -119,6 +120,7 @@ Codex 清单使用同一插件名 `quant-report-reproduce`，显式声明 `skill
 新案例的外审产物采用宿主无关名称：
 
 - `spec_audit_external.md`
+- `spec_external.md`（规格审查中的独立盲提取清单）
 - `code_audit_external.md`
 - `result_audit_external.md`
 - `second_opinion_external.md`

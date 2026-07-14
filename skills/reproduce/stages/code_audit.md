@@ -15,7 +15,7 @@
 1. **状态先行**：`uv run python tools/state.py set-stage <id> code_audit running`
 2. **备料**：
    - 生成 common 函数签名摘要落盘（供占位符 `{common_signatures_path}`），如 `workspace/<id>/audit/common_signatures.md`（`grep '^def ' common/*.py` 汇总即可）。
-   - 从 spec.md 第五节抽全部 R 类基准数值字面量清单（供占位符 `{r_class_values_list}`，让 codex grep 硬编码 K1）。
+   - 从 spec.md 第五节抽全部 R 类基准数值字面量清单（供外审 grep 硬编码 K1）。
 3. **填外审 prompt**：读 `templates/codex_prompts/code_audit.md`，填充全部占位符，正文落 `workspace/<id>/audit/external_prompt_code.md`。
 4. **调异构外审**：
    ```

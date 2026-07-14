@@ -21,11 +21,11 @@
    ```
    解析 stdout JSON；仅 `status=success` 进入下一步，其他状态走本卡降级链。
 4. **切出盲提取清单**：从 `spec_audit_external.md` 中把历史兼容标记 `=== SPEC_CODEX_BEGIN ===` / `=== SPEC_CODEX_END ===` 之间的内容原样存为 `workspace/<id>/spec/spec_external.md`。
-5. **（medium+）派 `quant-auditor mode=spec`**（subagent_type=`quant-auditor`，prompt 里写明 `mode=spec`；可与第 3 步 codex 同一消息并行发起，**两者都返回后**再做第 6 步记账）。输入合同（**不含 extractor/planner 的完成汇报**）：PDF `reports/<id>.pdf`、`report_text.md`、`tables_extracted.md`、`spec.md`、`coverage_matrix.md`、`ambiguities.md`、`plan.md`、`templates/audit/extract_audit.md`。产出 `workspace/<id>/audit/extract_audit.md`（C1–C6 + 遗漏清单 + C6 抽查 ≥10 条 + 末行 verdict）。**easy 跳过内审。**
+5. **（medium+）派 `quant-auditor mode=spec`**：可与第 3 步异构外审并行，必须两者都返回再记账。输入合同不含 extractor/planner 完成汇报；产出 `extract_audit.md`（C1–C6、遗漏清单、C6 抽查 ≥10 条、末行 verdict）。easy 跳过内审。
 6. **记账产 `extract_diff.md`**：逐条列出 `spec_external.md` 与 `spec.md` 差异，裁决照录 `extract_audit.md` 或 `spec_audit_external.md` 的结论；两者都未覆盖的项派 `quant-extractor` 定向复核。表头逐字：`| DIF-01 | 类别 | 描述 | 页码 | 裁决(adopted/dismissed/corrected) | 依据 |`，每条 DIF 的裁决列必须非空。
-   - 仅 codex 有 → 审计结论确有 = Claude 遗漏（adopted，派回 extractor 补 spec，日志记来源）；审计结论系 codex 幻觉（dismissed 留记录）。
-   - 仅 Claude 有 → 审计结论对 spec 无碍（dismissed，可提示补 tables_extracted）；审计结论系 Claude 幻觉（critical）。
-   - R 类数值不一致 → 以 PDF 原文为终审（corrected，该终审判断属 codex/auditor 审计范围，主会话只登记）。
+   - 仅外部盲提取有 → 审计核实确有则 adopted，派回 extractor 补 spec；外审幻觉则 dismissed 留记录。
+   - 仅主规格有 → 审计核实无碍则 dismissed；主规格幻觉则 critical。
+   - R 类数值不一致 → 以 PDF 原文为终审（判断属异构外审/auditor 范围，主会话只登记）。
    **每条 DIF 行「裁决」列必须非空**（G-SA-3）。
 7. **意见入 responses**：把 `spec_audit_external.md` 的每条 `CDX-S-` finding 逐条录入 `audit_responses.md`；一条意见一行，不合并不省略。`CDX` 前缀仅为历史稳定 ID，不代表实际引擎。
 8. **记外审台账**（读改写三步；**警告**：`state.py set` 是整体覆盖字段，直接 `set` 单条数组会把此前已写入的审查记录全部抹掉，三步缺一不可）：

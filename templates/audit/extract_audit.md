@@ -24,7 +24,7 @@
 | --- | --- | --- | --- | --- | --- |
 | GAP-01 | C1 | major | p14 | 图14 出现在正文但未在图表登记清单登记 | 补入 spec.md 第六节，标复现意图 |
 
-> 严重度取值统一用 `critical` / `major` / `minor`（与 codex 审查意见同一词表）：C1/C4/C5/C6 判定为「fail」信号的一律 `critical`；C2/C3 的「遗漏嫌疑」默认 `major`，经核实确属次要展示内容可降 `minor`。
+> 严重度取值统一用 `critical` / `major` / `minor`（与异构外审意见同一词表）：C1/C4/C5/C6 判定为「fail」信号的一律 `critical`；C2/C3 的「遗漏嫌疑」默认 `major`，经核实确属次要展示内容可降 `minor`。
 
 ---
 

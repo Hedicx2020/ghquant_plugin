@@ -4,7 +4,7 @@
 
 在线手册（外部可直接访问）：**https://hedicx2020.github.io/ghquant_plugin/docs/plugin-overview.html**
 
-本仓库同时是一个 **Claude Code 插件**（`quant-report-reproduce`）：既可以克隆后在仓库内直接使用（形态 A，维护者模式），也可以作为插件安装后在任意自己的目录中使用（形态 B，见下节）。
+本仓库同时是 **Claude Code / Codex 双宿主插件**（`quant-report-reproduce`）：两端共用同一套 12 阶段状态机和 8 个量化角色，并默认由另一宿主执行异构外审。
 
 ## 作为插件安装（推荐给其他使用者）
 
@@ -14,23 +14,38 @@
 /plugin install quant-report-reproduce@hedi-quant
 ```
 
+```bash
+# 在 Codex CLI 中：注册同一个插件源，再安装同一个插件
+codex plugin marketplace add https://github.com/Hedicx2020/ghquant_plugin
+codex plugin add quant-report-reproduce@hedi-quant-codex
+```
+
+Codex App 安装后请新建一个任务再使用插件，以确保新安装的 skill 与项目级 agents 被完整加载。
+
 **首次使用（三步）**：
 
-1. 进入你自己的工作目录（任意空目录即可），运行 `/reproduce setup`——向导会问五项配置：
+1. 进入你自己的工作目录（任意空目录即可），运行 `/reproduce setup`——向导会问六项配置：
    - **数据路径**：本地 parquet 数据根目录（默认 `~/local_data`）
    - **执行模式**：`auto` 全自动优先（推荐，歧义自动假设并登记、事后可定向重跑）/ `interactive` 遇关键歧义暂停人工裁决
    - **最大迭代次数**：按难度自动（easy 3 / medium 5 / hard 6）或自定义 1-10
    - **回测框架**：默认使用内置 `common/` 回测库；也可指定你自有回测框架的目录路径——复现代码的回测执行层将优先调用你的框架，内置库仅补缺口
    - **偏差容忍**：你能接受的复现值与原报告的偏差。默认按 `templates/standards.json` 分类型精细容差（年化/夏普等 5%、因子 IC 近零走绝对偏差等）；也可自定义统一百分比（如 10%）——所有相对偏差判定随之放宽或收紧，达标判定与最终报告一致生效
    - **经济模式**：开启后机械性角色（提取/验证/样本外）派发降为 sonnet，token 消耗约降三成；质量敏感角色（写码/审计/归因）保持 opus。另有配置文件项 `audit_level`（strict 默认 / standard 外审触发式）进一步控成本，见手册
-   随后 setup 自动落地：`.reproduce.json` 配置、`templates/`（含数据目录模板与达标标准）、`common/`（公共回测库）、`pyproject.toml`、目录树，并检测 uv / Python 依赖 / codex CLI。
+   随后 setup 自动落地：`.reproduce.json`、`templates/`、`common/`、`.codex/agents/`、`pyproject.toml` 与目录树，并检测 uv / Python 依赖 / codex CLI / claude CLI。
 2. **维护 `templates/data_catalog.md`**：按你数据目录的实际内容登记数据清单——分诊阶段判断「研报所需数据是否可得」完全依据此文件。
 3. 把研报 PDF 放进 `reports/`，运行 `/reproduce reports/xxx.pdf` 起跑。
 
 **环境要求**：
 - [uv](https://docs.astral.sh/uv/)（硬前置，所有工具经 `uv run` 调用）；依赖缺失时在工作目录 `uv sync`
-- Claude 订阅档位：子 agent 主力为 opus（7 个中 6 个），建议 Max 档位；可自行编辑安装副本中 `agents/*.md` 的 model 字段下调（复现质量自负）
-- codex CLI（软前置）：外部三审查点用；**未安装或额度耗尽都不断链**——自动降级为 Claude 替身盲审（同一审查 prompt、独立上下文、意见照样逐条回应闭环），替身也不可行才标记跳过；发生任一失败性降级时最终报告如实标注、可信度评级封顶 B。装好 codex / 额度恢复后无需重新配置，下次运行自动启用
+- Claude Code 主编排时，`codex` CLI 是异构外审软前置；缺失时降级为 Claude 独立盲审。
+- Codex 主编排时，`claude` CLI 是异构外审软前置；缺失时降级为 Codex 独立盲审。
+- 两种降级都不断链，但会在最终报告中如实标注并把可信度封顶 B；外部 CLI 恢复后下一检查点自动回到异构主路径。
+- Claude 角色模型档位以 `agents/*.md` 为正本；Codex 项目级角色由 `tools/sync_codex_agents.py` 生成并由 setup 安装。
+
+| 当前主编排 | 默认外审 | 一级降级 | 二级降级 |
+|---|---|---|---|
+| Claude Code | Codex CLI | Claude 独立盲审 | skipped |
+| Codex | Claude Code CLI | Codex 独立盲审 | skipped |
 
 ## 快速开始（两种形态通用）
 
@@ -49,14 +64,16 @@
 | 路径 | 内容 |
 |------|------|
 | `.claude-plugin/plugin.json` | 插件清单 |
+| `.codex-plugin/plugin.json` | Codex 插件清单（与 Claude Code 共用 `skills/`） |
+| `.codex/agents/` | 由 Markdown 角色正本生成的 Codex 项目级 agents |
 | `docs/specs/2026-07-07-reproduce-v2-design.md` | v2 完整设计文档（状态机 / 门禁 / agent 契约 / 防偷懒审计体系） |
 | `docs/specs/2026-07-09-plugin-packaging-design.md` | 插件化设计（双形态 / 路径解耦 / setup 向导） |
 | `CLAUDE.md` | 编码与产出格式落地约定（命名 / Excel / 图表 / common 复用 / 数据对齐） |
 | `skills/reproduce/` | `/reproduce` 主编排 SKILL.md + stage 执行卡（`.claude/skills/` 为回指 symlink） |
-| `agents/` | 8 个子 agent 定义（`.claude/agents` 为回指 symlink） |
+| `agents/` | 8 个角色合同正本（`.claude/agents` 回指；`.codex/agents` 由脚本生成） |
 | `templates/` | 分诊、类型、审计模板 + `standards.json` 达标标准（插件形态下作为种子拷贝到用户目录） |
 | `common/` | 公共回测库（同上，种子） |
-| `tools/` | `state.py`（状态写入口）/ `check_gates.py`（门禁判定）/ `pdf_extract.py`（PDF 转文本）/ `setup_workspace.py`（首次配置落地） |
+| `tools/` | 状态/门禁/PDF/setup 工具，以及 `external_review.py`（双引擎只读外审）与 `sync_codex_agents.py`（角色同步） |
 | `reports/{id}.pdf` | PDF 收件箱 |
 | `workspace/{id}/` | 每份报告的管线文书（spec / plan / audit / iterations / final_report） |
 | `src/{id}/`、`output/{id}/` | 策略代码与回测结果 |
@@ -72,6 +89,7 @@
 
 ## 变更记录
 
+- 2026-07-14（v2.12.0）：Claude Code / Codex 双宿主兼容——同一 `reproduce` skill 运行时识别宿主；Claude Code 默认调用 Codex 异构外审，Codex 默认调用 Claude Code 异构外审；新增 Codex 插件清单、8 个生成式项目 agents、统一只读外审执行器和对称降级链。新案例使用 `*_external.md`，门禁继续兼容历史 `*_codex.md`；同宿主替身统一封顶 B。
 - 2026-07-11：编排约定补记（ssrn_6115073 experimental 复现实践）——oos 阶段 oos-analyst 延伸 `config.py` 的 `TEST_END` 跑样本外后，主会话应将其**还原至复现基线**（本例 2024-12-31）；样本外区间仅存于 `output/{id}/results/oos_*` 静态产物、不依赖 config 保持延伸，从而保 `config.py` 与 verify 基线一致、`main.py` 复跑即得报告基线。属编排卫生、非框架变更、无门禁/工具代码改动。
 - 2026-07-12（v2.11.0）：术语人话化（客户可读性）——① 手册：22 处代号挂悬浮释义（悬停/轻点即看中文解释，纯前端自包含，无 JS 时术语表兜底）；② 结果页 final_report.html：全部枚举值中文为主、原始值括注（复现判定/类型难度/外审台账的审查点、引擎、结论/归因状态），降级引擎显著标注，未知枚举原样透传不吞值；③ 最终报告 final_report.md：reporter 新增人话化硬约束第 11 条（代号首次出现附中文说明、审计回应表必含"这条意见说什么·我们怎么处理"人话列、rejected 句式固定、评级句式固定防渲染器徽章误抓、状态枚举中文化）。内部文书与门禁零改动（代号仍是机器解析依赖），check_gates 全量回归通过。
 - 2026-07-11（v2.10.0）：案例统一编号——新案例 report_id 自动编号为 `rNNN_<slug>`（`state.py next-id` 分配，接现存最大编号；slug 取 PDF 文件名或研报标题的英文短名，保证看名知义）；全部子命令接受编号缩写（`r3`/`r003`/`3`）与唯一前缀（`state.py resolve` 解析，歧义时列候选）；无参 `status` 输出按编号排序的案例一览表。既有案例不迁移（旧式 id 照常可用、可前缀缩写）；`--id` 显式指定不强加编号。

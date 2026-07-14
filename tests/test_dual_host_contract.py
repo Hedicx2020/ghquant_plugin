@@ -15,13 +15,20 @@ def test_codex_manifest_points_to_shared_skill():
     assert data["skills"] == "./skills/"
 
 
-def test_legacy_marketplace_carries_codex_policy_without_second_catalog():
-    data = json.loads((ROOT / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
-    entry = data["plugins"][0]
-    assert entry["source"] == "./"
-    assert entry["policy"] == {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}
-    assert entry["category"] == "Developer Tools"
-    assert not (ROOT / ".agents" / "plugins" / "marketplace.json").exists()
+def test_host_specific_marketplaces_point_to_same_plugin():
+    claude = json.loads((ROOT / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
+    claude_entry = claude["plugins"][0]
+    assert claude_entry["source"] == "./"
+    assert "policy" not in claude_entry
+
+    codex = json.loads((ROOT / ".agents" / "plugins" / "marketplace.json").read_text(encoding="utf-8"))
+    codex_entry = codex["plugins"][0]
+    assert codex["name"] == "hedi-quant-codex"
+    assert codex_entry["name"] == claude_entry["name"] == "quant-report-reproduce"
+    assert codex_entry["source"]["source"] == "url"
+    assert codex_entry["source"]["url"] == "https://github.com/Hedicx2020/ghquant_plugin.git"
+    assert codex_entry["policy"] == {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}
+    assert codex_entry["category"] == "Developer Tools"
 
 
 def test_stage_cards_use_external_executor():
