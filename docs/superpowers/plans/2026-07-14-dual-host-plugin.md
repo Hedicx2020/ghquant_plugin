@@ -51,7 +51,7 @@ def test_claude_command_has_read_only_tool_surface(tmp_path, monkeypatch):
 
 - [ ] **Step 2: Run tests and verify RED**
 
-Run: `uv run pytest tests/test_external_review.py -q`  
+Run: `uv run pytest tests/test_external_review.py -q`
 Expected: FAIL because `tools/external_review.py` does not exist.
 
 - [ ] **Step 3: Implement the minimal executor**
@@ -82,9 +82,9 @@ def test_empty_success_does_not_write_output(tmp_path, monkeypatch):
 
 - [ ] **Step 5: Run focused tests and full regression**
 
-Run: `uv run pytest tests/test_external_review.py -q`  
-Expected: all tests pass.  
-Run: `uv run pytest -q`  
+Run: `uv run pytest tests/test_external_review.py -q`
+Expected: all tests pass.
+Run: `uv run pytest -q`
 Expected: all tests pass.
 
 - [ ] **Step 6: Commit Task 1**
@@ -130,7 +130,7 @@ def test_model_is_mapped_to_reasoning_not_slug(tmp_path):
 
 - [ ] **Step 2: Run tests and verify RED**
 
-Run: `uv run pytest tests/test_sync_codex_agents.py -q`  
+Run: `uv run pytest tests/test_sync_codex_agents.py -q`
 Expected: FAIL because sync module does not exist.
 
 - [ ] **Step 3: Implement generator and generate TOML files**
@@ -164,10 +164,10 @@ Add `copy_codex_agents()` using the same no-overwrite and plugin-newer behavior 
 
 - [ ] **Step 6: Verify and commit Task 2**
 
-Run: `uv run pytest tests/test_sync_codex_agents.py tests/test_setup_workspace.py -q`  
-Expected: all tests pass.  
-Run: `uv run python tools/sync_codex_agents.py --check --root .`  
-Expected: exit 0 and no drift.  
+Run: `uv run pytest tests/test_sync_codex_agents.py tests/test_setup_workspace.py -q`
+Expected: all tests pass.
+Run: `uv run python tools/sync_codex_agents.py --check --root .`
+Expected: exit 0 and no drift.
 
 ```bash
 git add tools/sync_codex_agents.py tools/setup_workspace.py tests/test_sync_codex_agents.py tests/test_setup_workspace.py .codex/agents
@@ -204,7 +204,7 @@ def test_external_audit_path_prefers_new_name(tmp_path):
 
 - [ ] **Step 2: Run tests and verify RED**
 
-Run: `uv run pytest tests/test_check_gates.py -q`  
+Run: `uv run pytest tests/test_check_gates.py -q`
 Expected: new-name tests fail because gates only read legacy names.
 
 - [ ] **Step 3: Implement canonical-path lookup**
@@ -229,7 +229,7 @@ Keep `codex` and `claude_fallback` mappings. Add `same_host_fallback` to warning
 
 - [ ] **Step 5: Verify and commit Task 3**
 
-Run: `uv run pytest tests/test_check_gates.py tests/test_render_report.py -q`  
+Run: `uv run pytest tests/test_check_gates.py tests/test_render_report.py -q`
 Expected: all tests pass.
 
 ```bash
@@ -285,7 +285,7 @@ def test_shared_skill_routes_both_hosts():
 
 - [ ] **Step 2: Run contract tests and verify RED**
 
-Run: `uv run pytest tests/test_dual_host_contract.py -q`  
+Run: `uv run pytest tests/test_dual_host_contract.py -q`
 Expected: FAIL because Codex manifest/adapters do not exist and stage cards call Codex directly.
 
 - [ ] **Step 3: Implement manifests and adapters**
@@ -304,11 +304,11 @@ Change user-facing headings such as “Codex 审查” to “异构外部审查�
 
 - [ ] **Step 6: Validate manifests, contracts and commit Task 4**
 
-Run: `uv run pytest tests/test_dual_host_contract.py -q`  
-Expected: all tests pass.  
-Run: `python3 /Users/hedi/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py .`  
-Expected: validation succeeds.  
-Run: `python3 /Users/hedi/.codex/skills/.system/skill-creator/scripts/quick_validate.py skills/reproduce`  
+Run: `uv run pytest tests/test_dual_host_contract.py -q`
+Expected: all tests pass.
+Run: `python3 /Users/hedi/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py .`
+Expected: validation succeeds.
+Run: `python3 /Users/hedi/.codex/skills/.system/skill-creator/scripts/quick_validate.py skills/reproduce`
 Expected: skill validation succeeds.
 
 ```bash
