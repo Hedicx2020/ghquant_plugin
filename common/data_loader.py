@@ -26,12 +26,26 @@ def get_data_root() -> Path:
         cfg = directory / ".reproduce.json"
         if cfg.is_file():
             try:
-                data_root = json.loads(cfg.read_text(encoding="utf-8")).get("data_root")
-            except (json.JSONDecodeError, OSError):
-                break
+                raw_config = cfg.read_text(encoding="utf-8")
+            except OSError as exc:
+                raise RuntimeError(f"无法读取复现配置文件: {cfg.resolve()}") from exc
+            try:
+                config = json.loads(raw_config)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"复现配置JSON格式损坏: {cfg.resolve()}") from exc
+            if not isinstance(config, dict):
+                raise ValueError(f"复现配置顶层必须为JSON对象: {cfg.resolve()}")
+            data_root = config.get("data_root")
             if data_root:
+                if not isinstance(data_root, str):
+                    raise ValueError(
+                        f"复现配置data_root必须为非空字符串: {cfg.resolve()}"
+                    )
                 return Path(data_root).expanduser()
-            break
+            # 为保持 /reproduce setup 既有兼容性：最近配置合法但字段缺失/空值时
+            # 直接采用历史默认目录，不继续向上搜索另一份配置。
+            return Path.home() / "local_data"
+    # 只有从 cwd 向上完全找不到配置文件时才走默认目录。
     return Path.home() / "local_data"
 
 
@@ -60,6 +74,43 @@ def load_stock_price(
     """
     path = data_dir / "ashare_stock_price.parquet"
     df = pd.read_parquet(path, columns=columns)
+    df["date"] = pd.to_datetime(df["date"])
+    return df
+
+
+def load_stock_price_forward(
+    data_dir: Path = LOCAL_DATA_DIR,
+    columns: Optional[Sequence[str]] = None,
+    stock_codes: Optional[Sequence[str]] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> pd.DataFrame:
+    """Load **forward-adjusted** (前复权) daily stock price data.
+
+    与 :func:`load_stock_price`（未复权）平行；回测算收益优先用前复权 close
+    （复权因子已滚入价格序列，相邻日 close 的对数差分即连续可比的日对数收益）。
+    支持 pyarrow filters 下推（按 stock_code / date）以减少读盘。
+
+    Args:
+        data_dir: Root directory of parquet files.
+        columns: Subset of columns to load; None for all.
+        stock_codes: 可选，仅加载这些代码（filters 下推）。
+        start_date: 可选，仅加载不早于此日期的记录（filters 下推）。
+        end_date: 可选，仅加载不晚于此日期的记录（filters 下推）。
+
+    Returns:
+        DataFrame with columns [stock_code, date, adj_factor, prev_close,
+        close, open, high, low, ...]（依 ``columns`` 而定）。
+    """
+    filters: list = []
+    if start_date is not None:
+        filters.append(("date", ">=", pd.Timestamp(start_date)))
+    if end_date is not None:
+        filters.append(("date", "<=", pd.Timestamp(end_date)))
+    if stock_codes is not None:
+        filters.append(("stock_code", "in", list(stock_codes)))
+    path = data_dir / "ashare_stock_price_forward.parquet"
+    df = pd.read_parquet(path, columns=columns, filters=filters or None)
     df["date"] = pd.to_datetime(df["date"])
     return df
 
@@ -329,3 +380,95 @@ def load_market_data(
 
     merged = price.merge(trade, on=["stock_code", "date"], how="inner")
     return merged.sort_values(["stock_code", "date"]).reset_index(drop=True)
+
+
+# ---------------------------------------------------------------------------
+# Point-in-time index membership & tradability status（通用；供时点成分/状态过滤复用）
+# ---------------------------------------------------------------------------
+
+def get_index_members_on_date(
+    components: pd.DataFrame,
+    date: pd.Timestamp,
+) -> pd.Index:
+    """某一时点的指数在册成分股（时点成分，防幸存者偏差）。
+
+    判定区间为半开 [in_date, out_date)：out_date 为空表示当前仍在册。
+
+    Args:
+        components: ``load_index_components()`` 的返回，含 [stock_code, in_date, out_date]。
+        date: 参照时点（通常为再平衡月末日）。
+
+    Returns:
+        该时点在册成分股代码 Index（去重）。
+    """
+    on = components[
+        (components["in_date"] <= date)
+        & ((components["out_date"] > date) | components["out_date"].isna())
+    ]
+    return pd.Index(on["stock_code"].unique())
+
+
+def _range_code_filters(
+    stock_codes: Optional[Sequence[str]],
+    start_date: Optional[str],
+) -> Optional[list]:
+    """构造 pyarrow read_parquet 的下推 filters（date>=start 与 stock_code in codes）。"""
+    filters: list = []
+    if start_date is not None:
+        filters.append(("date", ">=", pd.Timestamp(start_date)))
+    if stock_codes is not None:
+        filters.append(("stock_code", "in", list(stock_codes)))
+    return filters or None
+
+
+def load_suspend_status(
+    data_dir: Path = LOCAL_DATA_DIR,
+    stock_codes: Optional[Sequence[str]] = None,
+    start_date: Optional[str] = None,
+) -> pd.DataFrame:
+    """加载停牌状态（文件 ashare_stock_suspend.parquet，字段 if_suspend）。
+
+    注：本函数为 ``load_suspend`` 的字段/文件名修正版（后者读的
+    ``ashare_suspend.parquet`` / ``ifsuspend`` 与本地实际不符）。
+
+    Args:
+        data_dir: 数据根目录。
+        stock_codes: 可选，仅加载这些代码（filters 下推，减少读盘）。
+        start_date: 可选，仅加载不早于此日期的记录（filters 下推）。
+
+    Returns:
+        DataFrame[stock_code, date, if_suspend]；if_suspend==1 表示当日停牌。
+    """
+    path = data_dir / "ashare_stock_suspend.parquet"
+    df = pd.read_parquet(
+        path, columns=["stock_code", "date", "if_suspend"],
+        filters=_range_code_filters(stock_codes, start_date),
+    )
+    df["date"] = pd.to_datetime(df["date"])
+    return df
+
+
+def load_limit_status(
+    data_dir: Path = LOCAL_DATA_DIR,
+    stock_codes: Optional[Sequence[str]] = None,
+    start_date: Optional[str] = None,
+) -> pd.DataFrame:
+    """加载个股涨跌停标记（文件 ashare_stock_limit.parquet）。
+
+    Args:
+        data_dir: 数据根目录。
+        stock_codes: 可选，仅加载这些代码（filters 下推）。
+        start_date: 可选，仅加载不早于此日期的记录（filters 下推）。
+
+    Returns:
+        DataFrame[stock_code, date, surged_limit, decline_limit]；
+        surged_limit==1 涨停（当日难以按意愿买入）、decline_limit==1 跌停
+        （当日难以按意愿卖出）。
+    """
+    path = data_dir / "ashare_stock_limit.parquet"
+    df = pd.read_parquet(
+        path, columns=["stock_code", "date", "surged_limit", "decline_limit"],
+        filters=_range_code_filters(stock_codes, start_date),
+    )
+    df["date"] = pd.to_datetime(df["date"])
+    return df

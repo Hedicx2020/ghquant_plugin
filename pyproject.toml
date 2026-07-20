@@ -14,6 +14,8 @@ dependencies = [
     "pypdf>=4.0",
     "pdfplumber>=0.11",
     "pyyaml>=6.0",
+    "torch>=2.12.1",
+    "ncps",
 ]
 
 [project.optional-dependencies]
@@ -36,3 +38,6 @@ testpaths = ["tests"]
 [tool.uv]
 # 纯环境管理，本项目不作为可安装包构建
 package = false
+
+[tool.uv.sources]
+ncps = { git = "https://github.com/mlech26l/ncps", rev = "695ec22d7d1831f2ced67346ef7d2f08c525bd47" }
