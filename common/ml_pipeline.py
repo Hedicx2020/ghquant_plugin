@@ -1,18 +1,22 @@
-"""机器学习研报共用的时点安全数据、特征、标签与窗口接口。
+"""机器学习研报共用的时点安全数据、特征、标签、窗口与回归接口。
 
-本模块只负责数据层，不包含任何具体模型或回测逻辑。关键约束是：
+本模块不绑定具体报告、模型参数或回测逻辑。关键约束是：
 
 * 特征窗口只包含信号日及其之前的信息；
 * 预处理器只能由训练样本实际使用的行拟合；
 * 未来收益标签必须按交易日历核验 T+1 与 T+N 端点；
 * split 归属由信号、买入和卖出日期决定，特征窗口可向段前读取纯历史；
 * T+1 可交易状态只作为执行元数据，绝不参与 T 日股票池或特征。
+* 滚动回归只接受严格早于预测日的完整历史样本，不做缺失填补；
+* 集成预测必须由同一观测键下全部基础模型的有限预测共同形成。
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from datetime import date, datetime
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -873,3 +877,390 @@ def prepare_point_in_time_ml_data(
         preprocessor=preprocessor,
         quality_summary=quality_summary,
     )
+
+
+@dataclass
+class RegressionBatchResult:
+    """一次固定特征集合的多模型训练与样本外预测结果。"""
+
+    predictions: pd.DataFrame
+    model_audit: pd.DataFrame
+    fitted_models: dict[str, Any]
+
+
+def _finite_row_mask(frame: pd.DataFrame, columns: Sequence[str]) -> np.ndarray:
+    """返回指定数值列全部有限的逐行掩码。"""
+    values = frame.loc[:, list(columns)].apply(
+        pd.to_numeric,
+        errors="coerce",
+    )
+    return np.isfinite(
+        values.to_numpy(dtype=np.float64, na_value=np.nan)
+    ).all(axis=1)
+
+
+def fit_regression_model_batch(
+    training_frame: pd.DataFrame,
+    prediction_frame: pd.DataFrame,
+    *,
+    feature_columns: Sequence[str],
+    target_column: str,
+    model_factories: Mapping[str, Callable[[], Any]],
+    prediction_key_columns: Sequence[str],
+    training_date_column: str,
+    prediction_date_column: str,
+) -> RegressionBatchResult:
+    """在一个固定特征集合上拟合多个回归器并预测。
+
+    训练与预测分别执行 complete-case，不填补。为了让带截距 OLS 至少可
+    识别，完整训练样本数必须不小于 ``特征数 + 1``；不满足时所有模型均
+    明确标为 ``skipped_insufficient_training_samples``。训练日期最大值
+    必须严格早于预测日期最小值，违反时直接中止，不能降级为警告。
+    """
+    features = tuple(str(column) for column in feature_columns)
+    keys = tuple(str(column) for column in prediction_key_columns)
+    if not features:
+        raise ValueError("固定特征集合不得为空")
+    if len(set(features)) != len(features):
+        raise ValueError("固定特征集合存在重复列")
+    if not model_factories:
+        raise ValueError("model_factories 不得为空")
+    _require_columns(
+        training_frame,
+        (*features, target_column, training_date_column),
+        "滚动回归训练表",
+    )
+    _require_columns(
+        prediction_frame,
+        (*features, *keys, prediction_date_column),
+        "滚动回归预测表",
+    )
+
+    train_dates = pd.to_datetime(
+        training_frame[training_date_column],
+        errors="raise",
+    ).dt.normalize()
+    predict_dates = pd.to_datetime(
+        prediction_frame[prediction_date_column],
+        errors="raise",
+    ).dt.normalize()
+    if len(train_dates) and len(predict_dates):
+        if not train_dates.max() < predict_dates.min():
+            raise AssertionError("滚动模型训练日期未严格早于预测日期")
+
+    training_mask = _finite_row_mask(
+        training_frame,
+        (*features, target_column),
+    )
+    prediction_mask = _finite_row_mask(prediction_frame, features)
+    training_complete = training_frame.loc[training_mask].copy()
+    prediction_complete = prediction_frame.loc[prediction_mask].copy()
+    required_training_rows = len(features) + 1
+    common_audit = {
+        "feature_count": len(features),
+        "training_input_rows": len(training_frame),
+        "training_complete_rows": len(training_complete),
+        "training_dropped_rows": int((~training_mask).sum()),
+        "required_training_rows": required_training_rows,
+        "training_fit_start": (
+            train_dates.loc[training_mask].min()
+            if training_mask.any()
+            else pd.NaT
+        ),
+        "training_fit_end": (
+            train_dates.loc[training_mask].max()
+            if training_mask.any()
+            else pd.NaT
+        ),
+        "prediction_input_rows": len(prediction_frame),
+        "prediction_complete_rows": len(prediction_complete),
+        "prediction_missing_rows": int((~prediction_mask).sum()),
+        "prediction_start": (
+            predict_dates.loc[prediction_mask].min()
+            if prediction_mask.any()
+            else pd.NaT
+        ),
+        "prediction_end": (
+            predict_dates.loc[prediction_mask].max()
+            if prediction_mask.any()
+            else pd.NaT
+        ),
+        "fit_end_strictly_before_prediction": bool(
+            not training_mask.any()
+            or not prediction_mask.any()
+            or train_dates.loc[training_mask].max()
+            < predict_dates.loc[prediction_mask].min()
+        ),
+    }
+    skipped_status: str | None = None
+    if len(training_complete) < required_training_rows:
+        skipped_status = "skipped_insufficient_training_samples"
+    elif prediction_complete.empty:
+        skipped_status = "skipped_no_complete_prediction_rows"
+
+    audit_rows: list[dict[str, Any]] = []
+    fitted_models: dict[str, Any] = {}
+    prediction_parts: list[pd.DataFrame] = []
+    if skipped_status is not None:
+        for model_name in model_factories:
+            audit_rows.append(
+                {
+                    **common_audit,
+                    "model": str(model_name),
+                    "estimator_class": pd.NA,
+                    "status": skipped_status,
+                    "error_type": pd.NA,
+                    "error_message": pd.NA,
+                    "transaction_status": skipped_status,
+                    "failed_models": pd.NA,
+                }
+            )
+        return RegressionBatchResult(
+            predictions=pd.DataFrame(
+                columns=[*keys, "model", "prediction"]
+            ),
+            model_audit=pd.DataFrame(audit_rows),
+            fitted_models=fitted_models,
+        )
+
+    x_train = training_complete.loc[:, features].to_numpy(
+        dtype=np.float64,
+        copy=True,
+    )
+    y_train = pd.to_numeric(
+        training_complete[target_column],
+        errors="raise",
+    ).to_numpy(dtype=np.float64, copy=True)
+    x_predict = prediction_complete.loc[:, features].to_numpy(
+        dtype=np.float64,
+        copy=True,
+    )
+    for model_name, factory in model_factories.items():
+        estimator: Any | None = None
+        try:
+            estimator = factory()
+            if not all(
+                callable(getattr(estimator, method, None))
+                for method in ("fit", "predict", "get_params")
+            ):
+                raise TypeError("模型工厂必须返回兼容 sklearn 的回归器")
+            estimator.fit(x_train, y_train)
+            prediction = np.asarray(estimator.predict(x_predict), dtype=np.float64)
+            if prediction.shape != (len(prediction_complete),):
+                raise ValueError("模型预测结果不是一维逐样本数组")
+            if not np.isfinite(prediction).all():
+                raise ValueError("模型预测包含 NaN 或无穷值")
+        except Exception as exc:  # noqa: BLE001 - 失败必须逐模型落审计
+            audit_rows.append(
+                {
+                    **common_audit,
+                    "model": str(model_name),
+                    "estimator_class": (
+                        f"{type(estimator).__module__}.{type(estimator).__qualname__}"
+                        if estimator is not None
+                        else pd.NA
+                    ),
+                    "status": "failed",
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc),
+                }
+            )
+            continue
+        fitted_models[str(model_name)] = estimator
+        part = prediction_complete.loc[:, keys].reset_index(drop=True)
+        part["model"] = str(model_name)
+        part["prediction"] = prediction
+        prediction_parts.append(part)
+        audit_rows.append(
+            {
+                **common_audit,
+                "model": str(model_name),
+                "estimator_class": (
+                    f"{type(estimator).__module__}.{type(estimator).__qualname__}"
+                ),
+                "status": "fitted",
+                "error_type": pd.NA,
+                "error_message": pd.NA,
+            }
+        )
+    failed_models = [
+        str(row["model"]) for row in audit_rows if row["status"] == "failed"
+    ]
+    if failed_models:
+        failed_model_text = "|".join(failed_models)
+        for row in audit_rows:
+            row["transaction_status"] = "rolled_back_model_failure"
+            row["failed_models"] = failed_model_text
+            if row["status"] == "fitted":
+                row["status"] = "discarded_peer_model_failure"
+        return RegressionBatchResult(
+            predictions=pd.DataFrame(
+                columns=[*keys, "model", "prediction"]
+            ),
+            model_audit=pd.DataFrame(audit_rows),
+            fitted_models={},
+        )
+    for row in audit_rows:
+        row["transaction_status"] = "committed_all_base_models"
+        row["failed_models"] = pd.NA
+    predictions = (
+        pd.concat(prediction_parts, ignore_index=True)
+        if prediction_parts
+        else pd.DataFrame(columns=[*keys, "model", "prediction"])
+    )
+    return RegressionBatchResult(
+        predictions=predictions,
+        model_audit=pd.DataFrame(audit_rows),
+        fitted_models=fitted_models,
+    )
+
+
+def append_prediction_ensembles(
+    base_predictions: pd.DataFrame,
+    *,
+    group_columns: Sequence[str],
+    base_model_names: Sequence[str],
+    average_name: str,
+    median_name: str,
+    model_column: str = "model",
+    prediction_column: str = "prediction",
+) -> pd.DataFrame:
+    """仅对同一观测键下八个基础模型均有效的记录追加均值和中位数。"""
+    groups = tuple(str(column) for column in group_columns)
+    models = tuple(str(name) for name in base_model_names)
+    if len(models) != 8 or len(set(models)) != 8:
+        raise ValueError("B11 集成要求八个唯一基础模型")
+    _require_columns(
+        base_predictions,
+        (*groups, model_column, prediction_column),
+        "基础模型预测",
+    )
+    if base_predictions.duplicated([*groups, model_column]).any():
+        raise ValueError("基础预测存在重复观测键/模型")
+    unknown = set(base_predictions[model_column].dropna().astype(str)) - set(models)
+    if unknown:
+        raise ValueError(f"基础预测含未登记模型: {sorted(unknown)}")
+    finite = base_predictions.loc[
+        np.isfinite(
+            pd.to_numeric(
+                base_predictions[prediction_column],
+                errors="coerce",
+            ).to_numpy(dtype=np.float64, na_value=np.nan)
+        )
+    ].copy()
+    if finite.empty:
+        return finite
+    wide = finite.pivot(
+        index=list(groups),
+        columns=model_column,
+        values=prediction_column,
+    )
+    complete = wide.reindex(columns=models).dropna(how="any")
+    if complete.empty:
+        return finite.reset_index(drop=True)
+    average = complete.mean(axis=1).rename(prediction_column).reset_index()
+    average[model_column] = average_name
+    median = complete.median(axis=1).rename(prediction_column).reset_index()
+    median[model_column] = median_name
+    ordered_columns = [*groups, model_column, prediction_column]
+    return pd.concat(
+        [
+            finite.loc[:, ordered_columns],
+            average.loc[:, ordered_columns],
+            median.loc[:, ordered_columns],
+        ],
+        ignore_index=True,
+    )
+
+
+def _json_safe(value: Any) -> Any:
+    """递归转换为标准 JSON 可序列化值，并保留对象类型证据。"""
+    if value is None or value is pd.NA:
+        return None
+    if isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        return value if np.isfinite(value) else str(value)
+    if isinstance(value, np.generic):
+        return _json_safe(value.item())
+    if isinstance(value, (pd.Timestamp, datetime, date)):
+        return value.isoformat()
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, Mapping):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [_json_safe(item) for item in value]
+    get_params = getattr(value, "get_params", None)
+    if callable(get_params):
+        return {
+            "estimator_class": (
+                f"{type(value).__module__}.{type(value).__qualname__}"
+            ),
+            "params": _json_safe(get_params(deep=True)),
+        }
+    return {
+        "python_type": f"{type(value).__module__}.{type(value).__qualname__}",
+        "repr": repr(value),
+    }
+
+
+def snapshot_estimator_params(estimator: Any) -> dict[str, Any]:
+    """全量快照 ``get_params(deep=True)``，返回可直接 JSON 序列化的字典。"""
+    get_params = getattr(estimator, "get_params", None)
+    if not callable(get_params):
+        raise TypeError("estimator 不提供 get_params")
+    return {
+        "estimator_class": f"{type(estimator).__module__}.{type(estimator).__qualname__}",
+        "params_deep": _json_safe(get_params(deep=True)),
+    }
+
+
+def extract_estimator_feature_values(
+    estimator: Any,
+    feature_names: Sequence[str],
+    *,
+    model_name: str,
+) -> pd.DataFrame:
+    """统一提取线性系数或树模型特征重要性；无原生权重时返回空表。"""
+    features = tuple(str(name) for name in feature_names)
+    value_kind: str
+    if hasattr(estimator, "coef_"):
+        values = np.asarray(estimator.coef_, dtype=np.float64).reshape(-1)
+        value_kind = "coefficient"
+    elif hasattr(estimator, "feature_importances_"):
+        values = np.asarray(
+            estimator.feature_importances_,
+            dtype=np.float64,
+        ).reshape(-1)
+        value_kind = "feature_importance"
+    else:
+        return pd.DataFrame(
+            columns=[
+                "model",
+                "feature",
+                "value_kind",
+                "value",
+                "absolute_value",
+                "absolute_rank",
+            ]
+        )
+    if len(values) != len(features):
+        raise ValueError(
+            f"{model_name} 权重长度 {len(values)} 与特征数 {len(features)} 不一致"
+        )
+    result = pd.DataFrame(
+        {
+            "model": model_name,
+            "feature": features,
+            "value_kind": value_kind,
+            "value": values,
+        }
+    )
+    result["absolute_value"] = result["value"].abs()
+    result["absolute_rank"] = (
+        result["absolute_value"]
+        .rank(method="first", ascending=False)
+        .astype("int64")
+    )
+    return result

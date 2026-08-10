@@ -1,7 +1,7 @@
 ---
 name: reproduce
 description: "研报复现主编排——从 PDF 到与原报告对齐的复现产物，11 阶段门禁状态机（触发词：复现研报、reproduce、复现 <pdf>）"
-argument-hint: "<pdf_path> | continue <id> | status [id] | revise <id> ... | accept <id>"
+argument-hint: "<pdf_path> | continue <id> | status [id] | revise <id> ... | accept <id> | export-assumptions <id>"
 ---
 
 # /reproduce 主编排
@@ -50,6 +50,7 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/<x>.py" ...
 - 状态写入口（唯一）：`uv run python tools/state.py {init|show|set-stage|set|record-event|milestone|gate} ...`
 - 门禁判定：`uv run python tools/check_gates.py <id> --stage <stage> [--assert-done] [--record]`
 - PDF 转文本：`uv run python tools/pdf_extract.py <pdf_path> <out_dir>`
+- 假设登记簿 Excel 导出/回灌（批量 revise，见 3.4/3.6）：`uv run python tools/assumptions_xlsx.py {export|apply|set-param|restore|sensitivity} ...`
 - 8 个子 agent（`Agent` 工具，`subagent_type`）：`quant-extractor` / `quant-planner` / `quant-auditor`（派发时在 prompt 里指明 `mode=spec|code|result`）/ `quant-coder` / `quant-verifier` / `quant-diagnoser` / `quant-oos-analyst`（复现达标后的样本外延伸分析）/ `quant-reporter`
 - **经济模式派发规则**：cwd `.reproduce.json` 的 `economy=true` 时，派发 `quant-extractor` / `quant-verifier` / `quant-oos-analyst` 一律带 `model: "sonnet"` 覆盖（机械性工作：抄写结构化/跑脚本对数/延伸跑数）；`quant-planner` / `quant-coder` / `quant-auditor` / `quant-diagnoser` 任何模式下保持 opus（分诊裁决/写代码/对抗审计/归因推理，质量敏感）；`quant-reporter` 本就 sonnet。economy=false 或无配置时不加覆盖。
 - **外审档位规则**：cwd `.reproduce.json` 的 `audit_level=standard` 时，spec_audit / code_audit 的 codex 外审改为触发式（触发条件与 skipped 落档协议见对应执行卡）；**result_audit 的 codex 外审任何档位必跑**（反虚报是最后防线）。strict（默认）或无配置时三审查点全跑。
@@ -81,7 +82,7 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/<x>.py" ...
 
 ## 三、子命令路由
 
-进入时先判断第一个参数：`setup` / `continue` / `status` / `revise` / `accept` 命中对应分支；否则视为 `<pdf_path>` 走新跑分支。
+进入时先判断第一个参数：`setup` / `continue` / `status` / `revise` / `accept` / `export-assumptions` 命中对应分支；否则视为 `<pdf_path>` 走新跑分支。
 
 **案例 id 解析（全部接受 `<id>` 的子命令通用）**：用户输入先经 `uv run python tools/state.py resolve "<输入>"` 解析为完整 report_id 再用——支持完整 id、**编号缩写**（`r3` / `r003` / `3` 均命中 `r003_xxx`）与唯一前缀（如 `ssrn` → `ssrn_6115073`）。resolve 报「匹配到多个」时把候选列给用户请其挑选；报「未找到」时跑 `status`（无参）把现有案例列表呈给用户。**对用户提及案例时优先用编号（如「案例 r003」）**，完整 id 括注即可。
 
@@ -119,9 +120,9 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/<x>.py" ...
 - 无 `id`：`ls workspace/` 列出全部 report_id，对每个跑一次 `state.py show` 摘要，**按编号排序制表呈现**：`编号 | report_id | 类型/难度 | 状态 | 当前阶段`（无编号的旧式 id 排在编号案例之后，编号列留空）。这张表就是用户「我有哪些案例、id 是什么」的唯一入口，任何时候用户问「id 是什么/有哪些复现」都跑这条。
 - **呈现约定（面向用户的可读性）**：show 原始输出之外，用中文进度摘要转述——11 阶段用人话（初始化→研报提取→复现规划→规格审计→代码实现→代码审计→运行验证→迭代修正→结果审计→报告汇总→人工评审），标注当前所处位置与完成比例；门禁/意见代号（G-XX、CDX/CA/RA-XX）只括注不打头，正文讲清楚它是什么检查、结论如何。此约定适用于全部子命令对用户的汇报措辞：**对用户讲人话，代号进文书**。
 
-### 3.4 `revise <id> --assumption <ASid> "<新口径>" | --instruction "<指令>"`
+### 3.4 `revise <id> --assumption <ASid> "<新口径>" | --instruction "<指令>" | --from-excel [--xlsx path] [--each]`
 
-人工 review 后的定向重跑（详见 `stages/review.md`）：
+人工 review 后的定向重跑（详见 `stages/review.md`）。单条形式（`--assumption` / `--instruction`）：
 1. 派 `quant-planner` 更新 `assumptions.md`：把 `<ASid>` 改写为新口径、状态 `assumed→revised`（`--instruction` 形式则按指令新增/调整假设）。
 2. 读该假设 `影响面` 字段查表定重跑范围：
 
@@ -135,9 +136,29 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/<x>.py" ...
 4. 记 `record-event <id> revise --json '{"assumption":"<ASid>","trigger":"revise"}'`；revise 轮 **不占 max_iter**，单条内部收敛上限 3 轮，超限则 `paused_blocked` 汇报。
 5. 完成后 `set <id> status awaiting_review`，回到 review。
 
+**批量形式 `--from-excel`**（客户已在 `workspace/<id>/assumptions.xlsx` 填好修改，模板结构与双通道语义见 `templates/audit/assumptions.md`「Excel 批量 revise 工作流」节）：
+
+1. **预演复述**：`uv run python tools/assumptions_xlsx.py apply <id> --dry-run`，把返回 JSON 的计划向用户复述（config_edits 参数直改清单 / text_revisions 文本通道清单 / rejected 拒绝行与原因 / 合并影响面），**确认后才正式 apply**；`rejected` 非空时必须停下呈报（客户误填最常见，不得静默吞）。`--each` 形式此步用 `apply <id> --each`（纯参数行才通过校验，混文本行会被拒并引导回合并模式）。
+2. **正式落地**（合并模式默认）：`apply <id>`——工具确定性完成：参数直改行注入 `src/<id>/config.py`（自动备份到 `workspace/<id>/audit/config_backups/` + diff 补丁 + 实例化冒烟，冒烟失败的编辑自动回滚并降级为文本通道）+ 对成功注入的条目在 assumptions.md 追记（状态→revised、验证后回看重置占位符、插「修订记录」行）；返回 JSON 含 batch_id / text_revisions / md_edits_failed / assumptions_stats。
+3. **文本通道**：`text_revisions` 或 `md_edits_failed` 非空时派 `quant-planner` 批量改写 assumptions.md（输入合同：该 JSON + batch_id；逐条改写口径叙述/补登记、状态→revised、同款「修订记录」行（末句改「人工 revise 新口径」）、验证后回看重置占位符；**不动已有修订记录行**、不改 config.py）。
+4. **重跑链路**：按返回 JSON 的 `merged_impact_scope` 查上表定合并范围（多条取最重一档）；scope 涉 data/method 时按「影响 milestone」派 `quant-coder` 落实文本改动 + codex 增量 code_audit；然后 verify 重跑（回填全部占位符）→ result_audit（param/trading 轻量）→ `quant-reporter` 增量更新。
+5. **记账收尾**：`record-event <id> revise --json '{"assumptions":[<AS列表>],"mode":"merged","batch_id":"<id>","trigger":"revise"}'`（批量记一次事件，不占 max_iter，收敛上限沿用单条 3 轮）；`set <id> assumptions '<返回 JSON 的 assumptions_stats>'`；重新 `export <id>` 刷新工作表（回填后的新状态/新当前值）；`set <id> status awaiting_review`，回 review。
+
+**逐条敏感性形式 `--each`**（what-if 实验，**不改 assumptions.md、不动状态枚举**）：
+1. 前置：`check_gates <id> --stage verify --assert-done` PASS 且 `output/<id>/results/comparison.json` 存在；**成本提示必须先呈报**：N 条 = N 次全量回测，N≥3 或 tags 含 `ml` 时必须用户明确确认再启动。
+2. 整目录快照基线：`cp -r output/<id>/results workspace/<id>/audit/sensitivity/_baseline_results/`（快照不放 results 内，防旧 mtime 干扰 G-VF-6）。
+3. 逐条串行（每轮：`set-param <id> --field <f> --value <v>` → stdout JSON 落 `workspace/<id>/audit/sensitivity/<ASid>_meta.json` → 派 `quant-verifier` 重跑（产物正常覆盖 results/）→ `cp results/comparison.json → audit/sensitivity/<ASid>_comparison.json` → `restore <id>` 恢复 config.py，**逐轮立即回滚，绝不让两条修改叠加**）。
+4. 全部完成：整目录恢复 `results/` ← `_baseline_results/`；跑 `sensitivity <id> --baseline audit/sensitivity/_baseline_results/comparison.json --runs-dir audit/sensitivity/` → 点收 `output/<id>/results/assumption_sensitivity.xlsx`（明细长表 AS × 指标的 基线值/变体值/Δ/Δ% + 汇总；experimental 只报 Δ）。
+5. 任一轮失败：立即 `restore` + 恢复 results 快照，`paused_blocked` 呈报已完成轮次，不留半改状态。
+6. 收尾：`record-event <id> revise_sensitivity --json '{"assumptions":[...],"batch_id":"..."}'` → 回 `awaiting_review`，向用户呈现对比表位置与要点。
+
 ### 3.5 `accept <id>`
 
 review 通过收尾：`set-stage <id> review done` → 按 verdict 定终态：`verdict.result==partial` 则 `set <id> status done_partial`，否则 `set <id> status done`。打印覆盖率/可信度/报告位置摘要。
+
+### 3.6 `export-assumptions <id>`
+
+导出/刷新假设修改工作表：`uv run python tools/assumptions_xlsx.py export <id>` → 转述 `workspace/<id>/assumptions.xlsx` 路径与填写要点（黄底三列可编辑：新值/新口径/操作）。返回 JSON 的 `unbound_param_candidates` 非空时提示：这些影响面为 param/trading 的假设尚无 `参数绑定`，如需参数直改可派 `quant-planner` 一次性回填绑定后重新导出（老案例迁移路径）。
 
 ---
 

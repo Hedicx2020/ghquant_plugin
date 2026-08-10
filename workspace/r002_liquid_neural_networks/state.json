@@ -1,0 +1,1132 @@
+{
+  "schema_version": 1,
+  "report_id": "r002_liquid_neural_networks",
+  "pdf_path": "reports/r002_liquid_neural_networks.pdf",
+  "paths": {
+    "workspace": "workspace/r002_liquid_neural_networks",
+    "src": "src/r002_liquid_neural_networks",
+    "output": "output/r002_liquid_neural_networks"
+  },
+  "mode": "auto",
+  "reproduction_mode": "strict",
+  "max_iter": 6,
+  "type": "ml",
+  "tags": [
+    "ml",
+    "factor"
+  ],
+  "difficulty": "hard",
+  "difficulty_override": null,
+  "feasibility": "degraded",
+  "pdf_pages": 20,
+  "current_stage": "verify",
+  "status": "paused_blocked",
+  "stages": {
+    "init": {
+      "status": "done",
+      "attempts": 1,
+      "updated_at": "2026-07-17T01:36:15+08:00",
+      "issues": 0
+    },
+    "extract": {
+      "status": "done",
+      "attempts": 1,
+      "updated_at": "2026-07-17T01:48:18+08:00",
+      "issues": 0
+    },
+    "plan": {
+      "status": "done",
+      "attempts": 1,
+      "updated_at": "2026-07-17T02:20:32+08:00",
+      "issues": 0
+    },
+    "spec_audit": {
+      "status": "done",
+      "attempts": 1,
+      "updated_at": "2026-07-17T02:40:37+08:00",
+      "issues": 0
+    },
+    "implement": {
+      "status": "done",
+      "attempts": 1,
+      "updated_at": "2026-07-17T05:12:54+08:00",
+      "issues": 0
+    },
+    "code_audit": {
+      "status": "done",
+      "attempts": 1,
+      "updated_at": "2026-07-17T06:10:18+08:00",
+      "issues": 0
+    },
+    "verify": {
+      "status": "running",
+      "attempts": 2,
+      "updated_at": "2026-07-18T01:48:42+08:00",
+      "issues": 0
+    },
+    "iterate": {
+      "status": "pending",
+      "attempts": 0,
+      "updated_at": null,
+      "issues": 0
+    },
+    "result_audit": {
+      "status": "pending",
+      "attempts": 0,
+      "updated_at": null,
+      "issues": 0
+    },
+    "oos": {
+      "status": "pending",
+      "attempts": 0,
+      "updated_at": null,
+      "issues": 0
+    },
+    "report": {
+      "status": "pending",
+      "attempts": 0,
+      "updated_at": null,
+      "issues": 0
+    },
+    "review": {
+      "status": "pending",
+      "attempts": 0,
+      "updated_at": null,
+      "issues": 0
+    }
+  },
+  "gates": [
+    {
+      "stage": "init",
+      "checks": [
+        {
+          "id": "G-IN-1",
+          "desc": "state schema 合法",
+          "result": "PASS"
+        },
+        {
+          "id": "G-IN-2",
+          "desc": "目录树齐全",
+          "result": "PASS"
+        },
+        {
+          "id": "G-IN-3",
+          "desc": "report_text.md 存在",
+          "result": "PASS"
+        },
+        {
+          "id": "G-IN-4",
+          "desc": "report_text.md 中 PAGE 标记数 >= 1",
+          "result": "PASS"
+        },
+        {
+          "id": "G-IN-5",
+          "desc": "PAGE 标记数与 PDF 页数一致",
+          "result": "PASS"
+        },
+        {
+          "id": "G-IN-6",
+          "desc": "tables_extracted.md 存在",
+          "result": "PASS"
+        }
+      ],
+      "verdict": "PASS",
+      "timestamp": "2026-07-17T01:36:08+08:00"
+    },
+    {
+      "stage": "extract",
+      "checks": [
+        {
+          "id": "G-EX-1",
+          "desc": "spec.md 存在",
+          "result": "PASS"
+        },
+        {
+          "id": "G-EX-2",
+          "desc": "frontmatter 可解析（yaml）",
+          "result": "PASS"
+        },
+        {
+          "id": "G-EX-3",
+          "desc": "frontmatter 必填字段齐全非空（tags_hint 允许空列表）",
+          "result": "PASS"
+        },
+        {
+          "id": "G-EX-4",
+          "desc": "正文正则计数 == frontmatter element_counts 汇总 == coverage_matrix 数据行数",
+          "result": "PASS"
+        },
+        {
+          "id": "G-EX-5",
+          "desc": "每条要素块含「- 页码:」与「- 原文:」行",
+          "result": "PASS"
+        },
+        {
+          "id": "G-EX-6",
+          "desc": "R 类要素 >= 1",
+          "result": "PASS"
+        },
+        {
+          "id": "G-EX-7",
+          "desc": "ambiguities.md 存在",
+          "result": "PASS"
+        },
+        {
+          "id": "G-EX-8",
+          "desc": "图表登记清单表格：FIG+EX/TBL 行数与 element_counts 一致，最大编号不超过 exhibit_declared 声明",
+          "result": "PASS"
+        }
+      ],
+      "verdict": "PASS",
+      "timestamp": "2026-07-17T01:48:06+08:00"
+    },
+    {
+      "stage": "plan",
+      "checks": [
+        {
+          "id": "G-PL-1",
+          "desc": "plan.md 存在",
+          "result": "PASS"
+        },
+        {
+          "id": "G-PL-2",
+          "desc": "frontmatter 可解析（yaml）",
+          "result": "PASS"
+        },
+        {
+          "id": "G-PL-3",
+          "desc": "frontmatter 枚举合法（type/difficulty/feasibility）",
+          "result": "PASS"
+        },
+        {
+          "id": "G-PL-4",
+          "desc": "milestone 数 >= 难度下限（hard: 3）",
+          "result": "PASS"
+        },
+        {
+          "id": "G-PL-5",
+          "desc": "milestone deps 无环",
+          "result": "PASS"
+        },
+        {
+          "id": "G-PL-6",
+          "desc": "矩阵所有非 skipped/infeasible 行 milestone 列非空",
+          "result": "PASS"
+        },
+        {
+          "id": "G-PL-7",
+          "desc": "ambiguities.md 每条 status ∈ resolved/blocked",
+          "result": "PASS"
+        },
+        {
+          "id": "G-PL-8",
+          "desc": "无 blocking 级 open 歧义",
+          "result": "PASS"
+        },
+        {
+          "id": "G-PL-9",
+          "desc": "feasibility != blocked",
+          "result": "FAIL"
+        }
+      ],
+      "verdict": "FAIL",
+      "timestamp": "2026-07-17T01:56:14+08:00"
+    },
+    {
+      "stage": "plan",
+      "checks": [
+        {
+          "id": "G-PL-1",
+          "desc": "plan.md 存在",
+          "result": "PASS"
+        },
+        {
+          "id": "G-PL-2",
+          "desc": "frontmatter 可解析（yaml）",
+          "result": "PASS"
+        },
+        {
+          "id": "G-PL-3",
+          "desc": "frontmatter 枚举合法（type/difficulty/feasibility）",
+          "result": "PASS"
+        },
+        {
+          "id": "G-PL-4",
+          "desc": "milestone 数 >= 难度下限（hard: 3）",
+          "result": "PASS"
+        },
+        {
+          "id": "G-PL-5",
+          "desc": "milestone deps 无环",
+          "result": "PASS"
+        },
+        {
+          "id": "G-PL-6",
+          "desc": "矩阵所有非 skipped/infeasible 行 milestone 列非空",
+          "result": "PASS"
+        },
+        {
+          "id": "G-PL-7",
+          "desc": "ambiguities.md 每条 status ∈ resolved/blocked",
+          "result": "PASS"
+        },
+        {
+          "id": "G-PL-8",
+          "desc": "无 blocking 级 open 歧义",
+          "result": "PASS"
+        },
+        {
+          "id": "G-PL-9",
+          "desc": "feasibility != blocked",
+          "result": "PASS"
+        }
+      ],
+      "verdict": "PASS",
+      "timestamp": "2026-07-17T02:20:21+08:00"
+    },
+    {
+      "stage": "spec_audit",
+      "checks": [
+        {
+          "id": "G-SA-1",
+          "desc": "外部盲提取/diff/审查产物齐",
+          "result": "PASS"
+        },
+        {
+          "id": "G-SA-2",
+          "desc": "extract_audit.md 存在（medium/hard 必跑）",
+          "result": "PASS"
+        },
+        {
+          "id": "G-SA-3",
+          "desc": "extract_diff.md 所有 DIF 行裁决列非空",
+          "result": "PASS"
+        },
+        {
+          "id": "G-SA-4",
+          "desc": "audit_responses.md 回应行数 == spec 审查 issues 数",
+          "result": "FAIL"
+        },
+        {
+          "id": "G-SA-5",
+          "desc": "无 open 状态的 critical",
+          "result": "PASS"
+        },
+        {
+          "id": "G-SA-6",
+          "desc": "major 全部有回应",
+          "result": "PASS"
+        }
+      ],
+      "verdict": "FAIL",
+      "timestamp": "2026-07-17T02:39:42+08:00"
+    },
+    {
+      "stage": "spec_audit",
+      "checks": [
+        {
+          "id": "G-SA-1",
+          "desc": "外部盲提取/diff/审查产物齐",
+          "result": "PASS"
+        },
+        {
+          "id": "G-SA-2",
+          "desc": "extract_audit.md 存在（medium/hard 必跑）",
+          "result": "PASS"
+        },
+        {
+          "id": "G-SA-3",
+          "desc": "extract_diff.md 所有 DIF 行裁决列非空",
+          "result": "PASS"
+        },
+        {
+          "id": "G-SA-4",
+          "desc": "audit_responses.md 回应行数 == spec 审查 issues 数",
+          "result": "PASS"
+        },
+        {
+          "id": "G-SA-5",
+          "desc": "无 open 状态的 critical",
+          "result": "PASS"
+        },
+        {
+          "id": "G-SA-6",
+          "desc": "major 全部有回应",
+          "result": "PASS"
+        }
+      ],
+      "verdict": "PASS",
+      "timestamp": "2026-07-17T02:40:24+08:00"
+    },
+    {
+      "stage": "implement",
+      "checks": [
+        {
+          "id": "G-IM-1",
+          "desc": "src/{id}/strategy.py 存在",
+          "result": "PASS"
+        },
+        {
+          "id": "G-IM-2",
+          "desc": "src/{id}/main.py 存在",
+          "result": "PASS"
+        },
+        {
+          "id": "G-IM-3",
+          "desc": "python -m compileall src/{id} 通过",
+          "result": "PASS"
+        },
+        {
+          "id": "G-IM-4",
+          "desc": "state.milestones 全部 implement=done",
+          "result": "PASS"
+        },
+        {
+          "id": "G-IM-5",
+          "desc": "矩阵「实现位置」列对非 excluded（skipped/infeasible）行非空",
+          "result": "PASS"
+        }
+      ],
+      "verdict": "PASS",
+      "timestamp": "2026-07-17T05:12:36+08:00"
+    },
+    {
+      "stage": "code_audit",
+      "checks": [
+        {
+          "id": "G-CA-1",
+          "desc": "code_audit_external.md / audit_responses.md 存在（外审按档位执行）",
+          "result": "PASS"
+        },
+        {
+          "id": "G-CA-2",
+          "desc": "impl_audit_m{X}.md 存在（按难度/ml 标签要求）",
+          "result": "PASS"
+        },
+        {
+          "id": "G-CA-3",
+          "desc": "impl_audit 文件中无结构化空壳判定「判定: not_found」（行锚定，非全文子串匹配）",
+          "result": "PASS"
+        },
+        {
+          "id": "G-CA-4",
+          "desc": "audit_responses.md 回应行数 == code 审查 issues 数",
+          "result": "PASS"
+        },
+        {
+          "id": "G-CA-5",
+          "desc": "无 open critical（未来函数/硬编码/方向反）",
+          "result": "PASS"
+        },
+        {
+          "id": "G-CA-6",
+          "desc": "无 open major 未回应",
+          "result": "PASS"
+        }
+      ],
+      "verdict": "PASS",
+      "timestamp": "2026-07-17T06:09:55+08:00"
+    },
+    {
+      "stage": "code_audit",
+      "checks": [
+        {
+          "id": "G-CA-1",
+          "desc": "code_audit_external.md / audit_responses.md 存在（外审按档位执行）",
+          "result": "PASS"
+        },
+        {
+          "id": "G-CA-2",
+          "desc": "impl_audit_m{X}.md 存在（按难度/ml 标签要求）",
+          "result": "PASS"
+        },
+        {
+          "id": "G-CA-3",
+          "desc": "impl_audit 文件中无结构化空壳判定「判定: not_found」（行锚定，非全文子串匹配）",
+          "result": "PASS"
+        },
+        {
+          "id": "G-CA-4",
+          "desc": "audit_responses.md 回应行数 == code 审查 issues 数",
+          "result": "PASS"
+        },
+        {
+          "id": "G-CA-5",
+          "desc": "无 open critical（未来函数/硬编码/方向反）",
+          "result": "PASS"
+        },
+        {
+          "id": "G-CA-6",
+          "desc": "无 open major 未回应",
+          "result": "PASS"
+        }
+      ],
+      "verdict": "PASS",
+      "timestamp": "2026-07-18T01:48:42+08:00"
+    }
+  ],
+  "external_reviews": [
+    {
+      "checkpoint": "spec",
+      "engine": "claude_external",
+      "verdict": "pass_with_issues",
+      "critical": 0,
+      "major": 0,
+      "minor": 1,
+      "raw": "workspace/r002_liquid_neural_networks/audit/spec_audit_external.md"
+    },
+    {
+      "checkpoint": "code",
+      "engine": "claude_external",
+      "verdict": "pass_with_issues",
+      "critical": 0,
+      "major": 2,
+      "minor": 3,
+      "raw": "workspace/r002_liquid_neural_networks/audit/code_audit_external.md"
+    }
+  ],
+  "milestones": [
+    {
+      "id": "m1",
+      "name": "时点安全的数据、标签与样本切分",
+      "deps": [],
+      "implement": "done",
+      "code_review": "done",
+      "verify": "done"
+    },
+    {
+      "id": "m2",
+      "name": "受控比较框架与GRU基准",
+      "deps": [
+        "m1"
+      ],
+      "implement": "done",
+      "code_review": "done",
+      "verify": "done"
+    },
+    {
+      "id": "m3",
+      "name": "连续时间与稀疏液态网络族",
+      "deps": [
+        "m1",
+        "m2"
+      ],
+      "implement": "done",
+      "code_review": "done",
+      "verify": "done"
+    },
+    {
+      "id": "m4",
+      "name": "预测因子、十档组合与多路径回测",
+      "deps": [
+        "m1",
+        "m2",
+        "m3"
+      ],
+      "implement": "done",
+      "code_review": "done",
+      "verify": "done"
+    },
+    {
+      "id": "m5",
+      "name": "结果对齐、稳健性与完整输出",
+      "deps": [
+        "m4"
+      ],
+      "implement": "done",
+      "code_review": "done",
+      "verify": "done"
+    }
+  ],
+  "iteration": {
+    "current": 0,
+    "max": 6,
+    "history": []
+  },
+  "verdict": {
+    "result": null,
+    "comparison_file": null,
+    "metrics_pass": null,
+    "metrics_total": null,
+    "decided_at": null
+  },
+  "coverage_stats": {
+    "total": 0,
+    "done": 0,
+    "skipped": 0,
+    "infeasible": 0,
+    "pending": 0
+  },
+  "assumptions": {
+    "total": 0,
+    "assumed": 0,
+    "confirmed": 0,
+    "revised": 0
+  },
+  "blockers": [],
+  "pending_question": "用户于2026-07-18主动暂停正式verify训练；继续时恢复原参数正式运行，复用已完成GRU缓存，严禁synthetic smoke。",
+  "events": [
+    {
+      "event": "state:init",
+      "timestamp": "2026-07-17T01:35:54+08:00",
+      "payload": null
+    },
+    {
+      "event": "stage:init:running",
+      "timestamp": "2026-07-17T01:35:54+08:00",
+      "payload": null
+    },
+    {
+      "event": "set:pdf_pages",
+      "timestamp": "2026-07-17T01:36:08+08:00",
+      "payload": {
+        "value": 20
+      }
+    },
+    {
+      "event": "input_from_url",
+      "timestamp": "2026-07-17T01:36:08+08:00",
+      "payload": {
+        "source_url": "https://www.sohu.com/a/867540778_121118711",
+        "source": "sohu",
+        "title": "神经常微分方程与液态神经网络",
+        "publisher": "理财小课堂（转载广发金工）",
+        "conversion": "chrome_headless_print_to_pdf",
+        "pdf_pages": 20,
+        "note": "原始输入为搜狐网页，已转制为独立 PDF 进入标准流水线；公式和图表包含网页图片，extract 需结合 PDF 视觉核对"
+      }
+    },
+    {
+      "event": "stage:init:done",
+      "timestamp": "2026-07-17T01:36:15+08:00",
+      "payload": null
+    },
+    {
+      "event": "stage:extract:running",
+      "timestamp": "2026-07-17T01:36:28+08:00",
+      "payload": null
+    },
+    {
+      "event": "stage:extract:done",
+      "timestamp": "2026-07-17T01:48:18+08:00",
+      "payload": null
+    },
+    {
+      "event": "stage:plan:running",
+      "timestamp": "2026-07-17T01:48:31+08:00",
+      "payload": null
+    },
+    {
+      "event": "set:type",
+      "timestamp": "2026-07-17T01:56:13+08:00",
+      "payload": {
+        "value": "ml"
+      }
+    },
+    {
+      "event": "set:tags",
+      "timestamp": "2026-07-17T01:56:13+08:00",
+      "payload": {
+        "value": [
+          "ml",
+          "factor"
+        ]
+      }
+    },
+    {
+      "event": "set:difficulty",
+      "timestamp": "2026-07-17T01:56:14+08:00",
+      "payload": {
+        "value": "hard"
+      }
+    },
+    {
+      "event": "set:feasibility",
+      "timestamp": "2026-07-17T01:56:14+08:00",
+      "payload": {
+        "value": "blocked"
+      }
+    },
+    {
+      "event": "set:milestones",
+      "timestamp": "2026-07-17T01:56:14+08:00",
+      "payload": {
+        "value": [
+          {
+            "id": "m1",
+            "name": "时点安全的数据、标签与样本切分",
+            "deps": [],
+            "implement": "pending",
+            "code_review": "pending",
+            "verify": "pending"
+          },
+          {
+            "id": "m2",
+            "name": "受控比较框架与GRU基准",
+            "deps": [
+              "m1"
+            ],
+            "implement": "pending",
+            "code_review": "pending",
+            "verify": "pending"
+          },
+          {
+            "id": "m3",
+            "name": "连续时间与稀疏液态网络族",
+            "deps": [
+              "m1",
+              "m2"
+            ],
+            "implement": "pending",
+            "code_review": "pending",
+            "verify": "pending"
+          },
+          {
+            "id": "m4",
+            "name": "预测因子、十档组合与多路径回测",
+            "deps": [
+              "m1",
+              "m2",
+              "m3"
+            ],
+            "implement": "pending",
+            "code_review": "pending",
+            "verify": "pending"
+          },
+          {
+            "id": "m5",
+            "name": "结果对齐、稳健性与完整输出",
+            "deps": [
+              "m4"
+            ],
+            "implement": "pending",
+            "code_review": "pending",
+            "verify": "pending"
+          }
+        ]
+      }
+    },
+    {
+      "event": "set:iteration.max",
+      "timestamp": "2026-07-17T01:56:14+08:00",
+      "payload": {
+        "value": 6
+      }
+    },
+    {
+      "event": "set:max_iter",
+      "timestamp": "2026-07-17T01:56:14+08:00",
+      "payload": {
+        "value": 6
+      }
+    },
+    {
+      "event": "set:status",
+      "timestamp": "2026-07-17T01:56:29+08:00",
+      "payload": {
+        "value": "paused_blocked"
+      }
+    },
+    {
+      "event": "set:pending_question",
+      "timestamp": "2026-07-17T01:56:29+08:00",
+      "payload": {
+        "value": "严格复现被4项核心缺口阻断：A2 标签与目标函数、A3 输入字段与回看窗口、A5 LTC/NCP/CFC 核心公式及结构参数、A12 图15-24与表6-10逐格基准。请选择：1）补充广发证券原始完整PDF或可访问图表；2）允许降级复现，采用公开标准实现和明确假设，仅对齐已披露摘要指标；3）放弃本案例。"
+      }
+    },
+    {
+      "event": "plan_blocked",
+      "timestamp": "2026-07-17T01:56:29+08:00",
+      "payload": {
+        "blocking_ambiguities": [
+          "A2",
+          "A3",
+          "A5",
+          "A12"
+        ],
+        "choices": [
+          "补充原始完整PDF或可访问图表",
+          "允许降级复现",
+          "放弃案例"
+        ]
+      }
+    },
+    {
+      "event": "blocker_decision",
+      "timestamp": "2026-07-17T02:05:31+08:00",
+      "payload": {
+        "choice": 2,
+        "decision": "允许降级复现并检索采用开源标准实现",
+        "scope": "保持A股市场；公开实现解决A5；A2/A3用显式假设；A12仅对齐正文摘要R1-R7，逐格图表不冒充原文"
+      }
+    },
+    {
+      "event": "set:feasibility",
+      "timestamp": "2026-07-17T02:20:21+08:00",
+      "payload": {
+        "value": "degraded"
+      }
+    },
+    {
+      "event": "set:pending_question",
+      "timestamp": "2026-07-17T02:20:21+08:00",
+      "payload": {
+        "value": null
+      }
+    },
+    {
+      "event": "set:status",
+      "timestamp": "2026-07-17T02:20:21+08:00",
+      "payload": {
+        "value": "running"
+      }
+    },
+    {
+      "event": "blocker_resolved",
+      "timestamp": "2026-07-17T02:20:21+08:00",
+      "payload": {
+        "resolved": [
+          "A2",
+          "A3",
+          "A5",
+          "A12"
+        ],
+        "assumptions": [
+          "AS9",
+          "AS10",
+          "AS11",
+          "AS12"
+        ],
+        "feasibility": "degraded",
+        "source": "user-authorized open-source standard implementations"
+      }
+    },
+    {
+      "event": "stage:plan:done",
+      "timestamp": "2026-07-17T02:20:32+08:00",
+      "payload": null
+    },
+    {
+      "event": "stage:spec_audit:running",
+      "timestamp": "2026-07-17T02:21:15+08:00",
+      "payload": null
+    },
+    {
+      "event": "set:external_reviews",
+      "timestamp": "2026-07-17T02:39:35+08:00",
+      "payload": {
+        "value": [
+          {
+            "checkpoint": "spec",
+            "engine": "claude_external",
+            "verdict": "pass_with_issues",
+            "critical": 0,
+            "major": 0,
+            "minor": 1,
+            "raw": "workspace/r002_liquid_neural_networks/audit/spec_audit_external.md"
+          }
+        ]
+      }
+    },
+    {
+      "event": "stage:spec_audit:done",
+      "timestamp": "2026-07-17T02:40:37+08:00",
+      "payload": null
+    },
+    {
+      "event": "stage:implement:running",
+      "timestamp": "2026-07-17T02:40:51+08:00",
+      "payload": null
+    },
+    {
+      "event": "milestone:m1:implement:done",
+      "timestamp": "2026-07-17T02:58:45+08:00",
+      "payload": null
+    },
+    {
+      "event": "milestone:m2:implement:done",
+      "timestamp": "2026-07-17T03:08:29+08:00",
+      "payload": null
+    },
+    {
+      "event": "milestone:m1:code_review:done",
+      "timestamp": "2026-07-17T03:14:28+08:00",
+      "payload": null
+    },
+    {
+      "event": "milestone:m2:code_review:done",
+      "timestamp": "2026-07-17T03:21:11+08:00",
+      "payload": null
+    },
+    {
+      "event": "milestone:m1:verify:done",
+      "timestamp": "2026-07-17T03:21:34+08:00",
+      "payload": null
+    },
+    {
+      "event": "milestone:m2:verify:done",
+      "timestamp": "2026-07-17T03:27:49+08:00",
+      "payload": null
+    },
+    {
+      "event": "milestone:m3:implement:done",
+      "timestamp": "2026-07-17T03:30:49+08:00",
+      "payload": null
+    },
+    {
+      "event": "milestone:m3:code_review:done",
+      "timestamp": "2026-07-17T03:39:06+08:00",
+      "payload": null
+    },
+    {
+      "event": "milestone:m3:verify:done",
+      "timestamp": "2026-07-17T03:46:38+08:00",
+      "payload": null
+    },
+    {
+      "event": "milestone:m4:implement:done",
+      "timestamp": "2026-07-17T03:46:38+08:00",
+      "payload": null
+    },
+    {
+      "event": "milestone:m5:implement:done",
+      "timestamp": "2026-07-17T04:07:04+08:00",
+      "payload": null
+    },
+    {
+      "event": "milestone:m4:code_review:done",
+      "timestamp": "2026-07-17T04:09:09+08:00",
+      "payload": null
+    },
+    {
+      "event": "milestone:m4:verify:done",
+      "timestamp": "2026-07-17T04:16:06+08:00",
+      "payload": null
+    },
+    {
+      "event": "milestone:m5:code_review:done",
+      "timestamp": "2026-07-17T05:00:10+08:00",
+      "payload": null
+    },
+    {
+      "event": "milestone:m5:code_review:done",
+      "timestamp": "2026-07-17T05:01:00+08:00",
+      "payload": null
+    },
+    {
+      "event": "milestone:m5:verify:done",
+      "timestamp": "2026-07-17T05:12:36+08:00",
+      "payload": null
+    },
+    {
+      "event": "stage:implement:done",
+      "timestamp": "2026-07-17T05:12:54+08:00",
+      "payload": null
+    },
+    {
+      "event": "stage:code_audit:running",
+      "timestamp": "2026-07-17T05:13:38+08:00",
+      "payload": null
+    },
+    {
+      "event": "set:external_reviews",
+      "timestamp": "2026-07-17T06:09:47+08:00",
+      "payload": {
+        "value": [
+          {
+            "checkpoint": "spec",
+            "engine": "claude_external",
+            "verdict": "pass_with_issues",
+            "critical": 0,
+            "major": 0,
+            "minor": 1,
+            "raw": "workspace/r002_liquid_neural_networks/audit/spec_audit_external.md"
+          },
+          {
+            "checkpoint": "code",
+            "engine": "claude_external",
+            "verdict": "pass_with_issues",
+            "critical": 0,
+            "major": 2,
+            "minor": 3,
+            "raw": "workspace/r002_liquid_neural_networks/audit/code_audit_external.md"
+          }
+        ]
+      }
+    },
+    {
+      "event": "stage:code_audit:done",
+      "timestamp": "2026-07-17T06:10:18+08:00",
+      "payload": null
+    },
+    {
+      "event": "stage:verify:running",
+      "timestamp": "2026-07-17T06:10:19+08:00",
+      "payload": null
+    },
+    {
+      "event": "verify_run_error_fix",
+      "timestamp": "2026-07-18T00:16:49+08:00",
+      "payload": {
+        "attempt": 1,
+        "reason": "formal process disappeared without exit marker after >15h; only GRU epoch-1 checkpoint remained; metrics/comparison/excel/png absent",
+        "scope": "performance_and_resumability_only_no_parameter_change"
+      }
+    },
+    {
+      "event": "verify_runtime_fix_audited",
+      "timestamp": "2026-07-18T01:48:42+08:00",
+      "payload": {
+        "internal": "workspace/r002_liquid_neural_networks/audit/impl_audit_verify_runtime_fix.md",
+        "external": "workspace/r002_liquid_neural_networks/audit/code_audit_external_verify_runtime_fix.md",
+        "external_recheck": "workspace/r002_liquid_neural_networks/audit/code_audit_external_verify_runtime_fix_recheck.md",
+        "verdict": "pass"
+      }
+    },
+    {
+      "event": "stage:verify:running",
+      "timestamp": "2026-07-18T01:48:42+08:00",
+      "payload": null
+    },
+    {
+      "event": "verify_progress",
+      "timestamp": "2026-07-18T05:45:18+08:00",
+      "payload": {
+        "attempt": 2,
+        "formal_pid": 16620,
+        "elapsed": "03:51:51",
+        "cpu_pct": 448.0,
+        "rss_bytes": 15944024064,
+        "completed_model_cache": [
+          "GRU"
+        ],
+        "current_model": "LTC",
+        "ltc_checkpoint_present": false,
+        "run_log_status": "running",
+        "action": "monitor_only_no_restart"
+      }
+    },
+    {
+      "event": "verify_progress",
+      "timestamp": "2026-07-18T06:13:43+08:00",
+      "payload": {
+        "attempt": 2,
+        "formal_pid": 16620,
+        "elapsed": "04:20:35",
+        "cpu_pct": 436.0,
+        "rss_kib": 13129120,
+        "completed_model_cache": [
+          "GRU"
+        ],
+        "current_model": "LTC",
+        "ltc_checkpoint_present": false,
+        "run_log_status": "running",
+        "action": "monitor_only_no_restart"
+      }
+    },
+    {
+      "event": "verify_progress",
+      "timestamp": "2026-07-18T06:43:38+08:00",
+      "payload": {
+        "attempt": 2,
+        "formal_pid": 16620,
+        "elapsed": "04:50:31",
+        "cpu_pct": 440.7,
+        "rss_kib": 12582656,
+        "completed_model_cache": [
+          "GRU"
+        ],
+        "current_model": "LTC",
+        "ltc_checkpoint_present": false,
+        "run_log_status": "running",
+        "action": "monitor_only_no_restart"
+      }
+    },
+    {
+      "event": "verify_progress",
+      "timestamp": "2026-07-18T07:13:39+08:00",
+      "payload": {
+        "attempt": 2,
+        "formal_pid": 16620,
+        "elapsed": "05:20:33",
+        "cpu_pct": 346.8,
+        "rss_kib": 10769824,
+        "completed_model_cache": [
+          "GRU"
+        ],
+        "current_model": "LTC",
+        "ltc_checkpoint_present": false,
+        "run_log_status": "running",
+        "action": "monitor_only_no_restart"
+      }
+    },
+    {
+      "event": "verify_progress",
+      "timestamp": "2026-07-18T07:43:32+08:00",
+      "payload": {
+        "attempt": 2,
+        "formal_pid": 16620,
+        "elapsed": "05:50:25",
+        "cpu_pct": 418.9,
+        "rss_kib": 10252976,
+        "completed_model_cache": [
+          "GRU"
+        ],
+        "current_model": "LTC",
+        "ltc_checkpoint_present": false,
+        "run_log_status": "running",
+        "action": "monitor_only_no_restart"
+      }
+    },
+    {
+      "event": "verify_progress",
+      "timestamp": "2026-07-18T08:13:39+08:00",
+      "payload": {
+        "attempt": 2,
+        "formal_pid": 16620,
+        "elapsed": "06:20:34",
+        "cpu_pct": 259.4,
+        "rss_kib": 13143696,
+        "completed_model_cache": [
+          "GRU"
+        ],
+        "current_model": "LTC",
+        "ltc_checkpoint_present": false,
+        "run_log_status": "running",
+        "action": "monitor_only_no_restart"
+      }
+    },
+    {
+      "event": "set:status",
+      "timestamp": "2026-07-18T08:20:53+08:00",
+      "payload": {
+        "value": "paused_blocked"
+      }
+    },
+    {
+      "event": "set:pending_question",
+      "timestamp": "2026-07-18T08:20:53+08:00",
+      "payload": {
+        "value": "用户于2026-07-18主动暂停正式verify训练；继续时恢复原参数正式运行，复用已完成GRU缓存，严禁synthetic smoke。"
+      }
+    },
+    {
+      "event": "verify_user_paused",
+      "timestamp": "2026-07-18T08:20:53+08:00",
+      "payload": {
+        "attempt": 2,
+        "terminated_pid": 16620,
+        "signal": "SIGTERM",
+        "completed_model_cache": [
+          "GRU"
+        ],
+        "incomplete_model": "LTC",
+        "parameters_changed": false,
+        "synthetic_smoke": false,
+        "resume_policy": "exact_fingerprint_cache_then_original_parameters"
+      }
+    }
+  ],
+  "created_at": "2026-07-17T01:35:54+08:00",
+  "updated_at": "2026-07-18T08:20:53+08:00"
+}

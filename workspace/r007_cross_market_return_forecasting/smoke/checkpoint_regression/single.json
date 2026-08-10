@@ -1,0 +1,23 @@
+{
+  "context": {
+    "code_manifest": {
+      "aggregate_sha256": "code-a",
+      "files": []
+    },
+    "config_sha256": "1cc680db6fe1894978320f9bf51d4000c95f49951f559828d4a909753dfed18a",
+    "context_sha256": "5df3470cbf9ddf514f6cd9313f1fb01acaefed368244648e9aaca5171b6f10f0",
+    "input_manifest": {
+      "upstream": "243a7ca89c8583459b96381de95d4dd82a5425ff45041bf88619a5155075aa9b"
+    },
+    "input_manifest_sha256": "f8c57c17f191aec1ee387bb25df0199aae151fb18836b42ed75c99e4d6a5c5e9",
+    "stage": "sa3_single",
+    "upstream_checkpoint_hashes": {}
+  },
+  "output": {
+    "path": "/Users/hedi/report_reproduce/workspace/r007_cross_market_return_forecasting/smoke/checkpoint_regression/single.parquet",
+    "row_count": 1,
+    "schema_sha256": "6f788a8e8df157fa161c195c01c120d08a376ba310d87fb54c0d998f8ffa58ad",
+    "sha256": "9ce8c081e29bd8996b2cd047dc72226a871889ab504ae221994081b5a79bfa37"
+  },
+  "status": "complete"
+}

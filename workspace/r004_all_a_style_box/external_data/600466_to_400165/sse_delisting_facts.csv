@@ -1,0 +1,2 @@
+source_id,old_stock_code,company_name,source_public_date,delisting_decision_date,delisting_effective_date,transfer_window_trading_days,transfer_venue,evidence_pdf_page,field_units
+sse_600466_delisting_20230605,600466,四川蓝光发展股份有限公司,2023-06-05,2023-05-30,2023-06-06,45,全国中小企业股份转让系统等证券交易场所,5,"date=YYYY-MM-DD;transfer_window_trading_days=交易日"

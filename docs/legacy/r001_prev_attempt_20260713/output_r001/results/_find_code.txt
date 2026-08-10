@@ -1,0 +1,10 @@
+HAS_000016_SH=False
+N_TOTAL_CODES=6332
+INFO_COLS=index_code,index_name,pubic_date,base_date,base_point,currency_code,org_name,pub_index_type,JSID
+N_SSE50_HITS=4
+HIT=index_code=N00016 | index_name=上证50净收益 | pubic_date=2013-02-08 00:00:00 | base_date=2003-12-31 00:00:00 | base_point=1000.0 | currency_code=1420.0 | org_name=中证指数有限公司 | pub_index_type=471011.0 | JSID=730928583201
+  -> CODE_IN_COMPONENTS: N00016
+HIT=index_code=000016 | index_name=上证50 | pubic_date=2004-01-02 00:00:00 | base_date=2003-12-31 00:00:00 | base_point=1000.0 | currency_code=1420.0 | org_name=中证指数有限公司、上海证券交易所 | pub_index_type=471011.0 | JSID=742384419272
+  -> CODE_IN_COMPONENTS: 000016
+HIT=index_code=NHIHR | index_name=南华上证50股指期货 | pubic_date=2023-11-13 00:00:00 | base_date=2023-11-13 00:00:00 | base_point=1000.0 | currency_code=1420.0 | org_name=南华期货股份有限公司 | pub_index_type=nan | JSID=771432340037
+HIT=index_code=996203 | index_name=上证50 | pubic_date=2016-08-23 00:00:00 | base_date=NaT | base_point=nan | currency_code=1420.0 | org_name=天相投资顾问有限公司 | pub_index_type=nan | JSID=814543856182

@@ -1,0 +1,14 @@
+{
+  "protocol": "r007.verify-run-error-fix-04",
+  "compatible_stages": [
+    "m1",
+    "m2_m3"
+  ],
+  "legacy_code_aggregate_sha256": "ae883e4f3626921caf5ac73df76231d12fec178295e8918e9f44559c833d2076",
+  "allowed_current_files": {
+    "src/r007_cross_market_return_forecasting/backtest_pipeline.py": "65a90a5588f6cbefa0500e16e75ced2cdd87dbb9ff62b0b500303ced48cd8c0e",
+    "src/r007_cross_market_return_forecasting/graph_pipeline.py": "1568a2ea981400a2962aaacf0bf0bc545c369e43aeb523ae036838b333590520",
+    "src/r007_cross_market_return_forecasting/main.py": "def2edff674627928511a09c9fc917289325df6ffd8f73341493d588427b9d8a",
+    "src/r007_cross_market_return_forecasting/model_pipeline.py": "eaa20993a75d6bae54dbf05f06c097b995cfb052c75b42d231c121d6d371b405"
+  }
+}

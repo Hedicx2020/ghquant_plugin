@@ -1,0 +1,32 @@
+{
+  "protocol": "r007.verify-run-error-fix-05",
+  "compatible_stages": [
+    "m1",
+    "m2_m3"
+  ],
+  "legacy_code_aggregate_sha256": "ae883e4f3626921caf5ac73df76231d12fec178295e8918e9f44559c833d2076",
+  "allowed_current_files": {
+    "src/r007_cross_market_return_forecasting/backtest_pipeline.py": "65a90a5588f6cbefa0500e16e75ced2cdd87dbb9ff62b0b500303ced48cd8c0e",
+    "src/r007_cross_market_return_forecasting/graph_pipeline.py": "1568a2ea981400a2962aaacf0bf0bc545c369e43aeb523ae036838b333590520",
+    "src/r007_cross_market_return_forecasting/main.py": "13a777d6a2bb0cf9b4519c9b21ce0fd1fc53255abd1f5ade95ba7d0e001f0655",
+    "src/r007_cross_market_return_forecasting/model_pipeline.py": "eaa20993a75d6bae54dbf05f06c097b995cfb052c75b42d231c121d6d371b405"
+  },
+  "m4_component_compatibility": {
+    "legacy_parent_context_sha256": "f27872a53ad84d99633e49336ffd0792e2f75e9a6cb1cd33aa48fb28bc9ded17",
+    "current_parent_context_sha256": "059051e861fc254f8ca7463670884919c88b52c6c7b4ef93e7906730ef2f780f",
+    "current_code_aggregate_sha256": "e3fc8f00a171fd789fc8d7bfb2cdf190709156d238999dd31678833b68cae184",
+    "config_sha256": "0895cce65c0c9695d9b47266489de8f7e65ac5f2f87f27adab77a42d342738ec",
+    "input_manifest_sha256": "242aa5d3334726318991648eb062036e064482a48f36ab2ac3fb83c53a50cde5",
+    "upstream_checkpoint_hashes": {
+      "m1": "a90e6a861eacd8d8589c87c6dd28606f037d63d65edbf5dbc5f3c2487a26b07f",
+      "m2_m3": "86239042d7de9c3a06f6fde06afe246baccbbdc6ccc70c2a9c565510f606d968"
+    },
+    "components": [
+      "cross_market_graph_aggregate",
+      "same_market_graph_block",
+      "same_market_graph_aggregate",
+      "non_graph_block",
+      "non_graph_aggregate"
+    ]
+  }
+}

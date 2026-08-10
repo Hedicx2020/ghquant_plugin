@@ -1,0 +1,230 @@
+{
+  "report_id": "r004_all_a_style_box",
+  "reproduction_mode": "experimental",
+  "comparison_semantics": "us_reference_background_vs_china_oos_not_reproduction_error",
+  "report_values_are_reference_only": true,
+  "verification_status": "verified",
+  "formal_exit_code": 0,
+  "overall_pass": true,
+  "final_verdict": "PASS",
+  "verification_basis": "实验迁移按完整性、可重算性、PIT、交易与生命周期合同判定；美国原值不参与数值等价门槛",
+  "return_layer_semantics": {
+    "target_reference_return": "月度目标组合参考收益可用；日频目标参考收益不可用，不能用实际成本前收益代替",
+    "actual_before_cost_return": "受中国可交易约束后的实际持仓成本前收益",
+    "actual_after_cost_net_return": "同一实际持仓扣除交易成本后的净收益"
+  },
+  "final_boundary_disclosures": [
+    {
+      "disclosure_id": "experimental_china_transplant",
+      "text": "实验性中国市场迁移，不与美国原值作数值等价比较"
+    },
+    {
+      "disclosure_id": "oos_33_months",
+      "text": "正式样本外仅2023-04至2025-12共33个持有月，不代表长期稳定性"
+    },
+    {
+      "disclosure_id": "beijing_exchange_included",
+      "text": "动态全A包含当期可交易北交所证券"
+    },
+    {
+      "disclosure_id": "security_lifecycle_boundary",
+      "text": "证券生命周期只按当日及此前可核对事件处理；事件映射缺失时正式运行阻断"
+    },
+    {
+      "disclosure_id": "trading_constraints_and_costs",
+      "text": "结果包含涨跌停、停牌、成交约束及中国市场交易成本"
+    },
+    {
+      "disclosure_id": "terminal_accounting_date",
+      "text": "2025-12持有期记账至2026-01-05，仅为收益端点，不扩展OOS信号信息集"
+    },
+    {
+      "disclosure_id": "not_investment_advice",
+      "text": "本实验不构成投资建议"
+    }
+  ],
+  "metrics": [
+    {
+      "key": "R10_ALL_A_annualized_net_return",
+      "element_id": "R10",
+      "report_value": null,
+      "reproduced_value": 0.09558775430958688,
+      "verification_level": "market_transplant_output",
+      "comparison_status": "not_comparable",
+      "calculation_verified": true,
+      "pass": true,
+      "note": "中国全A实验产出；美国原值仅背景"
+    },
+    {
+      "key": "R10_BG_annualized_net_return",
+      "element_id": "R10",
+      "report_value": null,
+      "reproduced_value": 0.05481473571767448,
+      "verification_level": "market_transplant_output",
+      "comparison_status": "not_comparable",
+      "calculation_verified": true,
+      "pass": true,
+      "note": "中国全A实验产出；美国原值仅背景"
+    },
+    {
+      "key": "R10_BV_annualized_net_return",
+      "element_id": "R10",
+      "report_value": null,
+      "reproduced_value": 0.11235665196934352,
+      "verification_level": "market_transplant_output",
+      "comparison_status": "not_comparable",
+      "calculation_verified": true,
+      "pass": true,
+      "note": "中国全A实验产出；美国原值仅背景"
+    },
+    {
+      "key": "R10_GML_annualized_net_return",
+      "element_id": "R10",
+      "report_value": null,
+      "reproduced_value": -0.015169614992568081,
+      "verification_level": "market_transplant_output",
+      "comparison_status": "not_comparable",
+      "calculation_verified": true,
+      "pass": true,
+      "note": "中国全A实验产出；美国原值仅背景"
+    },
+    {
+      "key": "R10_HML_annualized_net_return",
+      "element_id": "R10",
+      "report_value": null,
+      "reproduced_value": 0.0050761046909446605,
+      "verification_level": "market_transplant_output",
+      "comparison_status": "not_comparable",
+      "calculation_verified": true,
+      "pass": true,
+      "note": "中国全A实验产出；美国原值仅背景"
+    },
+    {
+      "key": "R10_SG_annualized_net_return",
+      "element_id": "R10",
+      "report_value": null,
+      "reproduced_value": 0.17817903429663695,
+      "verification_level": "market_transplant_output",
+      "comparison_status": "not_comparable",
+      "calculation_verified": true,
+      "pass": true,
+      "note": "中国全A实验产出；美国原值仅背景"
+    },
+    {
+      "key": "R10_SMB_annualized_net_return",
+      "element_id": "R10",
+      "report_value": null,
+      "reproduced_value": 0.08590099562734621,
+      "verification_level": "market_transplant_output",
+      "comparison_status": "not_comparable",
+      "calculation_verified": true,
+      "pass": true,
+      "note": "中国全A实验产出；美国原值仅背景"
+    },
+    {
+      "key": "R10_STYLE_1N_annualized_net_return",
+      "element_id": "R10",
+      "report_value": null,
+      "reproduced_value": 0.1360320601501228,
+      "verification_level": "market_transplant_output",
+      "comparison_status": "not_comparable",
+      "calculation_verified": true,
+      "pass": true,
+      "note": "中国全A实验产出；美国原值仅背景"
+    },
+    {
+      "key": "R10_SV_annualized_net_return",
+      "element_id": "R10",
+      "report_value": null,
+      "reproduced_value": 0.16969706666763695,
+      "verification_level": "market_transplant_output",
+      "comparison_status": "not_comparable",
+      "calculation_verified": true,
+      "pass": true,
+      "note": "中国全A实验产出；美国原值仅背景"
+    },
+    {
+      "key": "R4_china_oos_correlation_cells",
+      "element_id": "R4",
+      "report_value": null,
+      "reproduced_value": 49,
+      "verification_level": "structure",
+      "comparison_status": "not_comparable",
+      "calculation_verified": true,
+      "pass": true
+    },
+    {
+      "key": "R7_china_style_box_winner_frequency_sum",
+      "element_id": "R7",
+      "report_value": null,
+      "reproduced_value": 1.0,
+      "verification_level": "structure",
+      "comparison_status": "not_comparable",
+      "calculation_verified": true,
+      "pass": true
+    },
+    {
+      "key": "SA4_dual_china_benchmark_rows",
+      "element_id": "SA4",
+      "report_value": null,
+      "reproduced_value": 16,
+      "verification_level": "structure",
+      "comparison_status": "not_comparable",
+      "calculation_verified": true,
+      "pass": true
+    }
+  ],
+  "qualitative": [
+    {
+      "key": "R4_structure_transplant",
+      "expect": "中国四箱及SMB/HML/GML相关矩阵",
+      "observed": "49个相关单元格",
+      "pass": true
+    },
+    {
+      "key": "R7_monthly_net_winner_frequency",
+      "expect": "四箱扣费后月度胜出频率且无F9标签",
+      "observed": "33个正式OOS月",
+      "pass": true
+    },
+    {
+      "key": "SA4_dual_benchmark",
+      "expect": "全A与四箱1/N双基准",
+      "observed": "ALL_A与STYLE_1N两套中国结构基准均已输出",
+      "pass": true
+    }
+  ],
+  "us_reference_background": {
+    "R7": {
+      "Value": 0.199,
+      "Growth": 0.159,
+      "Momentum": 0.144,
+      "Low Volatility": 0.213,
+      "Quality": 0.04,
+      "Small Size": 0.245
+    },
+    "R10": {
+      "Russell 1000": {
+        "annualized_return": 0.084,
+        "annualized_volatility": 0.1549,
+        "sharpe": 0.52
+      },
+      "Equal Weighted": {
+        "annualized_return": 0.0863,
+        "annualized_volatility": 0.1519,
+        "sharpe": 0.54
+      },
+      "Business Cycle Tilt": {
+        "annualized_return": 0.0984,
+        "annualized_volatility": 0.1606,
+        "sharpe": 0.59
+      },
+      "ML Approach": {
+        "annualized_return": 0.1147,
+        "annualized_volatility": 0.1681,
+        "sharpe": 0.66
+      }
+    },
+    "note": "仅背景/不可比；Momentum、Low Volatility、Quality、商业周期与ML未进入实现；PASS若由verifier给出，也只代表本33个月实验合同通过，不证明长期稳定"
+  }
+}

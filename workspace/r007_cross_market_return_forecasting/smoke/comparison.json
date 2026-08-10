@@ -1,0 +1,5 @@
+{
+  "mode": "smoke",
+  "note": "仅验证接口可执行，不构成复现验证结论",
+  "verdict": null
+}

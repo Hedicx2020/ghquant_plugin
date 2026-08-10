@@ -1,0 +1,216 @@
+{
+  "schema_version": 1,
+  "report_id": "r005_macro_regime_factor_allocation",
+  "pdf_path": "/Users/hedi/Downloads/ssrn-6962678.pdf",
+  "paths": {
+    "workspace": "workspace/r005_macro_regime_factor_allocation",
+    "src": "src/r005_macro_regime_factor_allocation",
+    "output": "output/r005_macro_regime_factor_allocation"
+  },
+  "mode": "auto",
+  "reproduction_mode": "experimental",
+  "max_iter": null,
+  "type": null,
+  "tags": [],
+  "difficulty": null,
+  "difficulty_override": null,
+  "feasibility": null,
+  "pdf_pages": 104,
+  "current_stage": "extract",
+  "status": "aborted",
+  "stages": {
+    "init": {
+      "status": "done",
+      "attempts": 1,
+      "updated_at": "2026-07-26T10:28:20+08:00",
+      "issues": 0
+    },
+    "extract": {
+      "status": "running",
+      "attempts": 1,
+      "updated_at": "2026-07-26T10:28:27+08:00",
+      "issues": 0
+    },
+    "plan": {
+      "status": "pending",
+      "attempts": 0,
+      "updated_at": null,
+      "issues": 0
+    },
+    "spec_audit": {
+      "status": "pending",
+      "attempts": 0,
+      "updated_at": null,
+      "issues": 0
+    },
+    "implement": {
+      "status": "pending",
+      "attempts": 0,
+      "updated_at": null,
+      "issues": 0
+    },
+    "code_audit": {
+      "status": "pending",
+      "attempts": 0,
+      "updated_at": null,
+      "issues": 0
+    },
+    "verify": {
+      "status": "pending",
+      "attempts": 0,
+      "updated_at": null,
+      "issues": 0
+    },
+    "iterate": {
+      "status": "pending",
+      "attempts": 0,
+      "updated_at": null,
+      "issues": 0
+    },
+    "result_audit": {
+      "status": "pending",
+      "attempts": 0,
+      "updated_at": null,
+      "issues": 0
+    },
+    "oos": {
+      "status": "pending",
+      "attempts": 0,
+      "updated_at": null,
+      "issues": 0
+    },
+    "report": {
+      "status": "pending",
+      "attempts": 0,
+      "updated_at": null,
+      "issues": 0
+    },
+    "review": {
+      "status": "pending",
+      "attempts": 0,
+      "updated_at": null,
+      "issues": 0
+    }
+  },
+  "gates": [
+    {
+      "stage": "init",
+      "checks": [
+        {
+          "id": "G-IN-1",
+          "desc": "state schema 合法",
+          "result": "PASS"
+        },
+        {
+          "id": "G-IN-2",
+          "desc": "目录树齐全",
+          "result": "PASS"
+        },
+        {
+          "id": "G-IN-3",
+          "desc": "report_text.md 存在",
+          "result": "PASS"
+        },
+        {
+          "id": "G-IN-4",
+          "desc": "report_text.md 中 PAGE 标记数 >= 1",
+          "result": "PASS"
+        },
+        {
+          "id": "G-IN-5",
+          "desc": "PAGE 标记数与 PDF 页数一致",
+          "result": "PASS"
+        },
+        {
+          "id": "G-IN-6",
+          "desc": "tables_extracted.md 存在",
+          "result": "PASS"
+        }
+      ],
+      "verdict": "PASS",
+      "timestamp": "2026-07-26T10:28:07+08:00"
+    }
+  ],
+  "external_reviews": [],
+  "milestones": [],
+  "iteration": {
+    "current": 0,
+    "max": null,
+    "history": []
+  },
+  "verdict": {
+    "result": null,
+    "comparison_file": null,
+    "metrics_pass": null,
+    "metrics_total": null,
+    "decided_at": null
+  },
+  "coverage_stats": {
+    "total": 0,
+    "done": 0,
+    "skipped": 0,
+    "infeasible": 0,
+    "pending": 0
+  },
+  "assumptions": {
+    "total": 0,
+    "assumed": 0,
+    "confirmed": 0,
+    "revised": 0
+  },
+  "blockers": [],
+  "pending_question": "编号纠正：用户确认 r005 已存在，本篇为新论文；误建案例已中止，改用 r006。",
+  "events": [
+    {
+      "event": "state:init",
+      "timestamp": "2026-07-26T10:27:57+08:00",
+      "payload": null
+    },
+    {
+      "event": "stage:init:running",
+      "timestamp": "2026-07-26T10:27:57+08:00",
+      "payload": null
+    },
+    {
+      "event": "set:pdf_pages",
+      "timestamp": "2026-07-26T10:28:07+08:00",
+      "payload": {
+        "value": 104
+      }
+    },
+    {
+      "event": "stage:init:done",
+      "timestamp": "2026-07-26T10:28:20+08:00",
+      "payload": null
+    },
+    {
+      "event": "stage:extract:running",
+      "timestamp": "2026-07-26T10:28:27+08:00",
+      "payload": null
+    },
+    {
+      "event": "set:status",
+      "timestamp": "2026-07-26T10:35:04+08:00",
+      "payload": {
+        "value": "aborted"
+      }
+    },
+    {
+      "event": "set:pending_question",
+      "timestamp": "2026-07-26T10:35:04+08:00",
+      "payload": {
+        "value": "编号纠正：用户确认 r005 已存在，本篇为新论文；误建案例已中止，改用 r006。"
+      }
+    },
+    {
+      "event": "id_collision_corrected",
+      "timestamp": "2026-07-26T10:35:04+08:00",
+      "payload": {
+        "replacement": "r006",
+        "reason": "user confirmed r005 already exists"
+      }
+    }
+  ],
+  "created_at": "2026-07-26T10:27:57+08:00",
+  "updated_at": "2026-07-26T10:35:04+08:00"
+}

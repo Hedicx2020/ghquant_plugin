@@ -1,0 +1,26 @@
+{
+  "context": {
+    "code_manifest": {
+      "aggregate_sha256": "code-a",
+      "files": []
+    },
+    "config_sha256": "39e6fd549dc1beace79a80f14eb93ee0da9442dab426f8d44b1ce4387c9e4b82",
+    "context_sha256": "5e72dc9f5c9cce9edf16df902fb2bbcc83c7340cd8ebcba2922e4d340fe1ca63",
+    "input_manifest": {
+      "input_identity": "input-a"
+    },
+    "input_manifest_sha256": "bb8fd29d6de9e19e6166110b0f0cd0c07e63ca6c044fb32dc16fabd2513bc3a9",
+    "stage": "probe",
+    "upstream_checkpoint_hashes": {}
+  },
+  "output_manifest": [
+    {
+      "bytes": 1208,
+      "path": "/Users/hedi/report_reproduce/workspace/r007_cross_market_return_forecasting/smoke/checkpoint_regression/frames/probe_output.parquet",
+      "schema_sha256": "c8b7213fec043b2c587a748227d578ce5b41dc0e63642aa2f782e94d9f306d47",
+      "sha256": "af0b0fc87fb027b3fa0aeb872a1561461f3c1328983996eaf80d6a4ee9b7301c"
+    }
+  ],
+  "purpose": "dynamic_regression",
+  "status": "complete"
+}
