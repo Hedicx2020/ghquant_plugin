@@ -1,0 +1,148 @@
+{
+  "package_id": "r004_600466_to_400165_iter03",
+  "created_at_utc": "2026-07-18T23:56:00Z",
+  "offline_runtime_only": true,
+  "successor_whitelist": [
+    "400165"
+  ],
+  "lifecycle_scope": {
+    "600466": "400165"
+  },
+  "source_substitution": {
+    "planned_source": "Eastmoney push2his kline fqt=0",
+    "failure": "diagnosis指定端点在冻结时连续空响应，未保存也未补造响应",
+    "approved_replacement": "10jqka public unadjusted all.js",
+    "diagnosis_contract": "iter_03/diagnosis.md 数据源替代裁决",
+    "amount_policy": "unavailable; never inferred or represented as source amount",
+    "vwap_policy": "positive source volumn plus identical source OHLC makes VWAP mathematically equal to the single price"
+  },
+  "sources": [
+    {
+      "source_id": "sse_600466_delisting_20230605",
+      "publisher": "上海证券交易所",
+      "url": "https://static.sse.com.cn/disclosure/bond/announcement/company/c/new/2023-06-05/155484_20230605_KJB3.pdf",
+      "downloaded_at_utc": "2026-07-18T23:34:39Z",
+      "http_request": {
+        "method": "GET",
+        "params": {},
+        "response_content_type": "application/pdf"
+      },
+      "raw": {
+        "file": "sse_600466_delisting_20230605.pdf",
+        "sha256": "e9f53e9693106878aab293fe231a7385f53639b95b0eaea571c3644ee6cf7983",
+        "bytes": 409693,
+        "row_count": 8,
+        "row_unit": "pdf_pages"
+      },
+      "parsed": {
+        "file": "sse_delisting_facts.csv",
+        "sha256": "458f3b076ef1aa33f687f44d8e68da5df50ea9cce63b04c0b164329e9d9c6147",
+        "row_count": 1,
+        "parser": "pdftotext 25.06.0 + explicit fact extraction from PDF page 5"
+      },
+      "code_range": {
+        "old_stock_code": "600466",
+        "new_stock_code": null
+      },
+      "date_range": {
+        "source_public_date": "2023-06-05",
+        "delisting_decision_date": "2023-05-30",
+        "delisting_effective_date": "2023-06-06"
+      },
+      "fields_and_units": {
+        "transfer_window_trading_days": "trading days; value=45",
+        "security_code": "six digit string",
+        "dates": "YYYY-MM-DD"
+      }
+    },
+    {
+      "source_id": "neeq_400165_company_report_20250828",
+      "publisher": "全国中小企业股份转让系统",
+      "url": "https://www.neeq.com.cn/disclosure/2025/2025-08-28/5c0b46d0df904e44a9cd203d6ba42afd.pdf",
+      "downloaded_at_utc": "2026-07-18T23:36:08Z",
+      "http_request": {
+        "method": "GET",
+        "params": {},
+        "response_content_type": "application/pdf",
+        "acquisition_note": "NEEQ short-lived C3VK cookie followed same-URL redirect"
+      },
+      "raw": {
+        "file": "neeq_400165_company_report_20250828.pdf",
+        "sha256": "62d2177c2991dfe48ec2a734df7d3b3adb8d12b8a4890c90f41c9d79444d960d",
+        "bytes": 2135817,
+        "row_count": 157,
+        "row_unit": "pdf_pages"
+      },
+      "parsed": {
+        "file": "neeq_successor_facts.csv",
+        "sha256": "40af0944e2bd7c744c529d072d1b4ee2b97f7f148ba0b51c74320b1cdce8bff5",
+        "row_count": 1,
+        "parser": "pdftotext 25.06.0 + explicit fact extraction from PDF page 7"
+      },
+      "code_range": {
+        "old_stock_code": "600466",
+        "new_stock_code": "400165",
+        "identity_basis": "same issuer identity joined with SSE predecessor evidence"
+      },
+      "date_range": {
+        "document_public_date": "2025-08-28",
+        "historical_entry_date": "2023-07-26",
+        "formal_mapping_available_asof": "2023-07-26"
+      },
+      "fields_and_units": {
+        "total_common_shares": "shares; value=3034930435",
+        "mapping_ratio": "new shares per old share; value=1",
+        "security_code": "six digit string",
+        "dates": "YYYY-MM-DD"
+      }
+    },
+    {
+      "source_id": "10jqka_400165_daily_all",
+      "publisher": "同花顺公开行情",
+      "url": "https://d.10jqka.com.cn/v6/line/sb_400165/01/all.js",
+      "downloaded_at_utc": "2026-07-18T23:51:47Z",
+      "http_request": {
+        "method": "GET",
+        "params": {
+          "market_code": "sb_400165",
+          "period": "01",
+          "range": "all"
+        },
+        "response_content_type": "application/javascript"
+      },
+      "raw": {
+        "file": "10jqka_400165_daily_all.js",
+        "sha256": "6284dd992927823f269c5a6f11f60e9554f74199ab33996c77a249cf3e02539b",
+        "bytes": 9890,
+        "row_count": 429,
+        "row_unit": "daily_records"
+      },
+      "parsed": {
+        "file": "10jqka_400165_daily_all.csv",
+        "sha256": "e2517458d828009e545f8b53d1e75a0d9d4ebac4378210ee1caba6f819898eb8",
+        "row_count": 429,
+        "parser": "offline callback JSON parser; attach year by sortYear; divide price by priceFactor"
+      },
+      "code_range": {
+        "old_stock_code": null,
+        "new_stock_code": "400165",
+        "whitelist_scope": "600466 lifecycle exit only"
+      },
+      "date_range": {
+        "start": "2023-07-26",
+        "end": "2026-07-17",
+        "raw_start": "20230726",
+        "raw_total": 429,
+        "sort_year": [[2023, 64], [2024, 144], [2025, 145], [2026, 76]]
+      },
+      "fields_and_units": {
+        "price": "compressed integer OHLC; divide by priceFactor=100; unadjusted CNY/share",
+        "volumn": "shares; first day=5753700",
+        "amount": "unavailable; not present in source and never fabricated",
+        "dates": "MMDD joined with sortYear",
+        "first_day_ohlc": "open=high=low=close=0.38 CNY/share",
+        "vwap": "CNY/share; mathematically equal to the sole OHLC price only when volumn>0"
+      }
+    }
+  ]
+}

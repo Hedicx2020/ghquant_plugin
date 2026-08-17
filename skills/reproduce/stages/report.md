@@ -25,6 +25,14 @@
    uv run python tools/render_report.py <id>
    ```
    产出 `output/<id>/final_report.html`（自包含：指标对比总表可筛选、图表 base64 内嵌、样本外/审计台账/假设登记簿与报告全文折叠收录，浏览器直接打开可分享）。点收该文件存在。
+5.5 **导出假设修改工作表**（主会话跑确定性工具，性质同上）：
+   ```
+   uv run python tools/assumptions_xlsx.py export <id>
+   ```
+   产出 `workspace/<id>/assumptions.xlsx`（全部假设 + 黄底可编辑列，review 阶段客户批量修改的入口，结构见 `templates/audit/assumptions.md`「Excel 批量 revise 工作流」节）。点收该文件存在；把返回 JSON 的 `assumptions_stats` 写账：
+   ```
+   uv run python tools/state.py set <id> assumptions '<assumptions_stats JSON>'
+   ```
 
 ## 出口门禁
 
@@ -43,4 +51,5 @@ VERDICT PASS → `set-stage <id> report done` → `set <id> status awaiting_revi
 - **G-FN-5 rejected 意见未现** → 回 reporter 把 audit_responses 中处置=rejected 的意见 ID 原样写入报告遗留清单。
 - **G-FN-6 coverage_stats.total=0** → 主会话补跑步骤 2 的 `set coverage_stats`。
 - **G-FN-7 缺 final_report.html** → 主会话补跑步骤 5 的 `render_report.py`（工具报错则按报错修 comparison/state 硬输入后重跑）。
+- **步骤 5.5 export 失败**（assumptions.md 缺失/无 AS 块等硬错误）→ 不阻塞 G-FN；按报错修好输入后重跑本步，仍失败则在 review 挂起说明中如实告知「工作表导出失败，批量 revise 暂不可用（单条 revise 不受影响）」。
 - **HTML 评级徽章缺失或与报告评级不符** → final_report.md 违反硬约束 11f 的评级句式（渲染器按「可信度评级」四字就近提取字母，前置判据句会误抓）→ 回 reporter 修句式后重跑步骤 5 渲染。

@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 import numpy as np
 import pandas as pd
@@ -1088,4 +1088,364 @@ def run_multi_path_factor_backtest(
         path_metric_aggregate=metric_aggregate,
         path_daily_aggregate=daily_aggregate,
         monotonicity=monotonicity,
+    )
+
+
+@dataclass(frozen=True)
+class SignedLiquidityPortfolioSettings:
+    """按预测方向与历史流动性容量构造成本前组合的通用参数。
+
+    ``group_columns`` 用来隔离规格、市场方向和模型；同一组内只按
+    ``abs(prediction)`` 排序，股票代码仅用于同值时的确定性裁决。
+    """
+
+    group_columns: tuple[str, ...]
+    date_column: str
+    stock_column: str
+    prediction_column: str
+    realized_return_column: str
+    liquidity_column: str
+    market_column: str
+    portfolio_fractions: tuple[tuple[str, float], ...]
+    participation_rate: float
+    market_position_caps: Mapping[str, float]
+    periods_per_year: int
+    minimum_sharpe_observations: int
+    transaction_cost_rate: float
+
+    def validate(self) -> None:
+        """核验嵌套、容量、年化与成本前口径。"""
+        if not self.group_columns or len(set(self.group_columns)) != len(
+            self.group_columns
+        ):
+            raise ValueError("group_columns 不得为空、重复")
+        if self.date_column in self.group_columns:
+            raise ValueError("date_column 不得重复出现在 group_columns")
+        if len({name for name, _ in self.portfolio_fractions}) != len(
+            self.portfolio_fractions
+        ):
+            raise ValueError("组合名称不得重复")
+        fractions = tuple(float(value) for _, value in self.portfolio_fractions)
+        if not fractions or fractions[0] != 1.0:
+            raise ValueError("首个嵌套组合必须覆盖全部预测，fraction=1")
+        if any(not 0.0 < value <= 1.0 for value in fractions):
+            raise ValueError("组合保留比例必须位于 (0, 1]")
+        if any(current >= previous for previous, current in zip(fractions, fractions[1:])):
+            raise ValueError("组合保留比例必须严格递减")
+        if not np.isfinite(self.participation_rate) or self.participation_rate <= 0:
+            raise ValueError("participation_rate 必须为正的有限数")
+        if not self.market_position_caps:
+            raise ValueError("market_position_caps 不得为空")
+        if any(
+            not np.isfinite(float(cap)) or float(cap) <= 0
+            for cap in self.market_position_caps.values()
+        ):
+            raise ValueError("各市场仓位上限必须为正的有限数")
+        if self.periods_per_year <= 0:
+            raise ValueError("periods_per_year 必须为正整数")
+        if self.minimum_sharpe_observations < 2:
+            raise ValueError("minimum_sharpe_observations 至少为2")
+        if self.transaction_cost_rate != 0.0:
+            raise ValueError("本接口只计算成本前 PnL，transaction_cost_rate 必须为0")
+
+
+@dataclass
+class SignedLiquidityPortfolioResult:
+    """成本前方向组合的成员、贡献、日度路径、指标与嵌套审计。"""
+
+    portfolio_members: pd.DataFrame
+    daily_pnl: pd.DataFrame
+    sharpe_metrics: pd.DataFrame
+    nested_audit: pd.DataFrame
+
+
+def _annualized_pnl_record(
+    pnl: pd.Series,
+    *,
+    periods_per_year: int,
+    minimum_observations: int,
+) -> pd.Series:
+    """按 F21 公式返回年化 Sharpe，并显式标注不可计算原因。"""
+    values = pd.to_numeric(pnl, errors="coerce").dropna()
+    observation_count = int(len(values))
+    mean = float(values.mean()) if observation_count else np.nan
+    std = float(values.std(ddof=1)) if observation_count >= 2 else np.nan
+    if observation_count < minimum_observations:
+        sharpe = np.nan
+        status = "insufficient_observations"
+    elif not np.isfinite(std) or std == 0.0:
+        sharpe = np.nan
+        status = "zero_volatility"
+    else:
+        sharpe = float(mean / std * np.sqrt(periods_per_year))
+        status = "ok"
+    return pd.Series(
+        {
+            "observation_count": observation_count,
+            "pnl_mean": mean,
+            "pnl_std": std,
+            "annualized_sharpe": sharpe,
+            "sharpe_status": status,
+            "total_pnl": float(values.sum()) if observation_count else np.nan,
+        }
+    )
+
+
+def _build_nested_membership_audit(
+    members: pd.DataFrame,
+    settings: SignedLiquidityPortfolioSettings,
+) -> pd.DataFrame:
+    """逐组逐日核验相邻保留比例的股票集合包含关系。"""
+    base_keys = [*settings.group_columns, settings.date_column]
+    count_table = (
+        members.groupby([*base_keys, "portfolio"], observed=True)
+        .agg(
+            member_count=(settings.stock_column, "size"),
+            expected_member_count=("selected_count", "first"),
+        )
+        .reset_index()
+    )
+    audit_parts: list[pd.DataFrame] = []
+    portfolios = tuple(name for name, _ in settings.portfolio_fractions)
+    for larger_name, smaller_name in zip(portfolios, portfolios[1:]):
+        larger = members.loc[
+            members["portfolio"].eq(larger_name),
+            [*base_keys, settings.stock_column],
+        ].drop_duplicates()
+        smaller = members.loc[
+            members["portfolio"].eq(smaller_name),
+            [*base_keys, settings.stock_column],
+        ].drop_duplicates()
+        membership = smaller.merge(
+            larger.assign(_in_larger=True),
+            on=[*base_keys, settings.stock_column],
+            how="left",
+            validate="one_to_one",
+        )
+        violations = (
+            membership["_in_larger"]
+            .isna()
+            .groupby([membership[column] for column in base_keys], observed=True)
+            .sum()
+            .rename("subset_violation_count")
+            .reset_index()
+        )
+        larger_counts = count_table.loc[
+            count_table["portfolio"].eq(larger_name),
+            [*base_keys, "member_count", "expected_member_count"],
+        ].rename(
+            columns={
+                "member_count": "larger_member_count",
+                "expected_member_count": "larger_expected_member_count",
+            }
+        )
+        smaller_counts = count_table.loc[
+            count_table["portfolio"].eq(smaller_name),
+            [*base_keys, "member_count", "expected_member_count"],
+        ].rename(
+            columns={
+                "member_count": "smaller_member_count",
+                "expected_member_count": "smaller_expected_member_count",
+            }
+        )
+        audit = (
+            larger_counts.merge(
+                smaller_counts,
+                on=base_keys,
+                how="outer",
+                validate="one_to_one",
+            )
+            .merge(
+                violations,
+                on=base_keys,
+                how="left",
+                validate="one_to_one",
+            )
+        )
+        audit.insert(len(base_keys), "larger_portfolio", larger_name)
+        audit.insert(len(base_keys) + 1, "smaller_portfolio", smaller_name)
+        audit["subset_violation_count"] = (
+            audit["subset_violation_count"].fillna(0).astype("int64")
+        )
+        audit["member_count_matches_expected"] = (
+            audit["larger_member_count"].eq(audit["larger_expected_member_count"])
+            & audit["smaller_member_count"].eq(
+                audit["smaller_expected_member_count"]
+            )
+        )
+        audit["is_nested"] = audit["subset_violation_count"].eq(0)
+        audit_parts.append(audit)
+    return (
+        pd.concat(audit_parts, ignore_index=True)
+        if audit_parts
+        else pd.DataFrame()
+    )
+
+
+def run_signed_liquidity_portfolios(
+    predictions: pd.DataFrame,
+    settings: SignedLiquidityPortfolioSettings,
+) -> SignedLiquidityPortfolioResult:
+    """构造按绝对预测值嵌套的方向组合并计算成本前 PnL/Sharpe。
+
+    输入中的流动性列必须已由调用方按信号时点历史数据计算。本函数不读取
+    当日成交额、不填补缺失，也不会在不同模型间聚合预测。
+    """
+    settings.validate()
+    required = (
+        *settings.group_columns,
+        settings.date_column,
+        settings.stock_column,
+        settings.prediction_column,
+        settings.realized_return_column,
+        settings.liquidity_column,
+        settings.market_column,
+    )
+    _require_columns(predictions, required, "方向组合预测面板")
+    working = _normalise_dates(predictions, settings.date_column)
+    unique_keys = [
+        *settings.group_columns,
+        settings.date_column,
+        settings.stock_column,
+    ]
+    if working.duplicated(unique_keys).any():
+        duplicate_count = int(
+            working.duplicated(unique_keys, keep=False).sum()
+        )
+        raise ValueError(f"方向组合预测面板存在 {duplicate_count} 行重复键")
+    numeric_columns = (
+        settings.prediction_column,
+        settings.realized_return_column,
+        settings.liquidity_column,
+    )
+    numeric = working.loc[:, numeric_columns].apply(pd.to_numeric, errors="coerce")
+    finite = np.isfinite(
+        numeric.to_numpy(dtype=np.float64, na_value=np.nan)
+    ).all(axis=1)
+    if not finite.all():
+        raise ValueError(
+            "方向组合预测/实现收益/历史流动性存在 "
+            f"{int((~finite).sum())} 行非有限值"
+        )
+    working.loc[:, numeric_columns] = numeric
+    working[settings.stock_column] = working[settings.stock_column].astype(str)
+    caps = working[settings.market_column].astype(str).map(
+        {str(key): float(value) for key, value in settings.market_position_caps.items()}
+    )
+    if caps.isna().any():
+        unknown = sorted(
+            working.loc[caps.isna(), settings.market_column].astype(str).unique()
+        )
+        raise KeyError(f"未配置仓位上限的市场: {unknown}")
+    if (working[settings.liquidity_column] < 0).any():
+        raise ValueError("历史成交金额中位数不得为负")
+    working["absolute_prediction"] = working[settings.prediction_column].abs()
+    working["position_direction"] = np.sign(working[settings.prediction_column])
+    working["position_cap"] = caps.to_numpy(dtype=np.float64)
+    working["position"] = np.minimum(
+        settings.participation_rate * working[settings.liquidity_column],
+        working["position_cap"],
+    )
+    ranking_keys = [
+        *settings.group_columns,
+        settings.date_column,
+        "absolute_prediction",
+        settings.stock_column,
+    ]
+    ascending = [True] * (len(settings.group_columns) + 1) + [False, True]
+    working = working.sort_values(
+        ranking_keys,
+        ascending=ascending,
+        kind="mergesort",
+    ).reset_index(drop=True)
+    daily_groups = working.groupby(
+        [*settings.group_columns, settings.date_column],
+        observed=True,
+        sort=False,
+    )
+    working["absolute_prediction_rank"] = daily_groups.cumcount() + 1
+    working["candidate_count"] = daily_groups[settings.stock_column].transform(
+        "size"
+    )
+
+    portfolio_table = pd.DataFrame(
+        settings.portfolio_fractions,
+        columns=["portfolio", "retained_fraction"],
+    )
+    members = working.merge(portfolio_table, how="cross")
+    members["selected_count"] = np.ceil(
+        members["candidate_count"] * members["retained_fraction"]
+    ).astype("int64")
+    members = members.loc[
+        members["absolute_prediction_rank"].le(members["selected_count"])
+    ].copy()
+    members["pnl_contribution_before_cost"] = (
+        members["position_direction"]
+        * members[settings.realized_return_column]
+        * members["position"]
+    )
+    members["transaction_cost_rate"] = settings.transaction_cost_rate
+
+    daily_keys = [
+        *settings.group_columns,
+        settings.date_column,
+        "portfolio",
+        "retained_fraction",
+    ]
+    daily = (
+        members.groupby(daily_keys, observed=True, sort=False)
+        .agg(
+            candidate_count=("candidate_count", "first"),
+            selected_count=("selected_count", "first"),
+            member_count=(settings.stock_column, "size"),
+            gross_position=("position", "sum"),
+            long_position=(
+                "position",
+                lambda values: float(
+                    values[
+                        members.loc[values.index, "position_direction"].gt(0)
+                    ].sum()
+                ),
+            ),
+            short_position=(
+                "position",
+                lambda values: float(
+                    values[
+                        members.loc[values.index, "position_direction"].lt(0)
+                    ].sum()
+                ),
+            ),
+            daily_pnl_before_cost=("pnl_contribution_before_cost", "sum"),
+        )
+        .reset_index()
+    )
+    path_keys = [*settings.group_columns, "portfolio", "retained_fraction"]
+    daily = daily.sort_values([*path_keys, settings.date_column]).reset_index(
+        drop=True
+    )
+    daily["cumulative_pnl_before_cost"] = daily.groupby(
+        path_keys,
+        observed=True,
+        sort=False,
+    )["daily_pnl_before_cost"].cumsum()
+    metrics = (
+        daily.groupby(path_keys, observed=True, sort=False)[
+            "daily_pnl_before_cost"
+        ]
+        .apply(
+            _annualized_pnl_record,
+            periods_per_year=settings.periods_per_year,
+            minimum_observations=settings.minimum_sharpe_observations,
+        )
+        .unstack()
+        .reset_index()
+    )
+    nested_audit = _build_nested_membership_audit(members, settings)
+    return SignedLiquidityPortfolioResult(
+        portfolio_members=members.sort_values(
+            [*daily_keys, "absolute_prediction_rank"]
+        ).reset_index(drop=True),
+        daily_pnl=daily,
+        sharpe_metrics=metrics,
+        nested_audit=nested_audit,
     )

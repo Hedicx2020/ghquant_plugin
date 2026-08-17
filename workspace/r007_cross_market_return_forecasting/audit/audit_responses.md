@@ -1,0 +1,13 @@
+# 审计回应总表
+
+| 意见ID | severity | 摘要 | 处置(accepted/rejected/deferred) | 回应（修复位置 文件:行号 或技术理由） | 复核 |
+| --- | --- | --- | --- | --- | --- |
+| CDX-S-01 | major | 缺反向预测与基线对比的 R 类锚点 | accepted | 已增补 R3/R4，并同步矩阵与 m4：spec/spec.md:410、spec/spec.md:422、spec/coverage_matrix.md:55、spec/coverage_matrix.md:56、plan.md:58 | pass（外部增量复核） |
+| CDX-S-02 | minor | 页面覆盖表 D6/D7/D8 关联错位 | accepted | 已修正页面覆盖及 D8 页码：spec/spec.md:43、spec/spec.md:121 | pass（外部增量复核） |
+| CDX-S-03 | minor | FIG3 缺每行业 25 只及 254/235 样本口径 | accepted | 已补齐构图与样本参数：spec/spec.md:443 | pass（外部增量复核） |
+| CDX-S-04 | minor | SA1/SA2/SA5 缺次级结论 | accepted | 已补 SA1 qr6 韧性、SA2 qr6 持久性与 Lag4 稳定、SA5 RIDGE 不稳：spec/spec.md:464、spec/spec.md:472、spec/spec.md:502 | pass（外部增量复核＋内部定点复核） |
+| CDX-C-01 | minor | 缩减外审无法确认随机种子与 SVM 核函数 | rejected | 已反查集中配置：SVM 明确 `kernel="rbf"`；XGBoost、LGBM、RF、AdaBoost 及其基树均固定 `random_state=42`；LASSO 为 `selection="cyclic"`、RIDGE 为确定性 `solver="auto"`，两者 `random_state=None` 不引入随机路径：src/r007_cross_market_return_forecasting/config.py:315、src/r007_cross_market_return_forecasting/config.py:337、src/r007_cross_market_return_forecasting/config.py:352、src/r007_cross_market_return_forecasting/config.py:371、src/r007_cross_market_return_forecasting/config.py:394、src/r007_cross_market_return_forecasting/config.py:416、src/r007_cross_market_return_forecasting/config.py:424 | pass（配置定点复核） |
+| CDX-C-R1-01 | minor | 零缺口门禁与 AS2/AS14 动态候选冲突 | accepted | 已按 planner 裁决改为由图、训练与必要观测审计导出动态可预测键，不设置任意覆盖率阈值；合法排除逐键记账，predictable 键严格要求十模型齐全，三规格显式求交：src/r007_cross_market_return_forecasting/model_pipeline.py:238、src/r007_cross_market_return_forecasting/portfolio_pipeline.py:869 | pass（外部 round3＋内部最终全量复核） |
+| CDX-C-R2-01 | major | eligibility 缺逐键原始字段，排除原因不可独立重算 | accepted | 已落盘 `predictor_complete`、`actual_return_available`、`historical_liquidity_available`，生产端、M4 与 SA3 共用固定优先级推导和严格等式校验；伪标原因或篡改原始字段均硬失败：src/r007_cross_market_return_forecasting/model_pipeline.py:238、src/r007_cross_market_return_forecasting/model_pipeline.py:336、src/r007_cross_market_return_forecasting/portfolio_pipeline.py:869 | pass（外部 round3 closure＋内部最终全量复核） |
+| CDX-C-R2-02 | minor | FIG3 UTC 列缺失时可能退化为日期级检查 | accepted | FIG3 专用入口现强制要求 causal/source/UTC 列，逐条重算 250 个源收盘早于目标开盘及图日的合法配对，并在构图前失败；构图后再对五列逐值断言防漂移：src/r007_cross_market_return_forecasting/main.py:2379、src/r007_cross_market_return_forecasting/main.py:2520 | pass（外部 round3 closure＋内部最终全量复核） |
+| CDX-C-R3-01 | minor | 通用滚动图 `_direction_mapping` 仍保留 UTC 列可选守卫 | deferred | 正式输入由 `build_causal_calendar_mapping` 固定生成 `source_close_utc`、`target_open_utc` 并在 M1 审计闭环，正式路径不存在缺列；FIG3 已另有强制逐条预验证。保留为通用函数防御性加固项，不在已用尽的三轮定点修复中扩大改动：src/r007_cross_market_return_forecasting/data_pipeline.py:1143、src/r007_cross_market_return_forecasting/graph_pipeline.py:269 | pass（正式输入合同与内部最终全量复核；minor deferred） |

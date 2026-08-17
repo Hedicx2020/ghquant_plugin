@@ -1,0 +1,140 @@
+{
+  "files": [
+    {
+      "bytes": 449934,
+      "relative_path": "backtest_summary.xlsx",
+      "sha256": "e3fa03fcab41cfbe7a8b2420737e64a44c006dbd9597e1eaa7ef0f7ea71c7086"
+    },
+    {
+      "bytes": 109,
+      "relative_path": "comparison.json",
+      "sha256": "6046239daabe209eed5f6c16caa0d249fbd562ad7135ffe3429674099dcd8f21"
+    },
+    {
+      "bytes": 7392,
+      "relative_path": "evidence_tables.xlsx",
+      "sha256": "a47172d10f39ccffaeb5cec13d5bdef7c857e5b60614bd566eb0fbf76e1721f3"
+    },
+    {
+      "bytes": 62803,
+      "relative_path": "feature_importance.png",
+      "sha256": "0c8b220d06f78e1615ff2abeda94e1725af7f0882036b16ac6763462dc8a2f5a"
+    },
+    {
+      "bytes": 70073,
+      "relative_path": "fig03_biadjacency_heatmap.png",
+      "sha256": "88aa0048aa2a59afd5a04cee989e98a2e731e56e24b21256dc0b3dc6e0a04884"
+    },
+    {
+      "bytes": 70930,
+      "relative_path": "fig04_sector_block_heatmap.png",
+      "sha256": "82a5713cc6e67991696110f00a88ba240bb384deb602c3cdf192197349e523fc"
+    },
+    {
+      "bytes": 61319,
+      "relative_path": "fig05_indegree_percentiles.png",
+      "sha256": "d9890f20d3a95bbabd1251b2264865d3e35767026db041976712f7a39126958c"
+    },
+    {
+      "bytes": 426133,
+      "relative_path": "fig08_us_to_cn_sharpe.png",
+      "sha256": "75d7b9c99e8017ac44b1ab48bae22a51e9e16d82bbd2fc438adb3ed2a4180662"
+    },
+    {
+      "bytes": 425998,
+      "relative_path": "fig09_cn_to_us_sharpe.png",
+      "sha256": "ba7ad44907b44adda13c34618b45c18605f5c91a8f0871892dd71c068bc60deb"
+    },
+    {
+      "bytes": 163326,
+      "relative_path": "fig10_cumulative_daily_pnl.png",
+      "sha256": "ee38fec106ecc3ee600115754012f27915af1013d758d1f7d0712e174bd92dc3"
+    },
+    {
+      "bytes": 62460,
+      "relative_path": "fig11_same_market_sharpe.png",
+      "sha256": "e95b69764d0998754734f9b43aea607f39d92eba0723465a33534970e84d4fb0"
+    },
+    {
+      "bytes": 61800,
+      "relative_path": "fig12_three_specification_sharpe.png",
+      "sha256": "ba7d47ae0c1c560c6bde2e46ac69348f9f2ef4b019e5e2442858a2d7b3ece807"
+    },
+    {
+      "bytes": 132661,
+      "relative_path": "fig13_sharpe_delta.png",
+      "sha256": "d69155e113adbc8419973748ee2641525d5f567ce45252a12cdb142b004c8733"
+    },
+    {
+      "bytes": 157896,
+      "relative_path": "fig14_edge_randomization_and_lag.png",
+      "sha256": "34f5ae27aa42115ea90f6fdc0971ce65c40bd455ac124d8107ef7274c626c56f"
+    },
+    {
+      "bytes": 813952,
+      "relative_path": "fig15_opcl_three_specification.png",
+      "sha256": "2a5330d7c097d9c22f551efdca131f805cd1a67753a38af5abb8e4791fcc1b15"
+    },
+    {
+      "bytes": 793180,
+      "relative_path": "fig16_opcl_sharpe_delta.png",
+      "sha256": "fabac2208d7f7231c659e8e3159cd09e3a665dca052ea424fbf2fcaf5880e7cd"
+    },
+    {
+      "bytes": 61886,
+      "relative_path": "fig17_us_shock_conditioned.png",
+      "sha256": "71d589ce4cce9ef34b1aadd9e80dd481701d0bd5c5f2bce5aff1f2fff2566218"
+    },
+    {
+      "bytes": 63096,
+      "relative_path": "fig18_sector_sharpe.png",
+      "sha256": "bac92ddfe851e40aafc4a1a2a0079a135d91d77e1190f5ae0254fbe7497a7400"
+    },
+    {
+      "bytes": 851943,
+      "relative_path": "fig19_joint_predictors.png",
+      "sha256": "752b21a39dfcbde3e4258adf1cb6548b18dc746eca6525a33469a88f5f3e7d30"
+    },
+    {
+      "bytes": 157179,
+      "relative_path": "group_cumulative_returns.png",
+      "sha256": "e0dd2436c3dcce10d07dc128db152a9c28d516fcf66e84159c4be1bbf4de9bf6"
+    },
+    {
+      "bytes": 117178,
+      "relative_path": "ic_series.png",
+      "sha256": "02f3f6b79c83f813deb07d1e09acd542f7528fc16746c434ba324a439c62d91b"
+    },
+    {
+      "bytes": 3900,
+      "relative_path": "metrics.json",
+      "sha256": "742f58d87c1f18414c9295882b02b4e97765be4b174177b70cfe77c0e1759f1a"
+    },
+    {
+      "bytes": 364840,
+      "relative_path": "ml_core_results.xlsx",
+      "sha256": "abdd1a3e3332a35261d1efc20204b5b1fb2d809b06dd1c858669cd16d85eaef3"
+    },
+    {
+      "bytes": 100125,
+      "relative_path": "prediction_scatter.png",
+      "sha256": "1d7828e6a4a537d3d5d0b2fa321cf298f8fdaa3ea8678744dee719748103dfed"
+    },
+    {
+      "bytes": 130,
+      "relative_path": "run_log.md",
+      "sha256": "f12776dc6857eea36a034f4e695bb26ed6213206c2f8ba0dff07f2b9043ba92f"
+    },
+    {
+      "bytes": 2654308,
+      "relative_path": "sensitivity_analysis.xlsx",
+      "sha256": "3b899c77ec5839bf3c88ccd59baad340f000b6b5bd9df313b6a97ccf9c091f8f"
+    },
+    {
+      "bytes": 83069,
+      "relative_path": "train_val_loss.png",
+      "sha256": "2d284430523eb088ccb3cecf68fb415b2e405f0fc3d0f26ce9eaa1465e6bf3ef"
+    }
+  ],
+  "report_name": "r007_cross_market_return_forecasting"
+}

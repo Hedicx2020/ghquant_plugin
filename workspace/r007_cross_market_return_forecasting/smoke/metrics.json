@@ -1,0 +1,136 @@
+{
+  "formal_data_used": false,
+  "hyperparameter_configuration_count": 111,
+  "mode": "smoke",
+  "output_contract": {
+    "chart_status": [
+      {
+        "file": "feature_importance.png",
+        "reason": "底层结果表为空，未生成伪造柱图",
+        "row_count": null,
+        "status": "not_applicable"
+      },
+      {
+        "file": "ic_series.png",
+        "reason": null,
+        "row_count": 10.0,
+        "status": "generated"
+      },
+      {
+        "file": "group_cumulative_returns.png",
+        "reason": null,
+        "row_count": 300.0,
+        "status": "generated"
+      },
+      {
+        "file": "train_val_loss.png",
+        "reason": "本报告使用 OLS、正则回归、核回归和树模型的滚动闭式/拟合接口，无统一逐 epoch 训练/验证损失，按模板显式标记不适用",
+        "row_count": null,
+        "status": "not_applicable"
+      },
+      {
+        "file": "prediction_scatter.png",
+        "reason": null,
+        "row_count": 200.0,
+        "status": "generated"
+      },
+      {
+        "file": "fig03_biadjacency_heatmap.png",
+        "reason": "底层矩阵为空，未生成伪造热图",
+        "row_count": null,
+        "status": "not_applicable"
+      },
+      {
+        "file": "fig04_sector_block_heatmap.png",
+        "reason": "AS4：缺少美股行业字段，F6 双市场行业块为 data_missing",
+        "row_count": null,
+        "status": "not_applicable"
+      },
+      {
+        "file": "fig05_indegree_percentiles.png",
+        "reason": "底层结果表为空，未生成伪造曲线",
+        "row_count": null,
+        "status": "not_applicable"
+      },
+      {
+        "file": "fig08_us_to_cn_sharpe.png",
+        "reason": null,
+        "row_count": 30.0,
+        "status": "generated"
+      },
+      {
+        "file": "fig09_cn_to_us_sharpe.png",
+        "reason": null,
+        "row_count": 30.0,
+        "status": "generated"
+      },
+      {
+        "file": "fig11_same_market_sharpe.png",
+        "reason": "底层结果表为空，未生成伪造柱图",
+        "row_count": null,
+        "status": "not_applicable"
+      },
+      {
+        "file": "fig12_three_specification_sharpe.png",
+        "reason": "底层结果表为空，未生成伪造柱图",
+        "row_count": null,
+        "status": "not_applicable"
+      },
+      {
+        "file": "fig13_sharpe_delta.png",
+        "reason": null,
+        "row_count": 2.0,
+        "status": "generated"
+      },
+      {
+        "file": "fig10_cumulative_daily_pnl.png",
+        "reason": null,
+        "row_count": 300.0,
+        "status": "generated"
+      },
+      {
+        "file": "fig14_edge_randomization_and_lag.png",
+        "reason": null,
+        "row_count": 4.0,
+        "status": "generated"
+      },
+      {
+        "file": "fig15_opcl_three_specification.png",
+        "reason": null,
+        "row_count": 89.0,
+        "status": "generated"
+      },
+      {
+        "file": "fig16_opcl_sharpe_delta.png",
+        "reason": null,
+        "row_count": 87.0,
+        "status": "generated"
+      },
+      {
+        "file": "fig17_us_shock_conditioned.png",
+        "reason": "底层结果表为空，未生成伪造柱图",
+        "row_count": null,
+        "status": "not_applicable"
+      },
+      {
+        "file": "fig18_sector_sharpe.png",
+        "reason": "底层结果表为空，未生成伪造柱图",
+        "row_count": null,
+        "status": "not_applicable"
+      },
+      {
+        "file": "fig19_joint_predictors.png",
+        "reason": null,
+        "row_count": 240.0,
+        "status": "generated"
+      }
+    ],
+    "train_val_loss": {
+      "evidence_file": "train_val_loss.png",
+      "reason": "传统滚动回归与树模型无统一逐 epoch 训练/验证损失",
+      "status": "not_applicable"
+    }
+  },
+  "randomized_edge_count": 3,
+  "report_name": "r007_cross_market_return_forecasting"
+}

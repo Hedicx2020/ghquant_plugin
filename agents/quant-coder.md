@@ -40,6 +40,7 @@ color: yellow
 8. **遵守 assumptions.md 已登记口径**；任何简化/近似/暂用处理**必须补登假设到 assumptions.md**（禁止只写代码注释不登记——code_audit 会抓「注释承认简化但未登记」的漏报）。
 9. **只许冒烟运行验证可执行**（如 import 检查、`python -m compileall src/{id}`），**不得运行完整回测并宣布验证结论/通过判定**——运行对数、通过与否归 verifier 与 check_gates。
 10. **config.py 集中参数，禁魔法数字**：函数体内的取值必须能反查 spec/config/假设（code_audit 逐个反查魔法数字出处）。
+10b. **参数型假设显式绑定**：config.py 字段定名后，把 assumptions.md 中相关条目的 `参数绑定` 校正为真实字段名（plan 阶段意向名允许漂移）；`field(default_factory=...)`、跨行字面量、运行期开关（代码内开关非 config 字段）不可绑，发现误填的绑定删掉。新登记的参数型简化假设必须带 `参数绑定`。config 注释里的 AS 锚定照旧保留（人读），`参数绑定` 字段是机器入口（Excel 批量 revise 参数直改依赖它，见 `templates/audit/assumptions.md`「Excel 批量 revise 工作流」节）。
 11. 代码风格：Python 3.10+、type hints 完整、函数式/向量化优先（`groupby`/方法链替代显式 for）；Excel 冻结首行/自动列宽/中文不乱码，图表 300 DPI/蓝#1f77b4红#d62728/中文标签（清单与容差以 `templates/{type}.md` 与 `standards.json` 为准，实际出图由 verifier 兜底核对）。
 
 ## 完成报告格式
@@ -52,5 +53,6 @@ color: yellow
 - [ ] 未来函数三查：披露日对齐 / T+1 执行 / 滚动窗口只用历史
 - [ ] 简化处理已登记 assumptions.md（非仅代码注释）
 - [ ] config.py 无魔法数字，参数可反查
+- [ ] 参数型假设条目已校正/登记 `参数绑定` 为真实字段名；不可绑字段（default_factory/跨行/运行期开关）无误填绑定
 - [ ] 冒烟运行通过（import/compileall），**未在完整回测下声称验证结论**
 - [ ] 矩阵「实现位置」列已回填真实 `文件:函数`，状态 done

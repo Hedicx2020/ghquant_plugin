@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>研报复现工作台 · 案例总览</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --blue: #1f77b4; --blue-light: #e8f1f8; --red: #d62728;
+    --green: #2ca02c; --amber: #ff7f0e; --gray: #6b7280;
+    --ink: #1a2332; --muted: #5b6673; --line: #e3e8ee; --bg: #f5f7fa; --card: #ffffff;
+  }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.6; padding: 32px 20px; }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  header { border-bottom: 3px solid var(--blue); padding-bottom: 20px; margin-bottom: 28px; }
+  h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.3px; }
+  .sub { color: var(--muted); font-size: 14px; margin-top: 6px; }
+  .stat-row { display: flex; gap: 14px; margin-top: 18px; flex-wrap: wrap; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 20px; flex: 1; min-width: 150px; }
+  .stat .n { font-size: 28px; font-weight: 700; color: var(--blue); }
+  .stat .l { font-size: 13px; color: var(--muted); }
+  h2 { font-size: 18px; margin: 30px 0 14px; padding-left: 10px; border-left: 4px solid var(--blue); }
+  table { width: 100%; border-collapse: collapse; background: var(--card);
+    border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.05); font-size: 14px; }
+  th { background: var(--blue); color: #fff; text-align: left; padding: 11px 14px; font-weight: 600; }
+  td { padding: 11px 14px; border-top: 1px solid var(--line); }
+  tr:nth-child(even) td { background: #fafbfc; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+  .b-done { background: #e6f4ea; color: var(--green); }
+  .b-run { background: #fff3e0; color: var(--amber); }
+  .b-grade { background: var(--blue); color: #fff; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  .card-head { display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+  .card-title { font-size: 17px; font-weight: 700; }
+  .card-id { font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted); }
+  .card-paper { color: var(--muted); font-size: 13px; margin: 4px 0 16px; font-style: italic; }
+  .meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .chip { background: var(--blue-light); color: var(--blue); font-size: 12px; padding: 3px 10px; border-radius: 6px; }
+  .prog-wrap { margin: 14px 0; }
+  .prog-label { font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; margin-bottom: 5px; }
+  .prog-bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+  .prog-fill { height: 100%; background: var(--blue); border-radius: 4px; }
+  .prog-fill.full { background: var(--green); }
+  .kv { font-size: 13.5px; margin: 6px 0; }
+  .kv b { color: var(--muted); font-weight: 600; display: inline-block; min-width: 84px; }
+  .hl { background: #fffbe6; padding: 12px 16px; border-radius: 8px; border-left: 3px solid var(--amber);
+    font-size: 13.5px; margin: 14px 0; }
+  .res-table { margin-top: 12px; font-size: 13px; }
+  .res-table td, .res-table th { padding: 8px 12px; }
+  .up { color: var(--blue); font-weight: 700; }
+  .down { color: var(--red); }
+  footer { color: var(--muted); font-size: 12.5px; text-align: center; margin-top: 30px;
+    padding-top: 18px; border-top: 1px solid var(--line); }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink:#e6eaf0; --muted:#9aa5b1; --line:#2a3340; --bg:#12171f; --card:#1a2129; --blue-light:#1e2d3a; }
+    tr:nth-child(even) td { background: #1e262f; }
+    .hl { background: #2a2410; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>研报复现工作台 · 案例总览</h1>
+    <div class="sub">workspace/ 下全部复现案例汇总 · 生成于 2026-07-12 · 数据取自各案例 state.json 与产物,未编造</div>
+    <div class="stat-row">
+      <div class="stat"><div class="n">3</div><div class="l">复现案例总数</div></div>
+      <div class="stat"><div class="n">1</div><div class="l">已完成(达标 pass)</div></div>
+      <div class="stat"><div class="n">2</div><div class="l">进行中</div></div>
+      <div class="stat"><div class="n">B</div><div class="l">已完成案例评级</div></div>
+    </div>
+  </header>
+
+  <h2>总览对比</h2>
+  <table>
+    <thead><tr><th>编号</th><th>论文</th><th>类型/难度</th><th>当前状态</th><th>进度</th><th>结论</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><b>r001</b></td>
+        <td>Signature-Informed Transformer for Asset Allocation</td>
+        <td>allocation / hard</td>
+        <td><span class="badge b-done">已完成·待评审</span></td>
+        <td>11/11 阶段</td>
+        <td><span class="badge b-grade">pass · B</span></td>
+      </tr>
+      <tr>
+        <td><b>ssrn</b></td>
+        <td>A Production-Ready ML Pipeline for Factor Investing</td>
+        <td>allocation / hard</td>
+        <td><span class="badge b-run">进行中</span></td>
+        <td>规格审计(4/11)</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td><b>style</b></td>
+        <td>风格因子的子域漂移 (Style Factor Subdomain Drift)</td>
+        <td>待分诊</td>
+        <td><span class="badge b-run">进行中</span></td>
+        <td>复现规划(3/11)</td>
+        <td>—</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>案例详情</h2>
+
+  <!-- r001 -->
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title">r001 · Signature-Informed Transformer 资产配置</div>
+        <div class="card-id">report_id: r001_signature_transformer_allocation</div>
+      </div>
+      <span class="badge b-grade">达标 pass · 可信度 B</span>
+    </div>
+    <div class="card-paper">Signature-Informed Transformer for Asset Allocation (Yoontae Hwang, Stefan Zohren)</div>
+    <div class="meta">
+      <span class="chip">allocation</span><span class="chip">hard</span>
+      <span class="chip">ml + factor</span><span class="chip">experimental 市场迁移</span>
+    </div>
+    <div class="prog-wrap">
+      <div class="prog-label"><span>复现进度</span><span>11/11 阶段 · 待人工评审</span></div>
+      <div class="prog-bar"><div class="prog-fill full" style="width:100%"></div></div>
+    </div>
+    <div class="kv"><b>方法</b>path signature 路径特征 + signature-informed 几何注意力 + 可微 CVaR 端到端优化</div>
+    <div class="kv"><b>复现路线</b>美股不可得 → A股等价迁移(数值豁免,验方法成立性),四个 universe</div>
+    <div class="hl"><b>审计亮点:</b>code_audit 双通道独立揪出 <b>CA-1 critical 未来函数</b>(T日权重结算T日收益),修复后 SIT Sharpe 从虚高 0.94 回落至真实 0.68 —— 拦下了会虚高的假结果。spec_audit 另抓 3 major(数值抄错/漏 λ 项/口径混淆)全修。</div>
+
+    <table class="res-table">
+      <thead><tr><th>Universe(映射)</th><th>样本内 SIT Sharpe</th><th>样本外 2024</th><th>衰减</th><th>vs baseline</th></tr></thead>
+      <tbody>
+        <tr><td>中证800(宽基)</td><td class="up">0.75</td><td>0.61</td><td>-19%</td><td>居首·延续最好</td></tr>
+        <tr><td>上证50(←DJIA)</td><td class="up">0.72</td><td>0.63</td><td>-13%</td><td>居首·延续好</td></tr>
+        <tr><td>沪深300top100(←S&P100)</td><td class="up">0.68</td><td>0.51</td><td>-25%</td><td>居首</td></tr>
+        <tr><td>创业板(←Nasdaq100)</td><td class="up">0.54</td><td class="down">0.32</td><td>-41%</td><td>局部失效(MinVar反超)</td></tr>
+      </tbody>
+    </table>
+    <div class="kv" style="margin-top:14px"><b>结论</b>方法在 A股迁移成立(样本内四 universe SIT 全居首);越宽基/大盘样本外延续越好,越成长/高噪声衰减越狠。</div>
+    <div class="kv"><b>评级依据</b>复现完整+三审查点全跑+critical 修复+反虚报自洽;封顶 B 因 codex 不可用、三处外审用 Claude 替身。</div>
+    <div class="kv"><b>产物</b>final_report.md(246行) · index.html(四universe可视化) · 结果 xlsx/png/json</div>
+  </div>
+
+  <!-- ssrn -->
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title">ssrn · 因子投资机器学习流水线</div>
+        <div class="card-id">report_id: ssrn_6115073</div>
+      </div>
+      <span class="badge b-run">进行中</span>
+    </div>
+    <div class="card-paper">A Production-Ready Machine Learning Pipeline for Factor Investing: End-to-End Signal Generation, Portfolio Construction, and Risk Management</div>
+    <div class="meta">
+      <span class="chip">allocation</span><span class="chip">hard</span><span class="chip">ml + factor</span>
+    </div>
+    <div class="prog-wrap">
+      <div class="prog-label"><span>复现进度</span><span>已过 init→extract→plan,卡在规格审计</span></div>
+      <div class="prog-bar"><div class="prog-fill" style="width:33%"></div></div>
+    </div>
+    <div class="kv"><b>已产</b>spec.md(40 要素: D7/F12/B9/R8/SA4) · plan.md</div>
+    <div class="kv"><b>当前阶段</b>spec_audit(规格审计,忠实性双通道审查)</div>
+    <div class="kv"><b>说明</b>端到端因子投资 ML 流水线(信号生成→组合构建→风险管理),尚未进入实现,无最终结论。</div>
+    <div class="kv"><b>续跑</b><code>/reproduce continue ssrn</code></div>
+  </div>
+
+  <!-- style -->
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title">style · 风格因子的子域漂移</div>
+        <div class="card-id">report_id: style_factor_subdomain</div>
+      </div>
+      <span class="badge b-run">进行中</span>
+    </div>
+    <div class="card-paper">风格因子的子域漂移 (Style Factor Subdomain Drift)</div>
+    <div class="meta">
+      <span class="chip">类型待分诊</span>
+    </div>
+    <div class="prog-wrap">
+      <div class="prog-label"><span>复现进度</span><span>已过 init→extract,卡在复现规划</span></div>
+      <div class="prog-bar"><div class="prog-fill" style="width:22%"></div></div>
+    </div>
+    <div class="kv"><b>已产</b>spec.md(研报提取完成)</div>
+    <div class="kv"><b>当前阶段</b>plan(复现规划: 分诊/数据映射/milestone 拆分,尚未完成)</div>
+    <div class="kv"><b>说明</b>研究风格因子在不同子域(市值/行业/风格分层)上的漂移;类型与难度待 plan 分诊确定,无最终结论。</div>
+    <div class="kv"><b>续跑</b><code>/reproduce continue style</code></div>
+  </div>
+
+  <footer>
+    研报复现系统 v2 · 11 阶段门禁状态机 · 本页为跨案例只读汇总,结论以各案例 final_report 为准<br>
+    r001 已达 pass/B 待人工评审(<code>/reproduce accept r001</code> 收尾);ssrn / style 进行中可续跑
+  </footer>
+</div>
+</body>
+</html>

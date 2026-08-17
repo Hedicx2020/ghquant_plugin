@@ -22,7 +22,7 @@
    - `backtest_framework`：cwd `.reproduce.json` 的该字段（主会话读后转述）。非空 → 在 prompt 中告知「用户自有回测框架位于 <路径>，复用规划时回测执行层优先盘点该框架的能力，`common/` 仅作缺口补充」；为空/无配置 → 不提，维持内置 `common/` 复用规划。
 3. **点收输出合同**：
    - `workspace/<id>/plan.md`（frontmatter 分诊 + 正文）
-   - `workspace/<id>/assumptions.md`（每条 auto 假设，`验证后回看` 写占位符 `[verify 后填]`）
+   - `workspace/<id>/assumptions.md`（每条 auto 假设，`验证后回看` 写占位符 `[verify 后填]`；**纯参数型假设**（值将落地为 config.py 字段单行字面量者）填可选字段 `参数绑定: <意向字段名>`，非参数型（结构/口径/运行期开关）不填——Excel 批量 revise 参数直改通道的机器入口，implement 阶段由 coder 校正为真实字段名）
    - 回填后的 `workspace/<id>/spec/coverage_matrix.md`（milestone 列 + 优先级定稿，最后更新=plan）
    - 回填后的 `workspace/<id>/spec/ambiguities.md`（各条裁决方式/结果/依据/状态）
 4. **回填分诊到 state**（关键：下游裁剪矩阵与 standards 重算全靠这些字段）：

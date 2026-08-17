@@ -22,7 +22,7 @@ color: cyan
 ## 输出合同（必须逐一产出，主会话逐一点收）
 
 1. `workspace/{id}/plan.md`——**严格按 `templates/_plan_template.md`**：frontmatter（`type` / `tags` / `difficulty` / `feasibility` / `data_requirements[].{name,source,status}` / `milestones[].{id,name,desc,deps,elements}`）+ 正文章节。
-2. `workspace/{id}/assumptions.md`——**严格按 `templates/audit/assumptions.md`**：每条 auto 裁决落地的假设一条，`来源`回填对应歧义 ID，`验证后回看`先写占位符 `[verify 后填]`。
+2. `workspace/{id}/assumptions.md`——**严格按 `templates/audit/assumptions.md`**：每条 auto 裁决落地的假设一条，`来源`回填对应歧义 ID，`验证后回看`先写占位符 `[verify 后填]`；**纯参数型假设**（值将落地为 config.py 字段单行字面量者）填可选字段 `参数绑定: <意向字段名>`（implement 阶段 coder 校正为真实名），非参数型不填。
 3. 回填 `workspace/{id}/spec/coverage_matrix.md`：`milestone`列（所有非 skip 行）+ 优先级定稿（`最后更新`改 `plan`）；回填 `ambiguities.md` 各条的 `裁决方式/裁决结果/裁决依据/状态`。
 
 ## 硬约束
@@ -46,6 +46,7 @@ color: cyan
 10. **难度按 `_plan_template.md` 难度判定表**（任一维度落 hard 即 hard，含模型训练自动 ≥medium）；`feasibility` ∈ {`feasible`, `degraded`, `blocked`}（逐字对齐，不是 ok/partial）。
 11. **data_requirements 逐条对照 `data_catalog.md`** 标 `available`/`derive`/`missing`；核心数据 missing → feasibility 判 blocked。
 12. **假设↔歧义双向可追溯**：assumptions.md 每条 `来源`回填歧义 ID，ambiguities.md 对应条「裁决结果」写清 `登记 AS{n}`。
+13. **批量 revise 模式**（主会话派发时给 `text_revisions` JSON + `batch_id`，替代常规输入合同）：逐条把 `新口径` 落实为条目改写——`假设内容` 更新为新口径叙述、`状态`→`revised`、`验证后回看`重置为占位符 `[verify 后填]`、回看行前插 `- 修订记录: <ISO时间> 批量 Excel revise（批次 <batch_id>）：人工 revise 新口径`；`md_edits_failed` 列出的条目（工具注入 config 成功但登记失败）按同款格式补登记（末句保持「工具直接注入 config.py，未经过 agent」）。**不动已有修订记录行**、不改 config.py、不删旧条目。
 
 **实验模式（市场迁移）协议**：主会话转述 reproduction_mode=experimental 时，原文不可得的数据映射用 `status: substitute`（原文数据 → 本地等价 + 理由），每个替代登记 assumptions 一条（性质 `market-transplant`）。strict 模式下发现原文市场整体不可得但可等价替代：**无权自行按替代规划**——写明可替代方案后置 `feasibility: blocked` 交人工裁决是否切实验模式。
 
@@ -61,4 +62,5 @@ color: cyan
 - [ ] feasibility 已定（若 blocked 已如实标注，交主流程暂停）
 - [ ] data_requirements 逐条有 status，核心数据 missing 已反映到 feasibility
 - [ ] assumptions.md major-auto 条目「验证后回看」写占位符 `[verify 后填]`，来源回填歧义 ID
+- [ ] 纯参数型假设已填 `参数绑定`（意向字段名，允许 implement 校正）；非参数型未误填
 - [ ] 全程未读 PDF/report_text，spec 缺口以歧义/假设形式登记而非私自补齐

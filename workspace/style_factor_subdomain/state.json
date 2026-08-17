@@ -1,0 +1,289 @@
+{
+  "schema_version": 1,
+  "report_id": "style_factor_subdomain",
+  "pdf_path": "reports/style_factor_subdomain.pdf",
+  "paths": {
+    "workspace": "workspace/style_factor_subdomain",
+    "src": "src/style_factor_subdomain",
+    "output": "output/style_factor_subdomain"
+  },
+  "mode": "auto",
+  "reproduction_mode": "strict",
+  "max_iter": null,
+  "type": null,
+  "tags": [],
+  "difficulty": null,
+  "difficulty_override": null,
+  "feasibility": null,
+  "pdf_pages": 32,
+  "current_stage": "plan",
+  "status": "running",
+  "stages": {
+    "init": {
+      "status": "done",
+      "attempts": 1,
+      "updated_at": "2026-07-11T09:35:48+08:00",
+      "issues": 0
+    },
+    "extract": {
+      "status": "done",
+      "attempts": 1,
+      "updated_at": "2026-07-11T09:56:58+08:00",
+      "issues": 0
+    },
+    "plan": {
+      "status": "running",
+      "attempts": 1,
+      "updated_at": "2026-07-11T09:58:30+08:00",
+      "issues": 0
+    },
+    "spec_audit": {
+      "status": "pending",
+      "attempts": 0,
+      "updated_at": null,
+      "issues": 0
+    },
+    "implement": {
+      "status": "pending",
+      "attempts": 0,
+      "updated_at": null,
+      "issues": 0
+    },
+    "code_audit": {
+      "status": "pending",
+      "attempts": 0,
+      "updated_at": null,
+      "issues": 0
+    },
+    "verify": {
+      "status": "pending",
+      "attempts": 0,
+      "updated_at": null,
+      "issues": 0
+    },
+    "iterate": {
+      "status": "pending",
+      "attempts": 0,
+      "updated_at": null,
+      "issues": 0
+    },
+    "result_audit": {
+      "status": "pending",
+      "attempts": 0,
+      "updated_at": null,
+      "issues": 0
+    },
+    "oos": {
+      "status": "pending",
+      "attempts": 0,
+      "updated_at": null,
+      "issues": 0
+    },
+    "report": {
+      "status": "pending",
+      "attempts": 0,
+      "updated_at": null,
+      "issues": 0
+    },
+    "review": {
+      "status": "pending",
+      "attempts": 0,
+      "updated_at": null,
+      "issues": 0
+    }
+  },
+  "gates": [
+    {
+      "stage": "init",
+      "checks": [
+        {
+          "id": "G-IN-1",
+          "desc": "state schema 合法",
+          "result": "PASS"
+        },
+        {
+          "id": "G-IN-2",
+          "desc": "目录树齐全",
+          "result": "PASS"
+        },
+        {
+          "id": "G-IN-3",
+          "desc": "report_text.md 存在",
+          "result": "PASS"
+        },
+        {
+          "id": "G-IN-4",
+          "desc": "report_text.md 中 PAGE 标记数 >= 1",
+          "result": "PASS"
+        },
+        {
+          "id": "G-IN-5",
+          "desc": "PAGE 标记数与 PDF 页数一致",
+          "result": "PASS"
+        },
+        {
+          "id": "G-IN-6",
+          "desc": "tables_extracted.md 存在",
+          "result": "PASS"
+        }
+      ],
+      "verdict": "PASS",
+      "timestamp": "2026-07-11T09:35:02+08:00"
+    },
+    {
+      "stage": "extract",
+      "checks": [
+        {
+          "id": "G-EX-1",
+          "desc": "spec.md 存在",
+          "result": "PASS"
+        },
+        {
+          "id": "G-EX-2",
+          "desc": "frontmatter 可解析（yaml）",
+          "result": "PASS"
+        },
+        {
+          "id": "G-EX-3",
+          "desc": "frontmatter 必填字段齐全非空（tags_hint 允许空列表）",
+          "result": "PASS"
+        },
+        {
+          "id": "G-EX-4",
+          "desc": "正文正则计数 == frontmatter element_counts 汇总 == coverage_matrix 数据行数",
+          "result": "PASS"
+        },
+        {
+          "id": "G-EX-5",
+          "desc": "每条要素块含「- 页码:」与「- 原文:」行",
+          "result": "PASS"
+        },
+        {
+          "id": "G-EX-6",
+          "desc": "R 类要素 >= 1",
+          "result": "PASS"
+        },
+        {
+          "id": "G-EX-7",
+          "desc": "ambiguities.md 存在",
+          "result": "PASS"
+        },
+        {
+          "id": "G-EX-8",
+          "desc": "图表登记清单表格：FIG+EX/TBL 行数与 element_counts 一致，最大编号不超过 exhibit_declared 声明",
+          "result": "PASS"
+        }
+      ],
+      "verdict": "PASS",
+      "timestamp": "2026-07-11T09:56:11+08:00"
+    }
+  ],
+  "external_reviews": [],
+  "milestones": [],
+  "iteration": {
+    "current": 0,
+    "max": null,
+    "history": []
+  },
+  "verdict": {
+    "result": null,
+    "comparison_file": null,
+    "metrics_pass": null,
+    "metrics_total": null,
+    "decided_at": null
+  },
+  "coverage_stats": {
+    "total": 0,
+    "done": 0,
+    "skipped": 0,
+    "infeasible": 0,
+    "pending": 0
+  },
+  "assumptions": {
+    "total": 0,
+    "assumed": 0,
+    "confirmed": 0,
+    "revised": 0
+  },
+  "blockers": [],
+  "pending_question": null,
+  "events": [
+    {
+      "event": "state:init",
+      "timestamp": "2026-07-11T09:34:21+08:00",
+      "payload": null
+    },
+    {
+      "event": "stage:init:running",
+      "timestamp": "2026-07-11T09:34:34+08:00",
+      "payload": null
+    },
+    {
+      "event": "set:pdf_pages",
+      "timestamp": "2026-07-11T09:35:02+08:00",
+      "payload": {
+        "value": 32
+      }
+    },
+    {
+      "event": "input_from_url",
+      "timestamp": "2026-07-11T09:35:02+08:00",
+      "payload": {
+        "source_url": "https://mp.weixin.qq.com/s?__biz=MzkxNzE3MTE1MQ==&mid=2247557647&idx=1",
+        "source": "wechat_official_account",
+        "publisher": "兴证金工团队",
+        "conversion": "chrome_headless_print_to_pdf",
+        "n_images_embedded": 44,
+        "note": "原文为微信公众号文章，无官方PDF；正文0个HTML表格，全部表格/公式/图表以图片形式内嵌进PDF，extract须读图"
+      }
+    },
+    {
+      "event": "stage:init:done",
+      "timestamp": "2026-07-11T09:35:48+08:00",
+      "payload": null
+    },
+    {
+      "event": "stage:extract:running",
+      "timestamp": "2026-07-11T09:36:44+08:00",
+      "payload": null
+    },
+    {
+      "event": "stage:extract:done",
+      "timestamp": "2026-07-11T09:56:58+08:00",
+      "payload": null
+    },
+    {
+      "event": "stage:plan:running",
+      "timestamp": "2026-07-11T09:58:30+08:00",
+      "payload": null
+    },
+    {
+      "event": "stage:plan:running",
+      "timestamp": "2026-07-17T01:32:49+08:00",
+      "payload": null
+    },
+    {
+      "event": "set:stages.plan.attempts",
+      "timestamp": "2026-07-17T01:34:07+08:00",
+      "payload": {
+        "value": 1
+      }
+    },
+    {
+      "event": "set:stages.plan.updated_at",
+      "timestamp": "2026-07-17T01:34:07+08:00",
+      "payload": {
+        "value": "2026-07-11T09:58:30+08:00"
+      }
+    },
+    {
+      "event": "orchestrator_correction",
+      "timestamp": "2026-07-17T01:34:07+08:00",
+      "payload": {
+        "reason": "误将新 URL 识别为旧案例续跑，已将 plan.attempts 与 stage updated_at 恢复"
+      }
+    }
+  ],
+  "created_at": "2026-07-11T09:34:21+08:00",
+  "updated_at": "2026-07-17T01:34:07+08:00"
+}

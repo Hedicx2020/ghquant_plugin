@@ -1,0 +1,35 @@
+%% 研报复现系统 v2 · 多 agent 协作流程（与 docs/multi_agent_workflow.png 同内容）
+flowchart LR
+    subgraph ORCH["主会话（编排大脑）：只派发 / 审门禁 / 调 codex / 写 state，不亲自生产内容"]
+        direction TB
+        S1["1 init 初始化<br/>主会话直跑工具"]
+        S2["2 extract 研报提取<br/>quant-extractor"]
+        S3["3 plan 复现规划<br/>quant-planner<br/>plan.md + 假设登记簿(参数绑定)"]
+        S4["4 spec_audit 规格审计<br/>quant-auditor ∥ codex 外审"]
+        S5["5 implement 代码实现<br/>quant-coder × milestone"]
+        S6["6 code_audit 代码审计<br/>quant-auditor + codex 外审"]
+        S7["7 verify 运行验证<br/>quant-verifier<br/>comparison.json"]
+        S8{"8 iterate 迭代修正（条件）<br/>diagnoser→coder→verifier"}
+        S9["9 result_audit 结果审计<br/>codex 外审（反虚报必跑）"]
+        S10{"10 oos 样本外（条件）<br/>quant-oos-analyst"}
+        S11["11 report 报告汇总<br/>quant-reporter<br/>final_report + 导出 assumptions.xlsx"]
+        S12[["12 review 人工评审<br/>accept / revise"]]
+        S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7
+        S7 -->|不达标| S8 --> S9
+        S7 -->|达标| S9 --> S10 --> S11 --> S12
+    end
+
+    subgraph LOOP["本次新增：假设 Excel 批量 revise"]
+        direction LR
+        E1["① assumptions.xlsx<br/>客户批量编辑多条"] --> E2["② revise --from-excel<br/>dry-run 复述 → 客户确认"]
+        E2 --> E3{"③ apply 工具分流"}
+        E3 -->|参数直改| E4a["④a 工具注入 config.py<br/>备份+diff+冒烟+md 追记<br/>（不经过 agent）"]
+        E3 -->|文本口径| E4b["④b quant-planner 批量改写<br/>涉 data/method → coder + codex 增量审计"]
+        E4a --> E5["⑤ 按最重影响面合并重跑<br/>verify→result_audit→report→回 review<br/>+ 重新导出 xlsx"]
+        E4b --> E5
+        E6["--each 逐条敏感性（备选）<br/>set-param→verifier→快照→restore ×N<br/>→ sensitivity.xlsx（what-if 不改登记簿）"]
+    end
+
+    S11 -.自动导出.-> E1
+    S12 -->|revise --from-excel| E2
+    E5 -->|按影响面续跑| S7

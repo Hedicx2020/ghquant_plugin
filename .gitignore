@@ -7,3 +7,8 @@ venv/
 *.egg-info/
 output/
 .superpowers/
+# 运行产物/缓存（体积大、可再生，不入库）
+workspace/*/checkpoints/
+workspace/*/data_cache/
+workspace/*/audit/perturbation_*/
+tmp/
