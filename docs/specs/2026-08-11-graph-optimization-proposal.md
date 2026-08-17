@@ -9,7 +9,7 @@
 
 ## 结论先行
 
-两位独立评审一致选定**保守派方案（蒸馏层守界 + 摘要传递 + 机器预检下沉）**为基线（加权得分 8.3 / 8.25，结构派 6.95 / 7.63，激进派 6.25 / 7.25），并从两个败者方案中嫁接 6–7 件低风险部件补强。核心数字：单次完整复现可裁剪 **50–90 万 token**（pass 路径，无 iterate），进入 iterate 的失败路径再省 **20–40 万**（r004 规模，且这部分恰是终态 blocked 时的全额沉没）；墙钟侧以阶段看门狗截断实测最大的停滞黑盒（r001 两段合计 40.65h、r007 idle 119h、style 停滞 136h）。全部裁剪对象均为**无合同依据的无意冗余**，codex 三审、盲提取全文、K1 扰动测试、auditor(code)/verifier 的 src 全量读等刻意冗余一律不动。
+两位独立评审一致选定**保守派方案（蒸馏层守界 + 摘要传递 + 机器预检下沉）**为基线（加权得分 8.3 / 8.25，结构派 6.95 / 7.63，激进派 6.25 / 7.25），并从两个败者方案中嫁接 6–7 件低风险部件补强。核心数字：单次完整复现可裁剪 **50–90 万 token**（pass 路径，无 iterate），进入 iterate 的失败路径再省 **20–40 万**（r004 规模，且这部分恰是终态 blocked 时的全额沉没）；墙钟侧以停滞哨兵截断实测最大的停滞黑盒（r001 两段合计 40.65h、r007 idle 119h、style 停滞 136h）。全部裁剪对象均为**无合同依据的无意冗余**，codex 三审、盲提取全文、K1 扰动测试、auditor(code)/verifier 的 src 全量读等刻意冗余一律不动。
 
 ---
 
@@ -57,7 +57,7 @@ init(0.01) → extract(0.2–0.6) → plan(0.2–2.1，异常 r006 9.0) → spec
 
 1. **稳定成本 vs 方差成本分离**：implement（中位约 6.1h，r003 中占 57%）是唯一稳定大头；code_audit 24.1h、report 16.5h、spec_audit 6.3h、plan 9.0h 四个极端值全部伴随 **events 零记录黑盒**——属会话中断/跨夜停滞/人工间隙，不是计算。优化主战场是消除停滞与返工，不是压缩计算。
 2. **可并行却串行**：设计写明 medium/hard 默认 code_audit ∥ verify，实测 4/4 案例严格串行（每案例白流 36–77 分钟，合计约 200 分钟）；result_audit ∥ oos 3/3 串行（每案例 22–64 分钟）；hard 难度 milestone 间串行（r001 纯空档 113 分钟，5 个 milestone 若按 deps 拓扑并行，7.89h 有望压至 2–3h）。
-3. **无看门狗**：r007 span 132.8h 中 idle 119h、style 136h 卡 plan、r002 idle 26.2h、r006 idle 12.2h——paused/running 状态停滞以天计才被发现；stage 内无子步骤事件，状态机无法区分「agent 运行中」与「会话已断」。
+3. **无停滞哨兵**：r007 span 132.8h 中 idle 119h、style 136h 卡 plan、r002 idle 26.2h、r006 idle 12.2h——paused/running 状态停滞以天计才被发现；stage 内无子步骤事件，状态机无法区分「agent 运行中」与「会话已断」。
 
 ### 1.4 iterate 回环成本
 
@@ -102,7 +102,7 @@ r004 audit bundle 1.06GB（95.6% 为扰动测试 parquet/ndjson，单文件最�
 - **预计省多少**：切断 plan/implement/diagnose/oos 四处实际流入，**15–30 万 token/次**（report_text 135.8–253KB，单次全量装载 4.5–8.5 万）；护栏防 335MB ndjson 误读的尾部爆炸（单次即数十万 token + 会话全损）。
 - **审计体系等价替代**：无裁剪——这些路径本就不在任何 agent 的输入合同内，禁令是把既有设计意图写明并赋予强制力。agent 私下回原文补齐会使 spec 缺口永不暴露、spec_audit 盲提取 diff 失去校验对象，切断后缺口改为「声明缺失 → 主会话补派 extractor」，正是设计想要的暴露行为。codex 盲提取全文通道保留（§9.2 刻意冗余不动）。
 
-#### A2. 阶段看门狗 + 子步骤埋点 + codex 后台化（保守派 change 10 + 嫁接激进派调用方式）
+#### A2. 停滞哨兵 + 子步骤埋点 + codex 后台化（保守派 change 10 + 嫁接激进派调用方式）
 
 - **改哪个文件**：`tools/state.py`（set-stage running 记 running_since、record-event 刷新 updated_at、新增 `stall-check <id>|--all` 子命令、show 输出追加停滞告警）；四张含 codex 调用的 stage 卡（spec_audit/code_audit/result_audit/iterate）调用前后各插一条 record-event（codex_start/codex_end）；`SKILL.md` 第七节加 stall-check 驱动协议；四张卡的 codex 调用样板改为 `run_in_background` + Monitor 完成通知。
 - **怎么改**：当前 stage=running 且 now − max(stage.updated_at, 最新 event 时间) > 阈值（默认 3h，`.reproduce.json` 的 stall_hours 可覆盖）时输出 STALL 告警行；/goal 或 /loop 驱动器每轮 continue 先跑 `stall-check --all`，命中即 PushNotification 通知人工并暂停推进该案例，不干等。codex_start 后 10 分钟内不报 STALL（区分「codex 还在跑」与「会话已断」）。
@@ -196,7 +196,7 @@ r004 audit bundle 1.06GB（95.6% 为扰动测试 parquet/ndjson，单文件最�
 - **C2. spec.md → elements.jsonl 结构化记录 + materialize.py 物化视图**：spec 从单一 markdown 改结构化记录，切片合同由物化视图渲染，check_gates 改读 jsonl。潜在收益：解析更硬、消除 markdown 表格解析脆弱性。风险：jsonl schema/解析器 bug 系统性漏要素 + 历史案例迁移。
 - **C3. state.json 事件/门禁 JSONL 化 + 主会话搬运清零**：events/gates 改 append-only JSONL，codex prompt 占位符填充/SPEC_CODEX 切分/标量注入全部机器渲染。潜在收益：主会话 10–15 万 token/次。风险：check_gates 读取路径改造回归面大。
 
-启动评估的前置条件：保守派三批全部落地、看门狗与预筛跑出至少 2 个新案例的对照数据（token/墙钟/漏检率），届时用实测而非估算决定 DAG 是否值得上。
+启动评估的前置条件：保守派三批全部落地、停滞哨兵与预筛跑出至少 2 个新案例的对照数据（token/墙钟/漏检率），届时用实测而非估算决定 DAG 是否值得上。
 
 ---
 
@@ -227,7 +227,7 @@ r004 audit bundle 1.06GB（95.6% 为扰动测试 parquet/ndjson，单文件最�
 
 | 批次 | 内容 | 性质 | 时间窗 |
 |------|------|------|--------|
-| 第一批 | A1（禁读红线 + guard.py）、A2（看门狗 + 埋点 + codex 后台化）、A3（append-review + events 归档）、A4（PDF 撞库缓存）、A5（G-FN 预检） | 纯文字红线 + 工具新增，零合同结构变更，几乎不可能把跑通案例弄坏 | 当周 |
+| 第一批 | A1（禁读红线 + guard.py）、A2（停滞哨兵 + 埋点 + codex 后台化）、A3（append-review + events 归档）、A4（PDF 撞库缓存）、A5（G-FN 预检） | 纯文字红线 + 工具新增，零合同结构变更，几乎不可能把跑通案例弄坏 | 当周 |
 | 第二批 | B6（report_digest.py）、B8（static_prescan.py + 并行硬模板）、B4（comparison 唯一真相源） | digest 与预筛工具，须与 check_gates 共用解析函数 | 第一批稳定后 |
 | 第三批 | B1（spec 切片 + refs 闭包 + manifest）、B2（assumptions 分层 + 影响字段门禁）、B3（src 收窄）、B5（auditor spec 切片穷举） | 切片分发，须先跑通 spec_slice.py 与矩阵联动校验 | 第二批验证后 |
 | 第四批 | B7（iterate digest + 三件保险丝） | fidelity 妥协最大项，灰度制 | 最后，见 §4.3 |
@@ -258,7 +258,7 @@ r004 audit bundle 1.06GB（95.6% 为扰动测试 parquet/ndjson，单文件最�
 | token（pass 路径主线） | A1 report_text 守界 15–30 万 + B1 spec 切片 10–18 万 + B2 assumptions 5–12 万 + B6 reporter digest 7–12 万 + B3 src 3–10 万 + A3 state 通道 3–6 万 + B5 auditor(spec) 3–6 万 + B4 comparison 去重 3–6 万 | **50–90 万/次** |
 | token（失败路径追加） | B7 iterate digest（r004 规模） | **20–40 万/次**，且为 blocked 时的净止损 |
 | token（条件性） | B8 并行作废避免 5–15 万 + A4 同 PDF 重跑 10–15 万 | 按发生概率兑现 |
-| 墙钟 | A2 看门狗截断停滞（单案例 10–100h 级）+ B8 并行落实 60–140 分钟/案例 + B7 iterate 每轮 30–60 分钟 + A4 撞库 0.3–10.6h | pass 案例忙时 12.2–57.9h 有望压至约 8–15h 区间 |
+| 墙钟 | A2 停滞哨兵截断停滞（单案例 10–100h 级）+ B8 并行落实 60–140 分钟/案例 + B7 iterate 每轮 30–60 分钟 + A4 撞库 0.3–10.6h | pass 案例忙时 12.2–57.9h 有望压至约 8–15h 区间 |
 | 完成率 | 停滞未发现（r007/style/r002）、iterate 全损（r004）、案例级重做（r005→r006）三大死因分别被 A2、B7+趋势预警、A4 正面命中 | 目标：完成率从 33% 显著抬升 |
 
-**诚实总账**：全方案唯一零代价项是 A2 看门狗（纯观测）；最大妥协项是 B7 iterate digest（diagnoser 失去历史推理语境，已配原文抽取 digest + 逃生门 + second_opinion 全量保留 + iter≥3 自适应恢复 + 机器趋势预警五重对冲）；其余切片类改动把「全量读」降为「默认索引 + 按需取」，能力未被剥夺，fidelity 损失是概率性漏看略升而非审计通道关闭，且有 G-EX/G-PL 交叉门禁与 codex 异构通道双层兜底。结构派的 DAG 与激进派的 jsonl 化留 v3——等看门狗和预筛跑出新案例对照数据后，用实测而非估算决定是否再上。
+**诚实总账**：全方案唯一零代价项是 A2 停滞哨兵（纯观测）；最大妥协项是 B7 iterate digest（diagnoser 失去历史推理语境，已配原文抽取 digest + 逃生门 + second_opinion 全量保留 + iter≥3 自适应恢复 + 机器趋势预警五重对冲）；其余切片类改动把「全量读」降为「默认索引 + 按需取」，能力未被剥夺，fidelity 损失是概率性漏看略升而非审计通道关闭，且有 G-EX/G-PL 交叉门禁与 codex 异构通道双层兜底。结构派的 DAG 与激进派的 jsonl 化留 v3——等停滞哨兵和预筛跑出新案例对照数据后，用实测而非估算决定是否再上。

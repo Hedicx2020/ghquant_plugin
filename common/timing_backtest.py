@@ -192,3 +192,163 @@ def timing_metrics(
         "benchmark_annual_return": float(bench_ann),
         "n_periods": int(len(nav)),
     }
+
+
+def rotation_backtest(
+    weight: pd.Series,
+    returns_a: pd.Series,
+    returns_b: pd.Series,
+    cost_bps: float = 0.0,
+    lag: int = 1,
+    drift_within_period: bool = False,
+) -> pd.DataFrame:
+    """双标的轮动回测（两资产间 0~1 目标权重切换，恒满仓）。
+
+    与 :func:`signal_backtest`（单标的仓位）并列的通用择时引擎形态：目标权重
+    表示资产 A 的配置比例（``1-weight`` 为资产 B），策略日收益 =
+    ``w*r_a + (1-w)*r_b - cost``。适用于大小盘/股债等两资产轮动类研报。
+
+    目标权重允许稀疏索引（如仅月末观察日）：函数内 reindex 至收益日频索引后
+    前向填充，语义为「目标权重持有至下次更新」；首个非缺失权重之前的日子视为
+    未建仓（当日策略收益 0，净值持平 1.0）。
+
+    执行语义（T+lag 收盘成交，close-to-close 日收益口径）：
+    T 日收盘形成的目标权重于 T+lag 个交易日后的**收盘价成交**；索引日 t 的
+    日收益 ret[t] 为「t-1 收盘 → t 收盘」段收益，成交当日（T+lag）的收益段
+    仍由**旧仓位**承担，新仓位自 T+lag → T+lag+1 收益段起生效。函数内分离
+    两条仓位序列（CDX-C-R1-01 修复）：
+
+    - ``executed_weight = 目标权重 ffill 后 shift(lag)``：成交后权重，
+      T+lag 收盘成交即生效，用于换手与成本的**成交日**记账；
+    - ``position = executed_weight.shift(1)``：收益承担仓位（= 目标权重
+      ffill 后 ``shift(lag + 1)``，lag=1 时 shift 两段：T 日信号、T+1 收盘
+      成交、T+1→T+2 收益段起新仓位生效），用于逐日收益计算，与修复前
+      语义完全一致。
+
+    注意与 :func:`signal_backtest` 的 lag 语义不同（后者
+    position=signal.shift(lag) 等价于 T+lag-1 收盘成交、T+lag 当日收益段
+    即生效），调用方按研报的成交时点口径选择引擎。
+
+    月内漂移模式（``drift_within_period=True``，iter_04 SO-02 方法论族，
+    r008 月度策略「月末调仓、月内 drift」口径）：
+    默认 False 时语义如上（每日目标权重等价每日再平衡），**逐位不变**；
+    True 时仓位在成交日（观察日+lag）收盘重置为目标权重（每个成交日无论
+    目标权重是否变化均重置，与月度再平衡基准「每月末收盘恢复目标权重」
+    口径对齐），其余日期按两腿收益递推漂移——
+    ``w_A,t+1 = w_A,t·(1+r_A,t+1) / (w_A,t·(1+r_A,t+1) + w_B,t·(1+r_B,t+1))``
+    （B 腿对称，w_B=1-w_A）。换手仍在成交日按重置幅度记账（|w_目标-w_成交前
+    漂移|，漂移量计入下次调仓，换手较默认分支上升）；成本与 T+lag 成交时点
+    不变，收益承担语义（position = executed_weight.shift(1) 的 T+1 纪律）
+    不变。目标权重 ∈ {0,1} 时漂移恒等（段内漂移系数比值恒为 1），分支自动
+    退化为默认语义（逐位一致）。
+
+    Args:
+        weight: index=date 的资产 A 目标权重（取值 [0,1]，如小盘权重）。
+        returns_a: index=date 的资产 A 日收益（收盘价到收盘价，decimal）。
+        returns_b: index=date 的资产 B 日收益（与 returns_a 同索引口径，
+            缺日按 0 收益处理）。
+        cost_bps: 单边交易成本（bp）。轮动调仓的双边换手 = |Δw_A| + |Δw_B|
+            = 2|Δw_A|，双边各按单边费率计一次：成本 = 双边换手 × cost_bps/1e4，
+            于**成交日**从当日（旧仓位承担的）毛收益中扣除。
+        lag: 信号至成交的交易日数（默认 1）：T 日收盘形成的目标权重于 T+lag
+            收盘成交（成交后权重 executed_weight = weight.ffill().shift(lag)，
+            收益承担仓位 position = executed_weight.shift(1)），成交前的
+            收益段均由旧仓位承担，防未来函数。
+        drift_within_period: 是否月内权重漂移（默认 False）：False 为现有
+            「目标权重持有至下次更新」语义（逐位不变）；True 为「成交日重置
+            为目标权重、其余日期按两腿收益漂移」语义（见上「月内漂移模式」）。
+
+    Returns:
+        与收益同索引的 DataFrame，列：
+        ``position``（收益承担仓位=实际承担当日收益段的资产 A 权重，未建仓期 NaN）、
+        ``strategy_ret``（扣费后策略日收益，未建仓期 0；成本于成交日扣除，
+        建仓日旧仓位为空仓、毛收益 0，成本照常扣除）、
+        ``nav``（策略累计净值，期初财富 1.0）、
+        ``turnover_double``（双边换手 |Δw_A|+|Δw_B|，按成交后权重
+        executed_weight 的 diff 在**成交日**记账——信号日 T 的权重变化于
+        T+lag 收盘成交，换手即记在 T+lag；建仓日（首个成交日）记 1.0——
+        空仓满仓建立时买入 w 的 A 与 (1-w) 的 B，名义合计恰为 100%；
+        终点规则：样本最后一个索引收盘成交的调仓同样计入换手与成本，
+        即使其后已无收益行。``drift_within_period=True`` 时换手口径为
+        成交日重置幅度 |w_目标 - w_成交前漂移| 的双边值，建仓日仍记 1.0）。
+    """
+    ra = pd.Series(returns_a).astype(float).sort_index()
+    rb = pd.Series(returns_b).astype(float).reindex(ra.index).fillna(0.0)
+    idx = ra.index
+
+    if drift_within_period:
+        # 月内漂移分支（iter_04 SO-02）：仓位在成交日（观察日+lag）收盘重置
+        # 为目标权重，其余日期按两腿收益递推漂移；换手在成交日按重置幅度
+        # 记账（漂移量计入下次调仓）；成本与 T+lag 成交时点、收益承担语义
+        # （position = executed_weight.shift(1)）与默认分支一致。
+        w_obs = pd.Series(weight).astype(float).sort_index().reindex(idx)
+        exec_target = w_obs.shift(lag)  # 仅成交日有值（该日重置的目标权重）
+        trade_days = exec_target.notna()  # 成交日集合（每个观察日+lag，无论目标权重是否变化）
+        # 段 = [成交日, 下一成交日)：段首日收盘重置为目标权重（段内漂移系数
+        # g_a=g_b=1，段首日天然取 w0），段内其余日按两腿段内累计净值漂移
+        # （与 m1 基准「段内漂移、段末日重置」同一构造技巧的向量化实现）。
+        seg = trade_days.cumsum()
+        cum_a = (1.0 + ra.fillna(0.0)).groupby(seg).cumprod()
+        cum_b = (1.0 + rb).groupby(seg).cumprod()
+        g_a = cum_a / cum_a.groupby(seg).transform("first")
+        g_b = cum_b / cum_b.groupby(seg).transform("first")
+        w0 = exec_target.ffill()  # 段内目标权重（首个成交日前 NaN=未建仓）
+        executed_weight = (w0 * g_a) / (w0 * g_a + (1.0 - w0) * g_b)
+        position = executed_weight.shift(1)
+        # 换手在成交日按重置幅度记账：2|w0 - w_pre|，w_pre 为「若不重置」
+        # 自上一日收盘持仓经当日收益段漂移的成交前权重（漂移量由此计入
+        # 本次调仓）；非成交日 0；建仓日（首个成交日，w_pre 无前值）记 1.0。
+        prev_w = executed_weight.shift(1)
+        w_pre = (prev_w * (1.0 + ra.fillna(0.0))) / (
+            prev_w * (1.0 + ra.fillna(0.0)) + (1.0 - prev_w) * (1.0 + rb)
+        )
+        turnover_double = pd.Series(0.0, index=idx)
+        turnover_double.loc[trade_days] = (
+            2.0 * (exec_target[trade_days] - w_pre[trade_days]).abs()
+        ).fillna(0.0)
+        first_executed = executed_weight.first_valid_index()
+        if first_executed is not None:
+            turnover_double.loc[first_executed] = 1.0
+    else:
+        # 目标权重对齐日频并前向填充（持有至下次更新）。
+        w_daily = pd.Series(weight).astype(float).sort_index().reindex(idx).ffill()
+        # T+lag 收盘成交（CDX-C-01 修复，AS2 口径）：分离「成交后权重」与
+        # 「收益承担仓位」（CDX-C-R1-01 修复）——
+        # executed_weight = w_daily.shift(lag)：T 日信号在 T+lag 收盘成交后即
+        #   成为持仓权重（成交当日的收益段仍由旧仓位承担），用于换手/成本的
+        #   成交日记账；前 lag 日及首个信号日前为 NaN（未建仓）。
+        # position = executed_weight.shift(1)：收益承担仓位，新仓位自
+        #   T+lag→T+lag+1 收益段起生效，与旧实现 w_daily.shift(lag + 1) 逐位
+        #   等价，收益语义不变。旧实现 shift(lag) 直接承担收益实为「T+lag-1
+        #   收盘成交」，T 日信号的新仓位提前赚取了 T→T+lag 段收益，与 AS2
+        #   「T+1 收盘成交」矛盾。
+        executed_weight = w_daily.shift(lag)
+        position = executed_weight.shift(1)
+        # 双边换手在成交日按 executed_weight.diff() 记账（CDX-C-R1-01）：调仓日
+        # 2|Δw_exec|（|Δw_A|+|Δw_B| 且 Δw_B = -Δw_A）；建仓日（首个成交日）记
+        # 1.0；样本最后一个索引收盘成交的调仓同样计入（旧实现按 position.diff()
+        # 记账，换手延后一行且漏记末期成交）。
+        turnover_double = (2.0 * executed_weight.diff().abs()).fillna(0.0)
+        first_executed = executed_weight.first_valid_index()
+        if first_executed is not None:
+            turnover_double.loc[first_executed] = 1.0
+
+    active = position.notna()
+    pos = position.fillna(0.0)
+    gross_ret = pos * ra.fillna(0.0) + (1.0 - pos) * rb
+
+    # 成本于成交日从当日（旧仓位承担的）毛收益中扣除；cost_bps=0 时无数值
+    # 影响。建仓日旧仓位为空仓（毛收益 0），成本照常扣除。
+    cost = turnover_double * (cost_bps / 1e4)
+    strategy_ret = gross_ret.where(active, 0.0) - cost
+    nav = (1.0 + strategy_ret).cumprod()
+
+    return pd.DataFrame(
+        {
+            "position": position,
+            "strategy_ret": strategy_ret,
+            "nav": nav,
+            "turnover_double": turnover_double,
+        },
+        index=idx,
+    )
