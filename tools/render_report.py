@@ -26,7 +26,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from state import default_root  # noqa: E402
+from state import default_root, workspace_dir, output_dir, state_path  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -168,7 +168,7 @@ ENGINE_CN = {
     "skipped": "外审缺失（跳过）",
 }
 REVIEW_VERDICT_CN = {"pass": "通过", "pass_with_issues": "有意见通过",
-                     "fail": "曾出阻断问题（已修复闭环）", "skipped": "跳过"}
+                     "fail": "审查未通过（历史记录）", "skipped": "跳过"}
 ATTRIBUTION_CN = {"accepted": "残差已归因接受", "assumption_linked": "已挂钩假设条目"}
 
 
@@ -251,10 +251,13 @@ function fl(mode, btn){
 
 
 def render(root: Path, report_id: str) -> Path:
-    ws = root / "workspace" / report_id
-    res = root / "output" / report_id / "results"
+    ws = workspace_dir(root, report_id)
+    out = output_dir(root, report_id) / "final_report.html"
+    if out.is_symlink():
+        raise ValueError(f"输出文件不允许符号链接: {out}")
+    res = out.parent / "results"
 
-    state = _read_json(ws / "state.json")
+    state = _read_json(state_path(root, report_id))
     comparison = _read_json(res / "comparison.json")
     if state is None:
         raise SystemExit(f"缺硬输入: {ws / 'state.json'}")
@@ -301,11 +304,11 @@ def render(root: Path, report_id: str) -> Path:
     # KPI 卡
     B.append("<div class='kpis'>")
     if pass_count is not None and total:
-        B.append(f"<div class='kpi'><div class='k-label'>指标达标</div><div class='k-value'>{pass_count}/{total}</div><div class='k-sub'>comparison.json</div></div>")
+        B.append(f"<div class='kpi'><div class='k-label'>指标达标</div><div class='k-value'>{_fmt(pass_count)}/{_fmt(total)}</div><div class='k-sub'>comparison.json</div></div>")
     if cov.get("total"):
-        B.append(f"<div class='kpi'><div class='k-label'>要素覆盖</div><div class='k-value'>{cov.get('done', 0)}/{cov['total']}</div><div class='k-sub'>主动跳过 {cov.get('skipped', 0)} · 客观不可行 {cov.get('infeasible', 0)}</div></div>")
+        B.append(f"<div class='kpi'><div class='k-label'>要素覆盖</div><div class='k-value'>{_fmt(cov.get('done', 0))}/{_fmt(cov['total'])}</div><div class='k-sub'>主动跳过 {_fmt(cov.get('skipped', 0))} · 客观不可行 {_fmt(cov.get('infeasible', 0))}</div></div>")
     if it.get("current") is not None:
-        B.append(f"<div class='kpi'><div class='k-label'>迭代轮次</div><div class='k-value'>{it.get('current', 0)}/{it.get('max') or '-'}</div><div class='k-sub'>自动修正</div></div>")
+        B.append(f"<div class='kpi'><div class='k-label'>迭代轮次</div><div class='k-value'>{_fmt(it.get('current', 0))}/{_fmt(it.get('max') or '-')}</div><div class='k-sub'>自动修正</div></div>")
     if oos:
         B.append(f"<div class='kpi'><div class='k-label'>样本外结论</div><div class='k-value' style='font-size:18px'>{esc(str(oos.get('conclusion', '-')))}</div><div class='k-sub'>{esc(str(oos.get('oos_days', '-')))} 个交易日</div></div>")
     B.append("</div></header>")
@@ -394,8 +397,8 @@ def render(root: Path, report_id: str) -> Path:
             B.append(f"<tr><td>{esc(CHECKPOINT_CN.get(str(r.get('checkpoint')), str(r.get('checkpoint', '-'))))} <code>{esc(str(r.get('checkpoint', '-')))}</code></td>"
                      f"<td><span class='pill {ep}'>{esc(ENGINE_CN.get(eng, eng))}</span></td>"
                      f"<td><span class='pill {vp}'>{esc(REVIEW_VERDICT_CN.get(v, v))}</span></td>"
-                     f"<td>{r.get('critical', 0)}</td><td>{r.get('major', 0)}</td><td>{r.get('minor', 0)}</td></tr>")
-        B.append("</table></div><p class='note'>「曾出阻断问题」代表该审查点曾抓出必须修复的 critical 意见——按协议均已修复并经复审通过后才可能走到本报告（每条意见的原文与处置见 audit_responses.md）。</p></section>")
+                     f"<td>{_fmt(r.get('critical', 0))}</td><td>{_fmt(r.get('major', 0))}</td><td>{_fmt(r.get('minor', 0))}</td></tr>")
+        B.append("</table></div><p class='note'>本表展示已保存的审查记录。是否完成修复与复审，须核对 audit/audit_responses.md 和后续门禁证据；生成本页面不代表审计已闭环，本次渲染没有重跑门禁。</p></section>")
 
     # ---- 假设登记簿 / 最终报告全文（折叠收录） ----
     B.append("<section><h2>文书收录</h2>")
@@ -416,7 +419,6 @@ def render(root: Path, report_id: str) -> Path:
            f"<title>复现结果：{esc(report_id)}</title><style>{CSS}</style>"
            f"<script>{FILTER_JS}</script></head><body><main>" + "\n".join(B) + "</main></body></html>")
 
-    out = root / "output" / report_id / "final_report.html"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(doc, encoding="utf-8")
     return out

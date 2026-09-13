@@ -507,6 +507,72 @@ def test_check_verify_does_not_trust_file_pass_field(tmp_path: Path) -> None:
     by_id = {r.id: r for r in results}
     assert by_id["G-VF-3"].passed is False
     assert "rank_ic_mean" in by_id["G-VF-3"].detail
+    assert all(r.passed for r in results if r.id != "G-VF-3")  # 数值超差仍可走既定 iterate 分支
+
+
+@pytest.mark.parametrize("standards", [None, "{broken", "[]", "{}", '{"timing": {}}',
+    '{"factor": {"metrics": {"default": {}}, "required_charts": [], "required_excels": []}}'])
+def test_verify_missing_or_invalid_standards_is_configuration_blocker(tmp_path: Path, standards) -> None:
+    _init_workspace(tmp_path)
+    _write_verify_artifacts(tmp_path, "demo", [{"key": "annual_return", "report_value": 0.1, "reproduced_value": 100, "pass": False}])
+    if standards is not None:
+        (tmp_path / "templates").mkdir()
+        (tmp_path / "templates" / "standards.json").write_text(standards, encoding="utf-8")
+    results = {r.id: r for r in cg.check_verify(tmp_path, "demo")}
+    assert results["G-VF-0"].passed is False
+    assert "standards.json" in results["G-VF-0"].detail
+    assert results["G-VF-3"].passed is False
+    assert results["G-VF-4"].passed is False
+    assert results["G-VF-5"].passed is False
+    audit = {r.id: r for r in cg.check_result_audit(tmp_path, "demo")}
+    assert audit["G-RA-0"].passed is False
+
+
+@pytest.mark.parametrize("field", ["direction_only", "order_of_magnitude_only", "require_same_sign"])
+@pytest.mark.parametrize("value", ["false", 0, 1, None, False, True])
+def test_verify_standards_flags_require_json_booleans(tmp_path: Path, field: str, value) -> None:
+    _init_workspace(tmp_path)
+    _write_standards(tmp_path, {"factor": {
+        "metrics": {"default": {"max_rel_dev": 0.05, field: value}},
+        "required_charts": [], "required_excels": [],
+    }})
+    _write_verify_artifacts(tmp_path, "demo", [{"key": "x", "report_value": 1, "reproduced_value": 100}])
+    results = {r.id: r for r in cg.check_verify(tmp_path, "demo")}
+    assert results["G-VF-0"].passed is isinstance(value, bool)
+    if not isinstance(value, bool):
+        assert f"{field} 必须是布尔值" in results["G-VF-0"].detail
+        assert results["G-VF-3"].passed is False
+    elif value is False:
+        assert results["G-VF-3"].passed is False  # JSON false 不得开启方向/量级豁免。
+
+
+@pytest.mark.parametrize("value", [0, 100])
+def test_verify_missing_metric_rule_is_not_unverifiable_waiver(tmp_path: Path, value: float) -> None:
+    _init_workspace(tmp_path)
+    standards = json.loads(json.dumps(STANDARDS_FIXTURE))
+    del standards["factor"]["metrics"]["default"]
+    _write_standards(tmp_path, standards)
+    _write_verify_artifacts(tmp_path, "demo", [{"key": "unknown", "report_value": value, "reproduced_value": value, "attribution_status": "accepted"}])
+    results = {r.id: r for r in cg.check_verify(tmp_path, "demo")}
+    assert results["G-VF-0"].passed is False
+    assert results["G-VF-3"].passed is False
+    assert "unverifiable 豁免" not in results["G-VF-3"].detail
+    audit = {r.id: r for r in cg.check_result_audit(tmp_path, "demo")}
+    assert audit["G-RA-0"].passed is False
+
+    # 显式、有假设锚定的不可核验条目仍诚实豁免。
+    _write_verify_artifacts(tmp_path, "demo", [{"key": "unknown", "verification_level": "unverifiable", "attribution_status": "assumption_linked"}])
+    results = {r.id: r for r in cg.check_verify(tmp_path, "demo")}
+    assert results["G-VF-0"].passed is True
+    assert results["G-VF-3"].passed is True
+    assert "unverifiable 豁免 1 项" in results["G-VF-3"].detail
+
+
+def test_gate_rejects_unsafe_case_path(tmp_path: Path, monkeypatch, capsys) -> None:
+    monkeypatch.setenv("REPORT_REPRODUCE_ROOT", str(tmp_path))
+    assert cg.main(["../escape", "--stage", "review"]) == 1
+    assert "report_id" in capsys.readouterr().err
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_check_verify_fails_without_run_log_exit0(tmp_path: Path) -> None:

@@ -29,6 +29,7 @@ import re
 import sys
 import tempfile
 from datetime import datetime, timedelta, timezone
+from functools import wraps
 from pathlib import Path
 from typing import Any
 
@@ -115,8 +116,8 @@ class StateValidationError(ValueError):
 def default_root() -> Path:
     """仓库根目录：工具文件所在目录的上一级。
 
-    支持 REPORT_REPRODUCE_ROOT 环境变量覆盖（仅供测试用隔离 tmp_path 根，
-    正常使用不设置该变量时行为不变）。
+    REPORT_REPRODUCE_ROOT 可指向插件使用者的工作目录，也用于测试隔离；
+    未设置时取工具所在仓库根。
     """
     override = os.environ.get("REPORT_REPRODUCE_ROOT")
     if override:
@@ -129,20 +130,40 @@ def now_iso() -> str:
     return datetime.now(TZ_CN).isoformat(timespec="seconds")
 
 
+def validate_report_id(report_id: str) -> None:
+    """案例 ID 是单个目录名，禁止用户输入改变目录边界。"""
+    if not isinstance(report_id, str) or not re.fullmatch(r"[a-z][a-z0-9_]*", report_id):
+        raise ValueError(f"report_id 不合法（需小写字母开头的 snake_case）: {report_id!r}")
+
+
+def case_dir(root: Path, kind: str, report_id: str) -> Path:
+    """共享案例路径入口；目录不得通过符号链接重定向到其他案例或根外。"""
+    validate_report_id(report_id)
+    if kind not in {"workspace", "src", "output"}:
+        raise ValueError(f"未知案例目录: {kind!r}")
+    path = root.resolve() / kind / report_id
+    if path.resolve() != path:
+        raise ValueError(f"案例路径不允许符号链接重定向: {path}")
+    return path
+
+
 def workspace_dir(root: Path, report_id: str) -> Path:
-    return root / "workspace" / report_id
+    return case_dir(root, "workspace", report_id)
 
 
 def src_dir(root: Path, report_id: str) -> Path:
-    return root / "src" / report_id
+    return case_dir(root, "src", report_id)
 
 
 def output_dir(root: Path, report_id: str) -> Path:
-    return root / "output" / report_id
+    return case_dir(root, "output", report_id)
 
 
 def state_path(root: Path, report_id: str) -> Path:
-    return workspace_dir(root, report_id) / "state.json"
+    path = workspace_dir(root, report_id) / "state.json"
+    if path.is_symlink():
+        raise ValueError(f"state.json 不允许符号链接: {path}")
+    return path
 
 
 def _rel(root: Path, path: Path) -> str:
@@ -228,7 +249,7 @@ def default_state(
 def _check_enum(errors: list[str], key: str, value: Any, allowed: set, allow_none: bool = True) -> None:
     if value is None and allow_none:
         return
-    if value not in allowed:
+    if not isinstance(value, str) or value not in allowed:
         errors.append(f"{key} 取值非法: {value!r}，应属于 {sorted(allowed)}")
 
 
@@ -245,8 +266,10 @@ def validate_state(state: Any) -> list[str]:
     if extra:
         errors.append(f"存在未声明的顶层字段: {sorted(extra)}")
 
-    if not isinstance(state.get("report_id"), str) or not state.get("report_id"):
-        errors.append("report_id 必须是非空字符串")
+    try:
+        validate_report_id(state.get("report_id"))
+    except ValueError as exc:
+        errors.append(str(exc))
 
     _check_enum(errors, "mode", state.get("mode"), MODE_VALUES, allow_none=False)
     _check_enum(errors, "reproduction_mode", state.get("reproduction_mode"), REPRODUCTION_MODE_VALUES, allow_none=False)
@@ -376,7 +399,10 @@ def load_state(root: Path, report_id: str) -> dict[str, Any]:
 
 
 def save_state(root: Path, report_id: str, state: dict[str, Any]) -> dict[str, Any]:
+    """校验并替换；读改写调用方必须持有 _locked_mutation 的案例锁。"""
     errors = validate_state(state)
+    if isinstance(state, dict) and state.get("report_id") != report_id:
+        errors.append("state.report_id 与目标案例目录不一致")
     if errors:
         raise StateValidationError("state.json 校验失败:\n" + "\n".join(f"- {e}" for e in errors))
     atomic_write_json(state_path(root, report_id), state)
@@ -388,6 +414,37 @@ def save_state(root: Path, report_id: str, state: dict[str, Any]) -> dict[str, A
 # ---------------------------------------------------------------------------
 
 
+def _locked_mutation(func):
+    """案例锁覆盖整个读改写；锁文件保留，避免删除后产生两个锁 inode。"""
+    @wraps(func)
+    def locked(root: Path, report_id: str, *args, **kwargs):
+        # 所有路径先验证，避免 init 在发现另一目录越界前已创建部分骨架。
+        for kind in ("workspace", "src", "output"):
+            case_dir(root, kind, report_id)
+        path = state_path(root, report_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        lock_path = path.parent / ".state.lock"
+        if lock_path.is_symlink():
+            raise ValueError(f"状态锁不允许符号链接: {lock_path}")
+        fd = os.open(lock_path, os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        with os.fdopen(fd, "r+") as lock:
+            if os.name == "nt":
+                import msvcrt
+
+                lock.seek(0)
+                msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
+                if os.fstat(lock.fileno()).st_size == 0:
+                    lock.write("0")
+                    lock.flush()
+            else:
+                import fcntl
+
+                fcntl.flock(lock, fcntl.LOCK_EX)
+            return func(root, report_id, *args, **kwargs)
+    return locked
+
+
+@_locked_mutation
 def init_state(
     root: Path,
     report_id: str,
@@ -397,6 +454,8 @@ def init_state(
     legacy: bool = False,
     reproduction_mode: str = "strict",
 ) -> dict[str, Any]:
+    if state_path(root, report_id).exists():
+        raise FileExistsError(f"案例已存在，禁止重复 init 覆盖状态，请使用 continue: {report_id}")
     if mode not in MODE_VALUES:
         raise ValueError(f"非法 mode: {mode}，应属于 {sorted(MODE_VALUES)}")
     if reproduction_mode not in REPRODUCTION_MODE_VALUES:
@@ -427,6 +486,7 @@ def init_state(
     return state
 
 
+@_locked_mutation
 def migrate_stages(root: Path, report_id: str) -> list[str]:
     """STAGE_ORDER 演进后的旧 state 补键迁移。
 
@@ -458,6 +518,7 @@ def migrate_stages(root: Path, report_id: str) -> list[str]:
     return added
 
 
+@_locked_mutation
 def set_stage(root: Path, report_id: str, stage: str, status: str) -> dict[str, Any]:
     if stage not in STAGE_ORDER:
         raise ValueError(f"未知 stage: {stage}，应属于 {STAGE_ORDER}")
@@ -498,6 +559,7 @@ def _parse_cli_value(raw: str) -> Any:
         return raw
 
 
+@_locked_mutation
 def set_field(root: Path, report_id: str, key_path: str, raw_value: str) -> dict[str, Any]:
     state = load_state(root, report_id)
     parts = key_path.split(".")
@@ -525,6 +587,7 @@ def set_field(root: Path, report_id: str, key_path: str, raw_value: str) -> dict
     return state
 
 
+@_locked_mutation
 def record_event(root: Path, report_id: str, event: str, payload: Any = None) -> dict[str, Any]:
     state = load_state(root, report_id)
     ts = now_iso()
@@ -534,6 +597,7 @@ def record_event(root: Path, report_id: str, event: str, payload: Any = None) ->
     return state
 
 
+@_locked_mutation
 def set_milestone_field(root: Path, report_id: str, milestone_id: str, field: str, status: str) -> dict[str, Any]:
     if field not in MILESTONE_FIELDS:
         raise ValueError(f"非法 milestone 字段: {field}，应属于 {sorted(MILESTONE_FIELDS)}")
@@ -558,6 +622,7 @@ def set_milestone_field(root: Path, report_id: str, milestone_id: str, field: st
     return state
 
 
+@_locked_mutation
 def record_gate(root: Path, report_id: str, stage: str, verdict: str, checks: list) -> dict[str, Any]:
     if stage not in STAGE_ORDER:
         raise ValueError(f"未知 stage: {stage}，应属于 {STAGE_ORDER}")
@@ -776,7 +841,7 @@ def main(argv: list[str] | None = None) -> int:
             print(resolve_case_id(root, args.query))
         else:  # pragma: no cover - argparse 已保证 command 合法
             raise ValueError(f"未知命令: {args.command}")
-    except (ValueError, FileNotFoundError, StateValidationError, json.JSONDecodeError) as exc:
+    except (ValueError, OSError) as exc:
         print(f"错误: {exc}", file=sys.stderr)
         return 1
     return 0
