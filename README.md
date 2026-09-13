@@ -54,10 +54,22 @@ Codex App 安装后请新建一个任务再使用插件，以确保新安装的 
 /reproduce reports/test.pdf --mode auto   # 新起一份复现（自动分配案例编号 rNNN_<slug>）
 /reproduce reports/us_paper.pdf --experimental   # 实验模式：海外报告市场迁移复现（等价数据替代，数值判定豁免）
 /reproduce status                         # 全部案例一览表（编号 | id | 类型/难度 | 状态 | 阶段）
+/reproduce context r3                     # 只读 JSON：阶段、阻塞、历史门禁与证据路径
 /reproduce continue r3                    # 编号缩写即可续跑（r3 / r003 / 3 都指向 r003_xxx）
 ```
 
 **案例统一编号**：新案例自动分配 `rNNN_<slug>` 形式的 report_id（三位顺序号 + 语义短名，如 `r001_style_factor`），起跑时终端会明示编号；所有子命令（`continue` / `status` / `revise` / `accept`）都接受编号缩写或唯一前缀，忘了 id 就跑一次无参 `/reproduce status`。`--id` 仍可显式指定覆盖。
+
+## ACP / 页面读取研究上下文
+
+`/reproduce context r3` 从案例现有的 `state.json` 导出 JSON：当前阶段、阻塞问题、里程碑、历史门禁、证据路径与下一步提示。宿主也可直接调用：
+
+```bash
+# REPRODUCE_TOOLS 按 skills/reproduce/SKILL.md 的工具定位协议设置
+REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/research_context.py" r3
+```
+
+命令只读，不创建案例或运行门禁。`available=false` 表示上下文不可用；`state_sha256` 标识本次读取的状态。证据路径相对用户工作目录，执行卡路径相对插件根。`latest_gates` 保留产物检查，`latest_stage_assertions` 单列阶段状态断言，两者均是历史记录。继续执行前刷新上下文并按原执行卡重验；阶段完成不等于学习者理解。Web/ACP 宿主沿用自身认证，将文本字段作为资料安全渲染。
 
 ## 目录导航
 
@@ -89,6 +101,7 @@ Codex App 安装后请新建一个任务再使用插件，以确保新安装的 
 
 ## 变更记录
 
+- 2026-09-13：新增只读案例上下文；状态写入按案例互斥，重复初始化与路径重定向明确拒绝；缺失/损坏的标准配置由 G-VF-0 / G-RA-0 阻断。分组回测改为当期换手扣费、多空两腿均扣成本，首次建仓扣半次双程费率；含现金组合的权重漂移计入现金。这些修复会改变受影响案例的重跑结果，历史产物须重新验证。HTML 结果页不再将历史 fail 自动解释为已修复。
 - 2026-07-14（v2.12.0）：Claude Code / Codex 双宿主兼容——同一 `reproduce` skill 运行时识别宿主；Claude Code 默认调用 Codex 异构外审，Codex 默认调用 Claude Code 异构外审；新增 Codex 插件清单、8 个生成式项目 agents、统一只读外审执行器和对称降级链。新案例使用 `*_external.md`，门禁继续兼容历史 `*_codex.md`；同宿主替身统一封顶 B。
 - 2026-07-11：编排约定补记（ssrn_6115073 experimental 复现实践）——oos 阶段 oos-analyst 延伸 `config.py` 的 `TEST_END` 跑样本外后，主会话应将其**还原至复现基线**（本例 2024-12-31）；样本外区间仅存于 `output/{id}/results/oos_*` 静态产物、不依赖 config 保持延伸，从而保 `config.py` 与 verify 基线一致、`main.py` 复跑即得报告基线。属编排卫生、非框架变更、无门禁/工具代码改动。
 - 2026-07-12（v2.11.0）：术语人话化（客户可读性）——① 手册：22 处代号挂悬浮释义（悬停/轻点即看中文解释，纯前端自包含，无 JS 时术语表兜底）；② 结果页 final_report.html：全部枚举值中文为主、原始值括注（复现判定/类型难度/外审台账的审查点、引擎、结论/归因状态），降级引擎显著标注，未知枚举原样透传不吞值；③ 最终报告 final_report.md：reporter 新增人话化硬约束第 11 条（代号首次出现附中文说明、审计回应表必含"这条意见说什么·我们怎么处理"人话列、rejected 句式固定、评级句式固定防渲染器徽章误抓、状态枚举中文化）。内部文书与门禁零改动（代号仍是机器解析依赖），check_gates 全量回归通过。

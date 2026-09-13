@@ -77,6 +77,91 @@ def test_init_invalid_mode_rejected(tmp_path: Path) -> None:
         st.init_state(tmp_path, "demo", "reports/demo.pdf", mode="bogus")
 
 
+def test_init_existing_case_preserves_state(tmp_path: Path, monkeypatch, capsys) -> None:
+    st.init_state(tmp_path, "demo", "reports/demo.pdf")
+    st.record_event(tmp_path, "demo", "已保存研究证据")
+    st.set_stage(tmp_path, "demo", "verify", "done")
+    original = st.state_path(tmp_path, "demo").read_bytes()
+    monkeypatch.setenv("REPORT_REPRODUCE_ROOT", str(tmp_path))
+    assert st.main(["init", "demo", "--pdf", "replacement.pdf"]) == 1
+    assert "案例已存在" in capsys.readouterr().err
+    assert st.state_path(tmp_path, "demo").read_bytes() == original
+
+
+@pytest.mark.parametrize("report_id", ["../escaped", "/tmp/escaped", "", "a/b", r"a\b", "Demo"])
+def test_case_paths_reject_invalid_ids_before_writing(tmp_path: Path, report_id: str) -> None:
+    for path_func in (st.workspace_dir, st.src_dir, st.output_dir, st.state_path):
+        with pytest.raises(ValueError, match="report_id"):
+            path_func(tmp_path, report_id)
+    with pytest.raises(ValueError, match="report_id"):
+        st.init_state(tmp_path, report_id, "reports/demo.pdf")
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("kind", ["workspace", "src", "output"])
+def test_case_paths_reject_symlink_redirection(tmp_path: Path, kind: str) -> None:
+    root = tmp_path / "repo"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (root / kind).mkdir(parents=True)
+    (root / kind / "demo").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ValueError, match="符号链接"):
+        st.init_state(root, "demo", "reports/demo.pdf")
+    assert list(outside.iterdir()) == []
+    assert not (root / "workspace" / "demo" / "state.json").exists()
+
+
+def test_state_file_symlink_and_identity_change_are_rejected(tmp_path: Path) -> None:
+    st.init_state(tmp_path, "demo", "reports/demo.pdf")
+    path = st.state_path(tmp_path, "demo")
+    original = path.read_bytes()
+    with pytest.raises(st.StateValidationError, match="目标案例"):
+        st.set_field(tmp_path, "demo", "report_id", "other")
+    assert path.read_bytes() == original
+    target = tmp_path / "elsewhere.json"
+    path.rename(target)
+    path.symlink_to(target)
+    with pytest.raises(ValueError, match="符号链接"):
+        st.record_event(tmp_path, "demo", "不得写到其他文件")
+    assert target.read_bytes() == original
+
+
+def test_concurrent_mutations_preserve_events_and_gates(tmp_path: Path, monkeypatch) -> None:
+    """故意放慢读操作；并发记账必须覆盖整个读改写事务。"""
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    import time
+
+    st.init_state(tmp_path, "demo", "reports/demo.pdf")
+    load = st.load_state
+    start = Barrier(12)
+
+    def slow_load(*args):
+        state = load(*args)
+        time.sleep(0.01)
+        return state
+
+    def write(i):
+        start.wait(timeout=5)
+        if i % 3 == 0:
+            st.record_gate(tmp_path, "demo", "verify", "FAIL", [])
+        elif i % 3 == 1:
+            st.set_stage(tmp_path, "demo", "extract", "running")
+        else:
+            st.record_event(tmp_path, "demo", f"parallel_{i}")
+
+    monkeypatch.setattr(st, "load_state", slow_load)
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        list(pool.map(write, range(12)))
+    state = load(tmp_path, "demo")
+    assert len(state["gates"]) == 4
+    assert state["stages"]["extract"]["attempts"] == 4
+    assert len(state["events"]) == 9
+    assert {e["event"] for e in state["events"] if e["event"].startswith("parallel_")} == {
+        f"parallel_{i}" for i in range(2, 12, 3)
+    }
+
+
 # ---------------------------------------------------------------------------
 # set-stage
 # ---------------------------------------------------------------------------

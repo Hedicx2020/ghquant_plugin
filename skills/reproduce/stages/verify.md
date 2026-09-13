@@ -35,7 +35,7 @@
 ```
 uv run python tools/check_gates.py <id> --stage verify --record
 ```
-原样贴输出。G-VF：G-VF-1 run_log 含 exit=0 / G-VF-2 comparison.json 可解析 / **G-VF-3 按 standards.json 重算每条 metric 的 rel_dev 与 pass（不信任文件内 pass）** / G-VF-4 required_charts 全存在且 >15KB / G-VF-5 required_excels 全存在且非零 / G-VF-6 产物 mtime 晚于 src（E2 新鲜度）/ G-VF-7 矩阵验证结果列对**非 skipped/infeasible** 的 core/support 行无空。
+原样贴输出。G-VF：**G-VF-0 标准配置可用（文件、类型、数值规则完整）** / G-VF-1 run_log 含 exit=0 / G-VF-2 comparison.json 可解析 / **G-VF-3 按 standards.json 重算每条 metric 的 rel_dev 与 pass（不信任文件内 pass）** / G-VF-4 required_charts 全存在且 >15KB / G-VF-5 required_excels 全存在且非零 / G-VF-6 产物 mtime 晚于 src（E2 新鲜度）/ G-VF-7 矩阵验证结果列对**非 skipped/infeasible** 的 core/support 行无空。
 
 ## 达标分支（读 G-VF 逐条结果决定走向）
 
@@ -49,13 +49,14 @@ uv run python tools/check_gates.py <id> --stage verify --record
   uv run python tools/state.py set-stage <id> iterate skipped    # 首轮即达标，整段迭代不发生
   ```
   → 进 result_audit。
-- **仅 G-VF-3 FAIL（指标超容差），G-VF-1/2/4/5/6/7 结构项全 PASS** → 验证结构完整、仅未达标 → **进 iterate**（iterate 是「指标超容差」的既定补救路径，非硬规则1 意义上的越门；先记结构完整再进补救）：
+- **仅 G-VF-3 FAIL（指标超容差），G-VF-0/1/2/4/5/6/7 结构项全 PASS** → 验证结构完整、仅未达标 → **进 iterate**（iterate 是「指标超容差」的既定补救路径，非硬规则1 意义上的越门；先记结构完整再进补救）：
   ```
   uv run python tools/state.py set <id> verdict.result partial    # 暂定，迭代收敛后由 G-VF 重算改写
   uv run python tools/state.py set-stage <id> verify done         # 验证已如实产出对比，结构完整
   ```
   → 进 iterate（见 `stages/iterate.md`）。
-- **结构项 FAIL**（G-VF-1 run_log 无 exit=0 / G-VF-2 comparison 不可解析 / G-VF-4/5 图表 Excel 缺 / G-VF-6 新鲜度倒挂 / G-VF-7 矩阵未回填）→ **verify 未 done，禁止推进**（硬规则1）：
+- **结构项 FAIL**（G-VF-0 标准缺失/损坏/规则缺失 / G-VF-1 run_log 无 exit=0 / G-VF-2 comparison 不可解析 / G-VF-4/5 图表 Excel 缺 / G-VF-6 新鲜度倒挂 / G-VF-7 矩阵未回填）→ **verify 未 done，禁止推进**（硬规则1）：
+  - 标准配置失败（G-VF-0）→ 恢复正确标准并重验；不能把缺规则当不可核验豁免，也不能按数值超差进入 iterate。
   - 运行报错（G-VF-1/2）→ 回 `quant-coder` 修复（`uv run python tools/state.py record-event <id> verify_run_error_fix --json '{"attempt": N}'` 记第 N 次重试，**不改 `iteration.current`、不占迭代轮**——迭代轮计数完全交给 `iterate.md` 的 `iter_NN` 机制），修好回本 stage 重跑 verifier；重试上限见下方「失败处理」同一 gate 连续 3 次 FAIL 的兜圈断路器。
   - 新鲜度/图表/矩阵问题 → 回 `quant-verifier` 重跑补齐（拿旧结果冒充 = E2 失败，必须重跑）。
 

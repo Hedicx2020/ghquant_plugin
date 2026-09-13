@@ -29,12 +29,13 @@
 ```
 uv run python tools/check_gates.py <id> --stage result_audit --record
 ```
-原样贴输出。G-RA-1 使用 `result_audit_external.md`（兼容历史名），G-RA-2～5 语义不变。
+原样贴输出。G-RA-0 检查标准配置可用，缺文件、缺类型或缺数值规则时阻断；G-RA-1 使用 `result_audit_external.md`（兼容历史名），G-RA-2～5 语义不变。
 
-VERDICT PASS → `set-stage <id> result_audit done` → 进 report。
+VERDICT PASS → `set-stage <id> result_audit done` → 进 oos（按条件分析或跳过），再到 report。
 
 ## 失败处理
 
+- **G-RA-0 标准配置失败** → 恢复正确标准后重跑，不能以缺规则豁免超差归因。
 - **数字不实（critical：comparison 与原始产物 xlsx/metrics.json 不符）** → 回 verify 重出（重跑 verifier 覆盖产物），本 stage 复审。
 - **代码问题（超差归因指向实现缺陷）** → 计入迭代轮：回 iterate 再跑一轮（若未超 max_iter），收敛后重回本 stage。
 - **G-RA-3 超差指标缺 attribution_status** → 回 `quant-diagnoser`（收尾模式）为每条 pass=false 指标补 accepted/assumption_linked。

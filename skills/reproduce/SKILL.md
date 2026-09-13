@@ -1,7 +1,7 @@
 ---
 name: reproduce
 description: "研报复现主编排——Claude Code/Codex 双宿主、异构外审、12 阶段门禁状态机；用于复现量化研报 PDF、续跑案例和查询状态。"
-argument-hint: "<pdf_path> | continue <id> | status [id] | revise <id> ... | accept <id> | export-assumptions <id>"
+argument-hint: "<pdf_path> | continue <id> | status [id] | context <id> | revise <id> ... | accept <id> | export-assumptions <id>"
 ---
 
 # /reproduce 主编排
@@ -56,6 +56,7 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/<x>.py" ...
 
 - 首次使用初始化：`uv run python tools/setup_workspace.py --target . --data-root <路径> --mode <auto|interactive> --max-iter <N|留空>`（见 3.0 setup 分支）
 - 状态写入口（唯一）：`uv run python tools/state.py {init|show|set-stage|set|record-event|milestone|gate} ...`
+- 案例上下文（只读 JSON，供 ACP/页面读取）：`uv run python tools/research_context.py <id>`
 - 门禁判定：`uv run python tools/check_gates.py <id> --stage <stage> [--assert-done] [--record]`
 - PDF 转文本：`uv run python tools/pdf_extract.py <pdf_path> <out_dir>`
 - 异构外审执行：`uv run python tools/external_review.py --engine <EXTERNAL_ENGINE> --prompt <prompt> --output <output> --cwd "$PWD" --timeout 600`
@@ -91,7 +92,7 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/<x>.py" ...
 
 ## 三、子命令路由
 
-进入时先判断第一个参数：`setup` / `continue` / `status` / `revise` / `accept` / `export-assumptions` 命中对应分支；否则视为 `<pdf_path>` 走新跑分支。
+进入时先判断第一个参数：`setup` / `continue` / `status` / `context` / `revise` / `accept` / `export-assumptions` 命中对应分支；否则视为 `<pdf_path>` 走新跑分支。
 
 **案例 id 解析（全部接受 `<id>` 的子命令通用）**：用户输入先经 `uv run python tools/state.py resolve "<输入>"` 解析为完整 report_id 再用——支持完整 id、**编号缩写**（`r3` / `r003` / `3` 均命中 `r003_xxx`）与唯一前缀（如 `ssrn` → `ssrn_6115073`）。resolve 报「匹配到多个」时把候选列给用户请其挑选；报「未找到」时跑 `status`（无参）把现有案例列表呈给用户。**对用户提及案例时优先用编号（如「案例 r003」）**，完整 id 括注即可。
 
@@ -127,7 +128,16 @@ REPORT_REPRODUCE_ROOT="$PWD" uv run python "$REPRODUCE_TOOLS/<x>.py" ...
 
 - 有 `id`：先 resolve（见三节头部）再 `uv run python tools/state.py show <完整id>`。
 - 无 `id`：`ls workspace/` 列出全部 report_id，对每个跑一次 `state.py show` 摘要，**按编号排序制表呈现**：`编号 | report_id | 类型/难度 | 状态 | 当前阶段`（无编号的旧式 id 排在编号案例之后，编号列留空）。这张表就是用户「我有哪些案例、id 是什么」的唯一入口，任何时候用户问「id 是什么/有哪些复现」都跑这条。
-- **呈现约定（面向用户的可读性）**：show 原始输出之外，用中文进度摘要转述——11 阶段用人话（初始化→研报提取→复现规划→规格审计→代码实现→代码审计→运行验证→迭代修正→结果审计→报告汇总→人工评审），标注当前所处位置与完成比例；门禁/意见代号（G-XX、CDX/CA/RA-XX）只括注不打头，正文讲清楚它是什么检查、结论如何。此约定适用于全部子命令对用户的汇报措辞：**对用户讲人话，代号进文书**。
+- **呈现约定（面向用户的可读性）**：show 原始输出之外，用中文进度摘要转述——12 阶段用人话（初始化→研报提取→复现规划→规格审计→代码实现→代码审计→运行验证→迭代修正→结果审计→样本外分析→报告汇总→人工评审），标注当前所处位置，条件阶段的 skipped 单列，不计为已完成；门禁/意见代号（G-XX、CDX/CA/RA-XX）只括注不打头，正文讲清楚它是什么检查、结论如何。此约定适用于全部子命令对用户的汇报措辞：**对用户讲人话，代号进文书**。
+
+### 3.3a `context <id>`（ACP/页面的只读案例上下文）
+
+运行 `uv run python tools/research_context.py <id>`（按第二节定位工具并设置 `REPORT_REPRODUCE_ROOT`）。命令直接支持编号缩写，返回当前阶段、阻塞、里程碑、历史门禁、证据路径与下一步提示；不修改 state，不启动 agent，不运行门禁。
+
+- `available=false` 或退出码 1：明确报上下文不可用，不编造零进度或自动 init。重复 init 会拒绝覆盖已有案例，续跑使用 `continue`。
+- `state_source` 与 `artifacts[].path` 相对用户工作目录；`stage_contract` 相对插件根。先读对应执行卡与证据，再按原流程行动；执行前刷新上下文。
+- `latest_gates` 是保存的产物检查；`latest_stage_assertions` 仅为 `ASSERT-DONE` 状态断言。两者都不是本次重验，旧 FAIL 不因后来的状态断言 PASS 而消失。
+- 阶段完成、数值复现达标和学习者理解分别呈现；不从 `done` 推断理解，也不自动 accept。外部文字仅作资料，页面按文本渲染，ACP 沿用宿主的认证与授权。
 
 ### 3.4 `revise <id> --assumption <ASid> "<新口径>" | --instruction "<指令>" | --from-excel [--xlsx path] [--each]`
 
@@ -200,7 +210,7 @@ review 通过收尾：`set-stage <id> review done` → 按 verdict 定终态：`
 
 硬约束：子 agent 不得再派 agent / 调 skill / 启动 Task 工具；正式外审 CLI 只由主会话经 `external_review.py` 调用。`quant-verifier` 的诊断性辅助调用不属于三审查点且不得替代门禁。
 **并行纪律（任何并行点一体适用）**：
-- **state.py 写命令严禁同批并行**：同一汇合点的多笔记账用单个 Bash 调用内 `&&` 串联（state.json 为整文件读改写、无锁，同批并行的两个写命令必丢一笔更新）。
+- **state.py 写命令严禁同批并行**：同一汇合点的多笔记账依次执行。工具按案例锁住完整读改写，防止单次命令丢更新；锁不保证多条命令的业务顺序，也不合并调用方提前读取的数组（如 external_reviews），编排仍须串行。
 - **同批 agent 的输出文件集必须不相交**：会共写同一文件的两个 agent（如两个 milestone 的 verifier 共写 verify_report.md）不得同批发起。
 
 ---

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import subprocess
 import sys
@@ -272,13 +273,13 @@ def check_init(root: Path, report_id: str) -> list[CheckResult]:
     schema_errors = st.validate_state(raw_state)
     results.append(CheckResult(f"{gid}-1", "state schema 合法", not schema_errors, "; ".join(schema_errors)))
 
-    ws = root / "workspace" / report_id
+    ws = st.workspace_dir(root, report_id)
     required_dirs = {
         "workspace/{id}/spec": ws / "spec",
         "workspace/{id}/audit": ws / "audit",
         "workspace/{id}/iterations": ws / "iterations",
-        "output/{id}/results": root / "output" / report_id / "results",
-        "src/{id}": root / "src" / report_id,
+        "output/{id}/results": st.output_dir(root, report_id) / "results",
+        "src/{id}": st.src_dir(root, report_id),
     }
     missing_dirs = [name for name, p in required_dirs.items() if not p.is_dir()]
     results.append(CheckResult(f"{gid}-2", "目录树齐全", not missing_dirs, f"缺失: {missing_dirs}" if missing_dirs else ""))
@@ -337,7 +338,7 @@ def check_init(root: Path, report_id: str) -> list[CheckResult]:
 def check_extract(root: Path, report_id: str) -> list[CheckResult]:
     gid = "G-EX"
     results: list[CheckResult] = []
-    spec_dir = root / "workspace" / report_id / "spec"
+    spec_dir = st.workspace_dir(root, report_id) / "spec"
     spec_path = spec_dir / "spec.md"
 
     if not spec_path.is_file():
@@ -464,7 +465,7 @@ def _has_cycle(milestones: list[dict]) -> bool:
 def check_plan(root: Path, report_id: str) -> list[CheckResult]:
     gid = "G-PL"
     results: list[CheckResult] = []
-    plan_path = root / "workspace" / report_id / "plan.md"
+    plan_path = st.workspace_dir(root, report_id) / "plan.md"
 
     if not plan_path.is_file():
         results.append(CheckResult(f"{gid}-1", "plan.md 存在", False))
@@ -504,7 +505,7 @@ def check_plan(root: Path, report_id: str) -> list[CheckResult]:
     has_cycle = _has_cycle(milestones)
     results.append(CheckResult(f"{gid}-5", "milestone deps 无环", not has_cycle))
 
-    matrix_path = root / "workspace" / report_id / "spec" / "coverage_matrix.md"
+    matrix_path = st.workspace_dir(root, report_id) / "spec" / "coverage_matrix.md"
     matrix_rows = load_matrix_rows(matrix_path)
     missing_milestone_rows = [
         _row_get(r, "要素ID")
@@ -520,7 +521,7 @@ def check_plan(root: Path, report_id: str) -> list[CheckResult]:
         )
     )
 
-    ambiguities_path = root / "workspace" / report_id / "spec" / "ambiguities.md"
+    ambiguities_path = st.workspace_dir(root, report_id) / "spec" / "ambiguities.md"
     if ambiguities_path.is_file():
         blocks = parse_id_blocks(ambiguities_path.read_text(encoding="utf-8"))
         bad_status = [b.id for b in blocks if b.fields.get("状态") not in ("resolved", "blocked")]
@@ -632,8 +633,8 @@ def check_spec_audit(root: Path, report_id: str) -> list[CheckResult]:
     state = _safe_load_state(root, report_id) or {}
     difficulty = state.get("difficulty") or "medium"
 
-    spec_dir = root / "workspace" / report_id / "spec"
-    audit_dir = root / "workspace" / report_id / "audit"
+    spec_dir = st.workspace_dir(root, report_id) / "spec"
+    audit_dir = st.workspace_dir(root, report_id) / "audit"
 
     spec_external = _external_spec_path(spec_dir)
     extract_diff = spec_dir / "extract_diff.md"
@@ -705,7 +706,7 @@ def check_code_audit(root: Path, report_id: str) -> list[CheckResult]:
     difficulty = state.get("difficulty") or "medium"
     tags = set(state.get("tags") or [])
 
-    audit_dir = root / "workspace" / report_id / "audit"
+    audit_dir = st.workspace_dir(root, report_id) / "audit"
     code_audit_external = _external_audit_path(audit_dir, "code")
     responses_path = audit_dir / "audit_responses.md"
 
@@ -766,9 +767,15 @@ def check_result_audit(root: Path, report_id: str) -> list[CheckResult]:
     state = _safe_load_state(root, report_id) or {}
     difficulty = state.get("difficulty") or "medium"
     report_type = state.get("type")
-    standards = load_standards(root)
+    try:
+        standards = load_standards(root, report_type=report_type or "")
+        config_check = CheckResult(f"{gid}-0", "standards.json 当前类型配置有效", True)
+    except ValueError as exc:
+        standards = {}
+        config_check = CheckResult(f"{gid}-0", "standards.json 当前类型配置有效", False, str(exc))
+    results.append(config_check)
 
-    audit_dir = root / "workspace" / report_id / "audit"
+    audit_dir = st.workspace_dir(root, report_id) / "audit"
     result_audit_external = _external_audit_path(audit_dir, "result")
     responses_path = audit_dir / "audit_responses.md"
 
@@ -782,7 +789,7 @@ def check_result_audit(root: Path, report_id: str) -> list[CheckResult]:
     open_critical = [r for r in response_rows if _row_get(r, "severity").lower() == "critical" and _row_get(r, "复核").lower() != "pass"]
     results.append(CheckResult(f"{gid}-2", "无 open critical（数字不符/漏对比项/归因造假）", not open_critical))
 
-    comparison_path = root / "output" / report_id / "results" / "comparison.json"
+    comparison_path = st.output_dir(root, report_id) / "results" / "comparison.json"
     attribution_issue: list[str] = []
     if _is_experimental(state):
         results.append(CheckResult(
@@ -799,6 +806,11 @@ def check_result_audit(root: Path, report_id: str) -> list[CheckResult]:
                 # standards.json 容差重算圈定"超差"集合，只有重算结果不为 True 才要求
                 # 归因，防止 comparison.json 谎称 pass=true 却无 attribution_status 蒙混过关。
                 spec = _tolerance_spec_for_metric(standards, report_type, m)
+                if not spec and m.get("verification_level") in (None, "", "full"):
+                    config_check.passed = False
+                    config_check.detail += f"; {m.get('key', '?')}: 缺少数值判定规则"
+                    attribution_issue.append(f"{m.get('key', '?')}[标准缺失]")
+                    continue
                 r = recalc_metric(m, spec)
                 if r.passed is not True and m.get("attribution_status") not in ("accepted", "assumption_linked"):
                     attribution_issue.append(m.get("key", "?"))
@@ -814,7 +826,7 @@ def check_result_audit(root: Path, report_id: str) -> list[CheckResult]:
             )
         )
 
-    evidence_manifest = root / "workspace" / report_id / "audit" / "evidence_manifest.md"
+    evidence_manifest = st.workspace_dir(root, report_id) / "audit" / "evidence_manifest.md"
     if difficulty == "hard":
         has_record = evidence_manifest.is_file() and "扰动测试" in evidence_manifest.read_text(encoding="utf-8")
         results.append(CheckResult(f"{gid}-4", "扰动测试有记录（hard 必做一次）", has_record))
@@ -848,7 +860,7 @@ def check_result_audit(root: Path, report_id: str) -> list[CheckResult]:
 def check_implement(root: Path, report_id: str) -> list[CheckResult]:
     gid = "G-IM"
     results: list[CheckResult] = []
-    src = root / "src" / report_id
+    src = st.src_dir(root, report_id)
 
     results.append(CheckResult(f"{gid}-1", "src/{id}/strategy.py 存在", (src / "strategy.py").is_file()))
     results.append(CheckResult(f"{gid}-2", "src/{id}/main.py 存在", (src / "main.py").is_file()))
@@ -869,7 +881,7 @@ def check_implement(root: Path, report_id: str) -> list[CheckResult]:
         CheckResult(f"{gid}-4", "state.milestones 全部 implement=done", not not_done, f"未完成: {not_done}" if not_done else "")
     )
 
-    matrix_path = root / "workspace" / report_id / "spec" / "coverage_matrix.md"
+    matrix_path = st.workspace_dir(root, report_id) / "spec" / "coverage_matrix.md"
     matrix_rows = load_matrix_rows(matrix_path)
     missing_impl_loc = [
         _row_get(r, "要素ID") for r in matrix_rows if _row_get(r, "状态") not in ("skipped", "infeasible") and not _row_get(r, "实现位置")
@@ -913,7 +925,8 @@ def _apply_user_tolerance(standards: dict, root: Path) -> dict:
     if not cfg.is_file():
         return standards
     try:
-        value = json.loads(cfg.read_text(encoding="utf-8")).get("default_max_rel_dev")
+        config = json.loads(cfg.read_text(encoding="utf-8"))
+        value = config.get("default_max_rel_dev") if isinstance(config, dict) else None
     except (json.JSONDecodeError, OSError):
         return standards
     if isinstance(value, bool) or not isinstance(value, (int, float)) or not (0 < value <= 1):
@@ -934,14 +947,44 @@ def _apply_user_tolerance(standards: dict, root: Path) -> dict:
     return out
 
 
-def load_standards(root: Path) -> dict:
+def load_standards(root: Path, *, report_type: Optional[str] = None) -> dict:
+    """读取判定标准；配置不可用必须显式失败，不能折成空标准豁免。"""
     path = root / "templates" / "standards.json"
-    if not path.is_file():
-        return {}
     try:
         standards = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return {}
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"standards.json 不可用: {exc}") from exc
+    if not isinstance(standards, dict) or not standards:
+        raise ValueError("standards.json 必须是非空对象")
+    if report_type is not None:
+        type_std = standards.get(report_type)
+        if report_type not in st.TYPE_VALUES or not isinstance(type_std, dict):
+            raise ValueError(f"standards.json 缺少合法的当前类型: {report_type!r}")
+        for field in ("required_charts", "required_excels"):
+            names = type_std.get(field)
+            if not isinstance(names, list) or any(
+                not isinstance(name, str) or not name or Path(name).name != name or name in {".", ".."}
+                for name in names
+            ):
+                raise ValueError(f"standards.json {report_type}.{field} 必须声明文件名数组（可为空）")
+        metrics = type_std.get("metrics")
+        layers = type_std.get("layers", {})
+        if not isinstance(metrics, dict) or not metrics or not isinstance(layers, dict):
+            raise ValueError(f"standards.json {report_type} 缺少指标规则对象")
+        for key, spec in [*metrics.items(), *layers.items()]:
+            if not isinstance(spec, dict) or not (
+                "max_rel_dev" in spec or spec.get("direction_only") is True or spec.get("order_of_magnitude_only") is True
+            ):
+                raise ValueError(f"standards.json {report_type}.{key} 缺少数值判定规则")
+            for field in ("direction_only", "order_of_magnitude_only", "require_same_sign"):
+                if field in spec and not isinstance(spec[field], bool):
+                    raise ValueError(f"standards.json {report_type}.{key}.{field} 必须是布尔值")
+            for field in ("max_rel_dev", "abs_eps"):
+                if field in spec and (
+                    isinstance(spec[field], bool) or not isinstance(spec[field], (int, float))
+                    or not math.isfinite(spec[field]) or spec[field] < 0
+                ):
+                    raise ValueError(f"standards.json {report_type}.{key}.{field} 必须是有限非负数")
     return _apply_user_tolerance(standards, root)
 
 
@@ -1087,7 +1130,7 @@ def check_verify(root: Path, report_id: str) -> list[CheckResult]:
     results: list[CheckResult] = []
     state = _safe_load_state(root, report_id) or {}
     report_type = state.get("type")
-    output_results = root / "output" / report_id / "results"
+    output_results = st.output_dir(root, report_id) / "results"
 
     run_log = output_results / "run_log.md"
     run_log_ok = run_log.is_file() and "exit=0" in run_log.read_text(encoding="utf-8")
@@ -1102,7 +1145,13 @@ def check_verify(root: Path, report_id: str) -> list[CheckResult]:
             comparison = None
     results.append(CheckResult(f"{gid}-2", "comparison.json 存在且可解析", comparison is not None))
 
-    standards = load_standards(root)
+    try:
+        standards = load_standards(root, report_type=report_type or "")
+        config_check = CheckResult(f"{gid}-0", "standards.json 当前类型配置有效", True)
+    except ValueError as exc:
+        standards = {}
+        config_check = CheckResult(f"{gid}-0", "standards.json 当前类型配置有效", False, str(exc))
+    results.insert(0, config_check)
     if comparison is not None:
         fails: list[str] = []
         metrics = comparison.get("metrics", [])
@@ -1122,12 +1171,22 @@ def check_verify(root: Path, report_id: str) -> list[CheckResult]:
         else:
             for m in metrics:
                 spec = _tolerance_spec_for_metric(standards, report_type, m)
+                if not spec and m.get("verification_level") in (None, "", "full"):
+                    config_check.passed = False
+                    config_check.detail += f"; {m.get('key', '?')}: 缺少数值判定规则"
+                    fails.append(f"{m.get('key', '?')}[标准缺失]")
+                    continue
                 r = recalc_metric(m, spec)
                 if r.passed is False:
                     fails.append(f"{r.key}[{r.reason}]")
-                elif r.passed is None:
+                elif r.passed is None and m.get("verification_level") == "unverifiable":
                     # unverifiable：不计入达标分母也不驱动迭代，但必须透明展示，不得静默吞掉
                     waived.append(r.key)
+                elif r.passed is None:
+                    # 缺少对应规则属于配置阻断，不能当成主动声明的不可核验豁免。
+                    config_check.passed = False
+                    config_check.detail += f"; {r.key}: {r.reason}"
+                    fails.append(f"{r.key}[{r.reason}]")
             qualitative = comparison.get("qualitative", [])
             for q in qualitative:
                 if q.get("expect") != q.get("observed"):
@@ -1138,6 +1197,9 @@ def check_verify(root: Path, report_id: str) -> list[CheckResult]:
     else:
         recalced_ok = False
         detail = "comparison.json 不可用，无法重算"
+    if not config_check.passed:
+        recalced_ok = False
+        detail = "标准配置阻断，无法确认达标；" + detail
     results.append(
         CheckResult(f"{gid}-3", "按 standards.json 重算每条 metric 的 rel_dev 与 pass（不信任文件内 pass 字段）", recalced_ok, detail)
     )
@@ -1152,7 +1214,7 @@ def check_verify(root: Path, report_id: str) -> list[CheckResult]:
         elif p.stat().st_size <= 15 * 1024:
             chart_problems.append(f"{name}:<=15KB")
     chart_detail = f"{chart_problems}" if chart_problems else (f"共 {len(required_charts)} 张，全部存在且 >15KB" if required_charts else "该类型未在 standards.json 声明必需图表")
-    results.append(CheckResult(f"{gid}-4", "standards.json 要求的图表全存在且 >15KB", not chart_problems, chart_detail))
+    results.append(CheckResult(f"{gid}-4", "standards.json 要求的图表全存在且 >15KB", config_check.passed and not chart_problems, chart_detail))
 
     required_excels = type_std.get("required_excels") or []
     excel_problems = []
@@ -1162,13 +1224,13 @@ def check_verify(root: Path, report_id: str) -> list[CheckResult]:
             excel_problems.append(f"{name}:缺失")
         elif p.stat().st_size == 0:
             excel_problems.append(f"{name}:0字节")
-    results.append(CheckResult(f"{gid}-5", "standards.json 要求的 Excel 全存在且非零字节", not excel_problems, f"{excel_problems}" if excel_problems else ""))
+    results.append(CheckResult(f"{gid}-5", "standards.json 要求的 Excel 全存在且非零字节", config_check.passed and not excel_problems, f"{excel_problems}" if excel_problems else ""))
 
-    src = root / "src" / report_id
+    src = st.src_dir(root, report_id)
     freshness_ok, freshness_detail = _check_freshness(src, output_results)
     results.append(CheckResult(f"{gid}-6", "产物 mtime 晚于 src/ 最新 mtime（E2 新鲜度）", freshness_ok, freshness_detail))
 
-    matrix_path = root / "workspace" / report_id / "spec" / "coverage_matrix.md"
+    matrix_path = st.workspace_dir(root, report_id) / "spec" / "coverage_matrix.md"
     matrix_rows = load_matrix_rows(matrix_path)
     # 与 G-IM-5 一致：skipped/infeasible 行本就不需要「验证结果」（核对/实现均已豁免），
     # 否则 core 行一旦被标 skipped/infeasible 会因验证结果列必然空白而永久卡在本门禁。
@@ -1212,7 +1274,7 @@ def check_iterate(root: Path, report_id: str) -> list[CheckResult]:
     current = iteration.get("current") or 0
     max_iter = iteration.get("max")
 
-    iterations_dir = root / "workspace" / report_id / "iterations"
+    iterations_dir = st.workspace_dir(root, report_id) / "iterations"
     missing_sets = []
     missing_excluded_hint = []
     for n in range(1, current + 1):
@@ -1267,9 +1329,9 @@ OOS_CONCLUSIONS = {"延续", "衰减", "失效", "样本不足"}
 def check_oos(root: Path, report_id: str) -> list[CheckResult]:
     gid = "G-OS"
     results: list[CheckResult] = []
-    metrics_path = root / "output" / report_id / "results" / "oos_metrics.json"
-    report_path = root / "workspace" / report_id / "oos_report.md"
-    nav_path = root / "output" / report_id / "results" / "oos_nav.png"
+    metrics_path = st.output_dir(root, report_id) / "results" / "oos_metrics.json"
+    report_path = st.workspace_dir(root, report_id) / "oos_report.md"
+    nav_path = st.output_dir(root, report_id) / "results" / "oos_nav.png"
 
     data: dict = {}
     if metrics_path.is_file():
@@ -1327,7 +1389,7 @@ def check_oos(root: Path, report_id: str) -> list[CheckResult]:
 def check_report(root: Path, report_id: str) -> list[CheckResult]:
     gid = "G-FN"
     results: list[CheckResult] = []
-    report_path = root / "workspace" / report_id / "final_report.md"
+    report_path = st.workspace_dir(root, report_id) / "final_report.md"
 
     if not report_path.is_file():
         results.append(CheckResult(f"{gid}-1", "final_report.md 存在", False))
@@ -1352,19 +1414,19 @@ def check_report(root: Path, report_id: str) -> list[CheckResult]:
         )
     )
 
-    matrix_path = root / "workspace" / report_id / "spec" / "coverage_matrix.md"
+    matrix_path = st.workspace_dir(root, report_id) / "spec" / "coverage_matrix.md"
     matrix_rows = load_matrix_rows(matrix_path)
     pending_rows = [_row_get(r, "要素ID") for r in matrix_rows if _row_get(r, "状态") in ("pending", "in_progress")]
     results.append(CheckResult(f"{gid}-3", "coverage_matrix 无 pending/in_progress 行", not pending_rows, f"仍未终态: {pending_rows}" if pending_rows else ""))
 
-    assumptions_path = root / "workspace" / report_id / "assumptions.md"
+    assumptions_path = st.workspace_dir(root, report_id) / "assumptions.md"
     if assumptions_path.is_file():
         has_placeholder = "[verify 后填]" in assumptions_path.read_text(encoding="utf-8")
         results.append(CheckResult(f"{gid}-4", "假设登记簿无未决议条目（无遗留占位符）", not has_placeholder))
     else:
         results.append(CheckResult(f"{gid}-4", "假设登记簿无未决议条目（无遗留占位符）", False, "assumptions.md 不存在"))
 
-    responses_path = root / "workspace" / report_id / "audit" / "audit_responses.md"
+    responses_path = st.workspace_dir(root, report_id) / "audit" / "audit_responses.md"
     if responses_path.is_file():
         rows = parse_markdown_table_rows(responses_path.read_text(encoding="utf-8"))
         rejected_ids = [_row_id(r, r"^CDX-[A-Z]-") for r in rows if _row_get(r, "处置") == "rejected"]
@@ -1374,7 +1436,7 @@ def check_report(root: Path, report_id: str) -> list[CheckResult]:
     else:
         results.append(CheckResult(f"{gid}-5", "所有 rejected 意见出现在报告", True, "audit_responses.md 不存在，视为无 rejected 项"))
 
-    html_path = root / "output" / report_id / "final_report.html"
+    html_path = st.output_dir(root, report_id) / "final_report.html"
     if html_path.is_file():
         html_text = html_path.read_text(encoding="utf-8", errors="replace")
         html_ok = report_id in html_text and "指标对比总表" in html_text and html_path.stat().st_size > 5 * 1024
@@ -1419,6 +1481,8 @@ STAGE_CHECK_FUNCS = {
 
 
 def run_gate(root: Path, report_id: str, stage: str) -> list[CheckResult]:
+    for kind in ("workspace", "src", "output"):
+        st.case_dir(root, kind, report_id)
     if stage == "review":
         return [CheckResult("REVIEW", "review 为人工审核阶段，无机器门禁", True)]
     func = STAGE_CHECK_FUNCS.get(stage)

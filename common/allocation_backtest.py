@@ -502,10 +502,12 @@ def portfolio_backtest(
     权重）只与 ``asset_returns`` 中**严格晚于 T 的下一月**收益相乘，即「信号 T 算、
     T+1 执行」（spec B5 / AS4）。换手在 T 时点计（对比上期权重经 T 月收益漂移后的权重），
     成本从 T+1 期收益扣除。
+    成本沿用期收益直接扣减的近似，漂移按扣费前财富计算，不是精确现金结算模型。
 
     Args:
         weights_panel: index=调仓日（月末 T，升序），columns=asset，目标权重
-            （每行不必和为 1；空仓行=全 0）。各期资产不同已 reindex 到并集、缺失 0。
+            （每行不必和为 1；空仓行=全 0，剩余权重视为零息现金）。
+            各期资产不同已 reindex 到并集、缺失 0。
         asset_returns: index=月末，columns=asset（含 weights_panel 全部列），月收益。
         cost_bps: 每单位换手（Σ|Δw| 双边）的成本，单位 bps（AS5 无摩擦=0）。
 
@@ -539,7 +541,10 @@ def portfolio_backtest(
         else:
             r_t = ret.loc[t].reindex(assets).fillna(0.0) if t in ret_index else pd.Series(0.0, index=assets)
             drift = prev_w * (1.0 + r_t)
-            drift = drift / drift.sum() if drift.sum() > 0 else prev_w
+            wealth = 1.0 + float((prev_w * r_t).sum())
+            if not np.isfinite(wealth) or wealth <= 0:
+                raise ValueError(f"组合财富必须为正的有限数，无法在 {t} 计算漂移权重")
+            drift = drift / wealth  # 分母含现金，不能把半仓持仓归一为满仓。
             turnover = float((w_t - drift).abs().sum())
 
         # T+1 期收益：只对权重非零且收益非缺失的资产计

@@ -69,7 +69,8 @@ def test_render_produces_selfcontained_html(tmp_path):
     assert "难度：困难" in t                            # difficulty 纯中文
     assert "结果审查" in t                              # 外审台账 checkpoint
     assert "codex 异构外审" in t                        # 外审台账 engine
-    assert "曾出阻断问题" in t                          # 审查 verdict=fail 的人话
+    assert "审查未通过（历史记录）" in t                 # fail 不推断已修复
+    assert "已修复闭环" not in t and "均已修复" not in t
     assert "残差已归因接受" in t                        # attribution_status 映射
     # PNG base64 内嵌（自包含）
     assert "data:image/png;base64," in t
@@ -109,10 +110,37 @@ def test_html_escapes_content(tmp_path):
     res = tmp_path / "output" / "demo" / "results"
     data = json.loads((res / "comparison.json").read_text(encoding="utf-8"))
     data["metrics"][0]["key"] = "<script>alert(1)</script>"
+    payload = '<img src=x onerror="alert(1)">'
+    data["pass_count"] = data["total"] = payload
     (res / "comparison.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    source = tmp_path / "workspace/demo/state.json"
+    state = json.loads(source.read_text())
+    state["external_reviews"][0].update({k: payload for k in ("critical", "major", "minor")})
+    state["coverage_stats"] = {k: payload for k in ("total", "done", "skipped", "infeasible")}
+    state["iteration"] = {"current": payload, "max": payload}
+    source.write_text(json.dumps(state))
     t = rr.render(tmp_path, "demo").read_text(encoding="utf-8")
     assert "<script>alert(1)</script>" not in t
     assert "&lt;script&gt;" in t
+    assert payload not in t and t.count("&lt;img") == 11
+
+
+def test_render_rejects_redirected_case_without_writing(tmp_path):
+    _fixture(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (tmp_path / "output/redirect").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ValueError, match="符号链接"):
+        rr.render(tmp_path, "redirect")
+    with pytest.raises(ValueError, match="report_id"):
+        rr.render(tmp_path, "../outside")
+    assert not (outside / "final_report.html").exists()
+    target = outside / "original.txt"
+    target.write_text("keep")
+    (tmp_path / "output/demo/final_report.html").symlink_to(target)
+    with pytest.raises(ValueError, match="符号链接"):
+        rr.render(tmp_path, "demo")
+    assert target.read_text() == "keep"
 
 
 def test_render_unknown_enum_values_pass_through(tmp_path):

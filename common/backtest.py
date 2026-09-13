@@ -203,11 +203,21 @@ def quantile_backtest(
         return_col: Forward return column.
         date_col: Date column.
         n_groups: Number of groups.
-        transaction_cost: Round-trip cost.
+        transaction_cost: Round-trip cost as a fraction. Initial entry costs
+            half this rate; replacing a whole group costs the full rate.
+            Both legs pay costs in the long-short portfolio. No terminal
+            liquidation is assumed.
 
     Returns:
         Dictionary with group_returns, group_nav, turnover, etc.
+        ``turnover_by_date`` is half the traded notional per group (0.5 on
+        initial entry); ``group_costs`` applies the round-trip rate to it.
+        The legacy ``turnover`` lists exclude initial entry.
     """
+    if not np.isfinite(transaction_cost) or transaction_cost < 0:
+        raise ValueError("transaction_cost must be finite and non-negative")
+    if transaction_cost > 0 and "stock_code" not in factor_panel.columns:
+        raise ValueError("stock_code is required to calculate transaction costs")
     panel = assign_quantile_groups(
         factor_panel, factor_col=factor_col, date_col=date_col, n_groups=n_groups
     )
@@ -226,7 +236,8 @@ def quantile_backtest(
     top_col, bot_col = f"G{n_groups}", "G1"
     group_returns["long_short"] = group_returns[top_col] - group_returns[bot_col]
 
-    # Simple turnover estimation per group
+    # ponytail: membership turnover excludes price-driven weight drift;
+    # use asset-weight accounting when a strategy requires that precision.
     group_members = (
         panel.dropna(subset=["group"])
         .groupby([date_col, "group"])
@@ -235,6 +246,7 @@ def quantile_backtest(
     )
 
     turnover_dict: dict[str, list[float]] = {}
+    turnover_by_date = pd.DataFrame(index=group_returns.index)
     for g_col in group_returns.columns:
         if g_col == "long_short":
             continue
@@ -242,25 +254,28 @@ def quantile_backtest(
         if g_idx in group_members.columns:
             members_series = group_members[g_idx].dropna()
             turnovers = []
-            for i in range(1, len(members_series)):
-                prev, curr = members_series.iloc[i - 1], members_series.iloc[i]
+            prev = set()
+            for curr in members_series:
                 if prev and curr:
                     overlap = len(prev & curr)
                     total = max(len(prev), len(curr))
-                    turnovers.append(1 - overlap / total if total > 0 else 0)
+                    turnovers.append(1 - overlap / total)
                 else:
-                    turnovers.append(0)
-            turnover_dict[g_col] = turnovers
+                    turnovers.append(0.5 if prev or curr else 0.0)
+                prev = curr
+            turnover_dict[g_col] = turnovers[1:]
+            turnover_by_date[g_col] = pd.Series(turnovers, index=members_series.index)
 
-    # Deduct transaction cost (one-way cost = half round-trip * turnover)
-    # For simplicity, deduct cost from group returns using average turnover
+    # Costs belong to each period's rebalance, never the full-sample average.
+    group_costs = turnover_by_date * transaction_cost
     group_returns_net = group_returns.copy()
-    for g_col, tvs in turnover_dict.items():
-        avg_turnover = np.mean(tvs) if tvs else 0.0
-        group_returns_net[g_col] = group_returns[g_col] - transaction_cost * avg_turnover
+    for g_col in group_costs:
+        group_returns_net[g_col] = group_returns[g_col] - group_costs[g_col]
 
-    # Recalculate long-short after cost
-    group_returns_net["long_short"] = group_returns_net[top_col] - group_returns_net[bot_col]
+    # Short-side trading costs are expenses too, not a short-return credit.
+    group_returns_net["long_short"] = (
+        group_returns["long_short"] - group_costs[top_col] - group_costs[bot_col]
+    )
 
     # Cumulative NAV
     group_nav = (1 + group_returns_net).cumprod()
@@ -270,6 +285,8 @@ def quantile_backtest(
         "group_returns_net": group_returns_net,
         "group_nav": group_nav,
         "turnover": turnover_dict,
+        "turnover_by_date": turnover_by_date,
+        "group_costs": group_costs,
         "panel": panel,
         "n_groups": n_groups,
     }
