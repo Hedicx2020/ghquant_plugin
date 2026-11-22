@@ -48,7 +48,7 @@ def test_fresh_setup_creates_everything(tmp_path):
     assert (tmp_path / "common" / "data_loader.py").is_file()
     assert report.copied and not report.skipped_existing
     installed_agents = sorted((tmp_path / ".codex" / "agents").glob("quant-*.toml"))
-    assert len(installed_agents) == 8
+    assert len(installed_agents) == 11  # 8 个角色 + 3 个经济档变体
     assert any(p.startswith(".codex/agents/") for p in report.copied)
     # pyproject 与目录树
     assert report.pyproject_action == "created"
@@ -209,3 +209,20 @@ def test_max_rel_dev_out_of_range_rejected(tmp_path):
         _run(tmp_path, max_rel_dev=0.9)
     with pytest.raises(SystemExit):
         _run(tmp_path, max_rel_dev=0.001)
+
+
+def test_v3_policy_keys_are_written_and_validated(tmp_path):
+    report = sw.run_setup(tmp_path, "~/local_data", "auto", None, force_config=False, check_only=False, on_missing="mock", budget_hours=12, stall_hours=1.5)
+    cfg = json.loads((tmp_path / ".reproduce.json").read_text(encoding="utf-8"))
+    assert cfg["default_on_missing"] == "mock" and cfg["default_budget_hours"] == 12 and cfg["default_budget_tokens"] is None
+    assert cfg["flow"] == {"stall_hours": 1.5, "adhoc_limit": 5, "redispatch_limit": {}, "iterate_digest": "shadow"}
+    assert "数据缺口无人应答时=mock" in report.render_text() and "停滞阈值=1.5 小时" in report.render_text()
+    # 钩子脚本靠 python3 启动：环境里没有时要明说
+    missing = sw.SetupReport(target="x", env={"uv": "/u", "missing_deps": [], "python3": None, "codex": "/c", "claude": "/cl"}).render_text()
+    assert "python3 未在 PATH 上" in missing and "钩子不会生效" in missing
+    present = sw.SetupReport(target="x", env={"uv": "/u", "missing_deps": [], "python3": "/usr/bin/python3", "codex": "/c", "claude": "/cl"}).render_text()
+    assert "python3 未在 PATH 上" not in present
+    with pytest.raises(SystemExit, match="default_on_missing"):
+        sw.run_setup(tmp_path / "b", "~/local_data", "auto", None, force_config=False, check_only=False, on_missing="guess")
+    with pytest.raises(SystemExit, match="flow.stall_hours"):
+        sw.run_setup(tmp_path / "c", "~/local_data", "auto", None, force_config=False, check_only=False, stall_hours=0)

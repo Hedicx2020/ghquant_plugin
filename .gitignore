@@ -12,3 +12,16 @@ workspace/*/checkpoints/
 workspace/*/data_cache/
 workspace/*/audit/perturbation_*/
 tmp/
+
+# v3 内核的派生文件：看板、数据目录体检结果、案例锁（都可随时重新生成）
+workspace/board.html
+workspace/*/board.html
+workspace/_registry/data_probe.json
+workspace/_registry/data_probe.md
+workspace/*/.state.lock*
+
+# v3 运行期文件：钩子记下的用户输入、护栏索引（含私人内容或随时重建，不入库）
+workspace/_registry/presence.jsonl
+workspace/_registry/guard_index.json
+workspace/_registry/guard_agents.json
+workspace/*/flow/guard.log

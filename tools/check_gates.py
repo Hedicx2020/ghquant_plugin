@@ -26,7 +26,7 @@ import json
 import re
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
@@ -241,6 +241,15 @@ def _extract_h2_section(body: str, heading_keyword: str) -> str:
 # 图表登记清单表格的数据行：| FIG12 | ... | / | TBL3 | ... | / | EX25 | ... |
 # EX 前缀用于研报以「图表N」统一编号、不区分 TBL/FIG 的情形（替代 TBL/FIG）。
 _EXHIBIT_ROW_RE = re.compile(r"^\|\s*(FIG|TBL|EX)(\d+)\s*\|", re.MULTILINE)
+
+
+def _v3_native(state: Optional[dict]) -> bool:
+    """是不是 v3 内核新建的案例（flow init 建的）。
+
+    数据体检（G-PL-10/11）与数据清单（G-VF-8）这几条新检查只对这类案例生效：旧案例没有体检结果、
+    代码也不经 data_path() 取数，对它们加检查只会让已收口的阶段变红。所以旧案例的门禁输出逐条不变。
+    """
+    return ((state or {}).get("ext") or {}).get("created_by") == "flow"
 
 
 def _safe_load_state(root: Path, report_id: str) -> Optional[dict]:
@@ -542,7 +551,55 @@ def check_plan(root: Path, report_id: str) -> list[CheckResult]:
 
     results.append(CheckResult(f"{gid}-9", "feasibility != blocked", frontmatter.get("feasibility") != "blocked"))
 
+    if _v3_native(_safe_load_state(root, report_id)):
+        results.extend(_check_plan_data(root, report_id, gid))
+
     return results
+
+
+def _check_plan_data(root: Path, report_id: str, gid: str) -> list[CheckResult]:
+    """数据体检的两条检查（只对 v3 新建案例）：每条数据需求都有体检结论；每个缺口都有处置决定。
+
+    体检本身由内核在 plan 阶段内执行（tools/flowlib/datacheck.py），这里只核对它的结果在不在、
+    是不是对着当前这版数据需求做的、缺口是不是都由人处置过了。
+    """
+    desc10 = "每条数据需求都有体检结论（data_check.json 与当前的 data_requirements 对得上）"
+    desc11 = "每个数据缺口都有处置决定（补数据须已补齐）"
+    try:
+        from tools.flowlib import datacheck
+    except Exception as exc:  # noqa: BLE001 - 体检模块不可用时如实判未过，不放行
+        detail = f"数据体检模块不可用: {exc}"
+        return [CheckResult(f"{gid}-10", desc10, False, detail), CheckResult(f"{gid}-11", desc11, False, detail)]
+
+    result = datacheck.load_check(root, report_id)
+    if result is None:
+        detail = "data_check.json 不存在：数据需求还没有体检"
+        return [CheckResult(f"{gid}-10", desc10, False, detail), CheckResult(f"{gid}-11", desc11, False, detail)]
+
+    entries = [e for e in result.get("requirements") or [] if isinstance(e, dict)]
+    problems: list[str] = []
+    if result.get("plan_hash") != datacheck.plan_requirements_hash(root, report_id):
+        problems.append("体检之后 data_requirements 改过，结果已过期")
+    wanted = [str(r.get("name")) for r in datacheck.requirements_from_plan(root, report_id)]
+    checked = [str(e.get("name")) for e in entries if e.get("result") in datacheck.RESULTS]
+    missing = [name for name in wanted if name not in checked]
+    if missing:
+        problems.append(f"没有体检结论: {missing}")
+    summary = result.get("summary") or {}
+    counted = "、".join(f"{label} {summary.get(key, 0)}" for key, label in (("ok", "通过"), ("partial", "部分满足"), ("missing", "缺失"), ("unchecked", "未机检")))
+    out = [CheckResult(f"{gid}-10", desc10, not problems, "; ".join(problems) if problems else f"共 {len(wanted)} 条：{counted}")]
+
+    undecided = [str(e.get("name")) for e in datacheck.open_gaps(result)]
+    waiting = [
+        str(e.get("name"))
+        for e in entries
+        if e.get("result") in datacheck.GAP_RESULTS and isinstance(e.get("disposition"), dict) and e["disposition"].get("choice") in ("supply", "abort")
+    ]
+    issues = ([f"没有处置决定: {undecided}"] if undecided else []) + ([f"决定补数据但还没补齐（或已决定终止）: {waiting}"] if waiting else [])
+    gaps = [e for e in entries if e.get("result") in datacheck.GAP_RESULTS]
+    chosen = "、".join(f"{e.get('name')}→{(e.get('disposition') or {}).get('choice')}" for e in gaps)
+    out.append(CheckResult(f"{gid}-11", desc11, not issues, "; ".join(issues) if issues else (f"缺口 {len(gaps)} 处：{chosen}" if gaps else "没有缺口")))
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -550,8 +607,22 @@ def check_plan(root: Path, report_id: str) -> list[CheckResult]:
 # ---------------------------------------------------------------------------
 
 
-def _parse_codex_output(path: Path) -> tuple[Optional[int], Optional[str]]:
-    """解析异构外审输出，返回 (issues 数, verdict)。
+@dataclass
+class ReviewParse:
+    """一份异构外审输出的解析结果。
+
+    issues/verdict 的口径与门禁沿用的 `_parse_codex_output` 完全相同；findings 与 source
+    是给内核用的附加信息（多轮合并、回应表生成），不参与任何门禁判定。
+    """
+
+    issues: Optional[int]
+    verdict: Optional[str]
+    findings: list = field(default_factory=list)
+    source: Optional[str] = None  # json / fenced_json / trailing_json / table；文件不存在时为 None
+
+
+def parse_review(path: Path) -> ReviewParse:
+    """解析异构外审输出。
 
     约定（供 templates/codex_prompts 与 review_schema.json 对齐）：优先整份 JSON
     或文中 ```json 代码块，形如 {"verdict": ..., "findings": [...]}；否则退化为
@@ -560,17 +631,21 @@ def _parse_codex_output(path: Path) -> tuple[Optional[int], Optional[str]]:
     出现的任意表格（如「已检查维度」汇总表）都算一条 issue。
     """
     if not path.is_file():
-        return None, None
+        return ReviewParse(None, None)
     text = path.read_text(encoding="utf-8")
 
-    for candidate in [text, *(m.group(1) for m in re.finditer(r"```json\s*(.*?)```", text, re.DOTALL))]:
+    def _from_json(data: dict, source: str) -> ReviewParse:
+        findings = data.get("findings") or []
+        return ReviewParse(len(findings), data.get("verdict"), findings if isinstance(findings, list) else [], source)
+
+    candidates = [("json", text), *(("fenced_json", m.group(1)) for m in re.finditer(r"```json\s*(.*?)```", text, re.DOTALL))]
+    for source, candidate in candidates:
         try:
             data = json.loads(candidate)
         except (json.JSONDecodeError, TypeError):
             continue
         if isinstance(data, dict) and "findings" in data:
-            findings = data.get("findings") or []
-            return len(findings), data.get("verdict")
+            return _from_json(data, source)
 
     # 裸 JSON：prompt 契约允许「纯 JSON（不 fence）」，实际输出常为混合文本
     # （盲提取标记块等）尾随一个 JSON 对象——整文件 loads 会失败，fenced 扫描
@@ -582,13 +657,18 @@ def _parse_codex_output(path: Path) -> tuple[Optional[int], Optional[str]]:
         except (json.JSONDecodeError, ValueError):
             continue
         if isinstance(data, dict) and "findings" in data:
-            findings = data.get("findings") or []
-            return len(findings), data.get("verdict")
+            return _from_json(data, "trailing_json")
 
     rows = parse_markdown_table_rows(text)
     cdx_rows = [r for r in rows if re.match(r"^CDX-", next(iter(r.values()), "") or "")]
     verdict_match = re.search(r"VERDICT:\s*(\w+)", text, re.IGNORECASE)
-    return len(cdx_rows), (verdict_match.group(1) if verdict_match else None)
+    return ReviewParse(len(cdx_rows), (verdict_match.group(1) if verdict_match else None), cdx_rows, "table")
+
+
+def _parse_codex_output(path: Path) -> tuple[Optional[int], Optional[str]]:
+    """返回 (issues 数, verdict)。门禁沿用的入口，解析逻辑见 `parse_review`。"""
+    parsed = parse_review(path)
+    return parsed.issues, parsed.verdict
 
 
 def _external_audit_path(audit_dir: Path, checkpoint: str) -> Path:
@@ -1059,9 +1139,23 @@ def recalc_metric(metric: dict, spec: dict) -> MetricRecalc:
     return MetricRecalc(key, rel_dev, passed, f"相对偏差判定 max_rel_dev={max_rel_dev}")
 
 
-def _check_freshness(src: Path, output_results: Path) -> tuple[bool, str]:
+@dataclass
+class Freshness:
+    """产物新鲜度（G-VF-6）的判定结果。stale 等字段是给内核用的附加信息，不参与判定。"""
+
+    ok: bool
+    detail: str
+    latest_src: Optional[Path] = None
+    latest_src_mtime: Optional[float] = None
+    earliest_out: Optional[Path] = None
+    earliest_out_mtime: Optional[float] = None
+    stale: list[Path] = field(default_factory=list)  # results 里不晚于 src 最新修改时间的文件
+
+
+def stale_outputs(src: Path, output_results: Path) -> Freshness:
+    """比较 src 最新修改时间与 results 最早修改时间，并列出过期的产物文件。"""
     if not src.is_dir() or not output_results.is_dir():
-        return False, "src 或 output/{id}/results 目录不存在"
+        return Freshness(False, "src 或 output/{id}/results 目录不存在")
     # 两侧都排除 __pycache__/*.pyc：它们是派生物，不是源码也不是产物。
     # src 侧计入会使「先重放 G-IM（compileall）再查 G-VF」的合法顺序被误判为产物过期；
     # out 侧计入会让 results 内脚本（如 build_final_artifacts.py）的旧字节码缓存把
@@ -1075,11 +1169,95 @@ def _check_freshness(src: Path, output_results: Path) -> tuple[bool, str]:
     src_files = _real_files(src)
     out_files = _real_files(output_results)
     if not src_files or not out_files:
-        return False, "src 或 results 下没有文件可比较"
-    latest_src_mtime = max(p.stat().st_mtime for p in src_files)
-    earliest_out_mtime = min(p.stat().st_mtime for p in out_files)
+        return Freshness(False, "src 或 results 下没有文件可比较")
+    src_mtimes = [(p.stat().st_mtime, p) for p in src_files]
+    out_mtimes = [(p.stat().st_mtime, p) for p in out_files]
+    latest_src_mtime, latest_src = max(src_mtimes, key=lambda item: item[0])
+    earliest_out_mtime, earliest_out = min(out_mtimes, key=lambda item: item[0])
     ok = earliest_out_mtime > latest_src_mtime
-    return ok, f"src最新mtime={latest_src_mtime:.0f} results最早mtime={earliest_out_mtime:.0f}"
+    return Freshness(
+        ok,
+        f"src最新mtime={latest_src_mtime:.0f} results最早mtime={earliest_out_mtime:.0f}",
+        latest_src=latest_src,
+        latest_src_mtime=latest_src_mtime,
+        earliest_out=earliest_out,
+        earliest_out_mtime=earliest_out_mtime,
+        stale=sorted(p for mtime, p in out_mtimes if mtime <= latest_src_mtime),
+    )
+
+
+def _check_freshness(src: Path, output_results: Path) -> tuple[bool, str]:
+    fresh = stale_outputs(src, output_results)
+    return fresh.ok, fresh.detail
+
+
+@dataclass
+class ComparisonRecalc:
+    """按 standards.json 重算 comparison.json 的结果（G-VF-3）。
+
+    ok/detail 即门禁的判定与明细；其余字段是逐条结果，供内核生成对比总表、看板与
+    一致性预检使用，不参与判定。
+    """
+
+    ok: bool
+    detail: str
+    experimental: bool = False
+    metrics: list[MetricRecalc] = field(default_factory=list)  # 与 comparison.metrics 逐条对应
+    qualitative: list[dict] = field(default_factory=list)  # [{key, passed}]
+    fails: list[str] = field(default_factory=list)
+    waived: list[str] = field(default_factory=list)
+
+
+def recalc_comparison(
+    comparison: Optional[dict], standards: dict, report_type: Optional[str], experimental: bool
+) -> ComparisonRecalc:
+    """重算每条 metric 的 rel_dev 与 pass（不信任文件内 pass 字段）。"""
+    if comparison is None:
+        return ComparisonRecalc(False, "comparison.json 不可用，无法重算", experimental)
+
+    fails: list[str] = []
+    metrics = comparison.get("metrics", [])
+    waived: list[str] = []
+    recalcs: list[MetricRecalc] = []
+    qual_results: list[dict] = []
+    if experimental:
+        # 实验模式（市场迁移）：数值不与原文对齐，只核「每个原文指标都有迁移市场的对应产出」
+        for m in metrics:
+            present = m.get("reproduced_value") is not None
+            if not present:
+                fails.append(f"{m.get('key', '?')}[实验模式：迁移市场产出缺失]")
+            recalcs.append(
+                MetricRecalc(m.get("key", "?"), None, present, "实验模式：只核迁移市场产出是否在位")
+            )
+        qualitative = comparison.get("qualitative", [])
+        for q in qualitative:
+            present = q.get("observed") not in (None, "")
+            if not present:
+                fails.append(f"{q.get('key', '?')}[实验模式：定性观察缺失]")
+            qual_results.append({"key": q.get("key", "?"), "passed": present})
+        recalced_ok = not fails
+        detail = (f"未通过: {fails}" if fails
+                  else f"实验模式（市场迁移）：{len(metrics)} 项指标产出完整 + {len(qualitative)} 项定性观察在位；数值对齐判定按模式豁免，原文值仅作对照")
+    else:
+        for m in metrics:
+            spec = _tolerance_spec_for_metric(standards, report_type, m)
+            r = recalc_metric(m, spec)
+            recalcs.append(r)
+            if r.passed is False:
+                fails.append(f"{r.key}[{r.reason}]")
+            elif r.passed is None:
+                # unverifiable：不计入达标分母也不驱动迭代，但必须透明展示，不得静默吞掉
+                waived.append(r.key)
+        qualitative = comparison.get("qualitative", [])
+        for q in qualitative:
+            matched = q.get("expect") == q.get("observed")
+            if not matched:
+                fails.append(f"{q.get('key', '?')}[定性指标 expect!=observed]")
+            qual_results.append({"key": q.get("key", "?"), "passed": matched})
+        recalced_ok = not fails
+        waived_note = f"；unverifiable 豁免 {len(waived)} 项: {waived}" if waived else ""
+        detail = (f"未通过: {fails}" if fails else f"{len(metrics)} 项数值指标 + {len(qualitative)} 项定性指标均通过重算") + waived_note
+    return ComparisonRecalc(recalced_ok, detail, experimental, recalcs, qual_results, fails, waived)
 
 
 def check_verify(root: Path, report_id: str) -> list[CheckResult]:
@@ -1103,41 +1281,8 @@ def check_verify(root: Path, report_id: str) -> list[CheckResult]:
     results.append(CheckResult(f"{gid}-2", "comparison.json 存在且可解析", comparison is not None))
 
     standards = load_standards(root)
-    if comparison is not None:
-        fails: list[str] = []
-        metrics = comparison.get("metrics", [])
-        waived: list[str] = []
-        if _is_experimental(state):
-            # 实验模式（市场迁移）：数值不与原文对齐，只核「每个原文指标都有迁移市场的对应产出」
-            for m in metrics:
-                if m.get("reproduced_value") is None:
-                    fails.append(f"{m.get('key', '?')}[实验模式：迁移市场产出缺失]")
-            qualitative = comparison.get("qualitative", [])
-            for q in qualitative:
-                if q.get("observed") in (None, ""):
-                    fails.append(f"{q.get('key', '?')}[实验模式：定性观察缺失]")
-            recalced_ok = not fails
-            detail = (f"未通过: {fails}" if fails
-                      else f"实验模式（市场迁移）：{len(metrics)} 项指标产出完整 + {len(qualitative)} 项定性观察在位；数值对齐判定按模式豁免，原文值仅作对照")
-        else:
-            for m in metrics:
-                spec = _tolerance_spec_for_metric(standards, report_type, m)
-                r = recalc_metric(m, spec)
-                if r.passed is False:
-                    fails.append(f"{r.key}[{r.reason}]")
-                elif r.passed is None:
-                    # unverifiable：不计入达标分母也不驱动迭代，但必须透明展示，不得静默吞掉
-                    waived.append(r.key)
-            qualitative = comparison.get("qualitative", [])
-            for q in qualitative:
-                if q.get("expect") != q.get("observed"):
-                    fails.append(f"{q.get('key', '?')}[定性指标 expect!=observed]")
-            recalced_ok = not fails
-            waived_note = f"；unverifiable 豁免 {len(waived)} 项: {waived}" if waived else ""
-            detail = (f"未通过: {fails}" if fails else f"{len(metrics)} 项数值指标 + {len(qualitative)} 项定性指标均通过重算") + waived_note
-    else:
-        recalced_ok = False
-        detail = "comparison.json 不可用，无法重算"
+    recalc = recalc_comparison(comparison, standards, report_type, _is_experimental(state))
+    recalced_ok, detail = recalc.ok, recalc.detail
     results.append(
         CheckResult(f"{gid}-3", "按 standards.json 重算每条 metric 的 rel_dev 与 pass（不信任文件内 pass 字段）", recalced_ok, detail)
     )
@@ -1188,7 +1333,40 @@ def check_verify(root: Path, report_id: str) -> list[CheckResult]:
         )
     )
 
+    if _v3_native(state):
+        results.append(_check_no_mock_in_results(root, report_id, gid))
+
     return results
+
+
+def _check_no_mock_in_results(root: Path, report_id: str, gid: str) -> CheckResult:
+    """G-VF-8（只对 v3 新建案例）：真实结果不得是用 mock 数据算出来的。
+
+    依据是运行时写下的数据清单 output/<id>/results/data_manifest.json（common.data_loader 经
+    data_path() 取数时登记每个文件是真实的还是 mock 的）。三种情况判未过：清单里有 mock 文件；
+    清单自己标着试跑；案例做过 mock 试跑（留有 mock 清单或试跑标记）而真实结果却没有数据清单可查。
+    没做过试跑、也没有数据清单的案例无从核对，如实写明后放行。
+    """
+    desc = "真实结果的数据清单里没有 mock 文件"
+    ws = root / "workspace" / report_id
+    manifest_path = root / "output" / report_id / "results" / "data_manifest.json"
+    mock_dir = ws / "data_mock"
+    if (mock_dir / "ACTIVE").is_file():
+        return CheckResult(f"{gid}-8", desc, False, "案例还处于 mock 试跑（data_mock/ACTIVE 存在），这一轮不能出结论")
+    had_trial = (mock_dir / "manifest.json").is_file()
+    if not manifest_path.is_file():
+        if had_trial:
+            return CheckResult(f"{gid}-8", desc, False, "案例做过 mock 试跑，但真实结果目录里没有 data_manifest.json，无法确认结果没有用到 mock 数据")
+        return CheckResult(f"{gid}-8", desc, True, "没有数据清单（代码没有经 data_path() 取数），无从核对；案例没有做过 mock 试跑")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return CheckResult(f"{gid}-8", desc, False, "data_manifest.json 解析失败")
+    files = [f for f in (manifest.get("files") or []) if isinstance(f, dict)] if isinstance(manifest, dict) else []
+    mock_files = [str(f.get("name")) for f in files if f.get("source") == "mock"]
+    if mock_files or (isinstance(manifest, dict) and manifest.get("trial")):
+        return CheckResult(f"{gid}-8", desc, False, f"用到了 mock 数据: {mock_files}" if mock_files else "数据清单标着试跑（trial=true）")
+    return CheckResult(f"{gid}-8", desc, True, f"共读 {len(files)} 个数据文件，全部来自数据根")
 
 
 # ---------------------------------------------------------------------------
@@ -1453,6 +1631,47 @@ def format_check(c: CheckResult) -> str:
     return line
 
 
+@dataclass
+class GateEvaluation:
+    """一次门禁判定的完整结果（含未通过项的明细）。"""
+
+    stage: str
+    checks: list[CheckResult]
+    assert_done: bool = False
+
+    @property
+    def passed(self) -> bool:
+        return all(c.passed for c in self.checks)
+
+    @property
+    def verdict(self) -> str:
+        return "PASS" if self.passed else "FAIL"
+
+    def failed(self) -> list[CheckResult]:
+        return [c for c in self.checks if not c.passed]
+
+    def render(self) -> str:
+        """与命令行逐字相同的输出文本。"""
+        return "\n".join([*(format_check(c) for c in self.checks), f"VERDICT: {self.verdict}"])
+
+    def to_record(self, with_detail: bool = False) -> list[dict]:
+        """供 state.record_gate 入账的检查项列表；with_detail 时给未通过项附上明细。"""
+        payload = []
+        for c in self.checks:
+            item = {"id": c.id, "desc": c.desc, "result": "PASS" if c.passed else "FAIL"}
+            if with_detail and not c.passed and c.detail:
+                item["detail"] = c.detail
+            payload.append(item)
+        return payload
+
+
+def evaluate(root: Path, report_id: str, stage: str, assert_done: bool = False) -> GateEvaluation:
+    """跑一个阶段的门禁（或 --assert-done 断言），返回结构化结果。不写任何文件。"""
+    if assert_done:
+        return GateEvaluation(stage, [check_assert_done(root, report_id, stage)], assert_done=True)
+    return GateEvaluation(stage, run_gate(root, report_id, stage))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="门禁机器判定（研报复现系统 v2）")
     parser.add_argument("report_id")
@@ -1466,31 +1685,20 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     root = st.default_root()
 
-    if args.assert_done:
-        check = check_assert_done(root, args.report_id, args.stage)
-        print(format_check(check))
-        verdict = "PASS" if check.passed else "FAIL"
-        print(f"VERDICT: {verdict}")
-        if args.record:
-            st.record_gate(root, args.report_id, args.stage, verdict, [{"id": check.id, "desc": check.desc, "result": verdict}])
-        return 0 if check.passed else 1
-
     try:
-        checks = run_gate(root, args.report_id, args.stage)
+        result = evaluate(root, args.report_id, args.stage, assert_done=args.assert_done)
     except ValueError as exc:
         print(f"错误: {exc}", file=sys.stderr)
         return 1
 
-    for c in checks:
-        print(format_check(c))
-    verdict = "PASS" if all(c.passed for c in checks) else "FAIL"
-    print(f"VERDICT: {verdict}")
+    print(result.render())
 
     if args.record:
-        checks_payload = [{"id": c.id, "desc": c.desc, "result": "PASS" if c.passed else "FAIL"} for c in checks]
-        st.record_gate(root, args.report_id, args.stage, verdict, checks_payload)
+        # v2 案例把未通过项的明细一并入账（进事件流）；v1 案例的入账内容与旧版相同
+        state = _safe_load_state(root, args.report_id) or {}
+        st.record_gate(root, args.report_id, args.stage, result.verdict, result.to_record(with_detail=st.is_v2(state)))
 
-    return 0 if verdict == "PASS" else 1
+    return 0 if result.passed else 1
 
 
 if __name__ == "__main__":

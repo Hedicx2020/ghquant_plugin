@@ -18,19 +18,29 @@
     - 时间戳统一 ISO8601 + 北京时区 (+08:00)。
     - 路径一律存为相对仓库根的 POSIX 风格字符串。
     - 子 agent 不得导入本模块；仅供主会话与 tools/check_gates.py 调用。
+    - 每个写操作都在案例锁内完成「读 → 改 → 写」，并行写不丢更新。
+    - schema v2（v3 内核用）：完整的事件与门禁历史追加写入 events.jsonl（带哈希链），
+      state.json 只留最近 50 条事件和各阶段最新一条门禁记录。v1 案例的读写行为不变，
+      只有显式迁移（tools/flow.py migrate）才会升级。
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
+import hashlib
 import json
 import os
 import re
+import shutil
+import socket
 import sys
 import tempfile
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 # ---------------------------------------------------------------------------
 # 常量：stage 顺序与各类枚举词表（与设计文档 §三 / §十一 字段名一致，不得改名）
@@ -67,7 +77,32 @@ GATE_VERDICT_VALUES = {"PASS", "FAIL"}
 MILESTONE_STATUS_VALUES = STAGE_STATUS_VALUES
 MILESTONE_FIELDS = {"implement", "code_review", "verify"}
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 1  # 新建案例的默认版本；v3 内核接管 init 之后才改为 2
+SCHEMA_VERSION_V2 = 2
+SUPPORTED_SCHEMA_VERSIONS = {SCHEMA_VERSION, SCHEMA_VERSION_V2}
+# v2 新增的顶层字段（v1 不得出现）。后续各期只在 ext 下加子键。
+V2_TOP_FIELDS = {"flow", "gate_latest", "counters", "checkpoints", "policy", "events_head", "ext"}
+# v2 的 state.json 内保留的最近事件条数；完整历史在 events.jsonl
+STATE_EVENTS_KEEP = 50
+# 以下字段归内核所有：v2 案例里不能用 `state.py set` 直接改，只能经 flow 的命令改
+KERNEL_OWNED_FIELDS = {"flow", "gate_latest", "counters", "checkpoints", "policy", "events_head", "ext"}
+WAITING_STATUSES = {"paused_blocked", "awaiting_review"}
+TERMINAL_STATUSES = {"done", "done_partial", "aborted"}
+# 同一（阶段, 检查项）连续这么多次 FAIL 就熔断，停下等人
+BREAKER_THRESHOLD = 3
+CHECKPOINT_PENDING = "pending"
+CHECKPOINT_RESOLVED = "resolved"
+# 内核与人工放行专用的事件名：v2 案例里不能用 `state.py record-event` 写入
+_RESERVED_EVENT_HEADS = (
+    "checkpoint", "decide", "decision", "step", "order", "adhoc", "gate", "stage", "set", "milestone", "migrate",
+    "flow", "guard", "pin", "policy", "usage", "review", "data", "pack", "receipt", "fork", "reopen", "tamper",
+    "stall", "budget", "trial", "precheck", "state", "breaker", "presence", "revise", "accept",
+)
+_RESERVED_EVENT_RE = re.compile(
+    r"^(?:" + "|".join(_RESERVED_EVENT_HEADS) + r")[:.]"
+    r"|override|authoriz|approv|human_|user_confirm|degrade_decision|^accept$|^decide$|_confirmed$",
+    re.IGNORECASE,
+)
 
 CANONICAL_TOP_FIELDS = {
     "schema_version",
@@ -105,6 +140,10 @@ TZ_CN = timezone(timedelta(hours=8))
 
 class StateValidationError(ValueError):
     """state.json 未通过 schema 校验，禁止落盘。"""
+
+
+class StateGuardError(ValueError):
+    """这次写入被状态层的守卫拒绝（等待态下改状态、改内核字段、写保留事件名等）。"""
 
 
 # ---------------------------------------------------------------------------
@@ -232,18 +271,72 @@ def _check_enum(errors: list[str], key: str, value: Any, allowed: set, allow_non
         errors.append(f"{key} 取值非法: {value!r}，应属于 {sorted(allowed)}")
 
 
+def default_v2_fields() -> dict[str, Any]:
+    """v2 新增字段的默认值（新建 v2 案例与 v1 → v2 迁移共用）。"""
+    return {
+        "flow": {"inflight": [], "pinned": {}, "generation": 0, "steps": {}, "driver": "kernel", "adhoc": []},
+        "gate_latest": {},
+        "counters": {"gate_fail_streak": {}, "redispatch": {}, "review_rounds": {}, "adhoc": 0, "false_fail": {}},
+        "checkpoints": [],
+        "policy": {
+            "on_no_answer": "stop",
+            "on_missing": "ask",
+            "until": None,
+            "step": False,
+            "budget_tokens": None,
+            "budget_hours": None,
+            "stall_hours": None,
+        },
+        "events_head": {"seq": 0, "hash": None},
+        "ext": {},
+    }
+
+
+def _validate_v2_fields(state: dict) -> list[str]:
+    errors: list[str] = []
+    flow = state.get("flow")
+    if not isinstance(flow, dict) or not {"inflight", "pinned", "generation"} <= flow.keys():
+        errors.append("flow 字段不完整（需含 inflight/pinned/generation）")
+    else:
+        if not isinstance(flow.get("inflight"), list):
+            errors.append("flow.inflight 必须是数组")
+        if not isinstance(flow.get("pinned"), dict):
+            errors.append("flow.pinned 必须是对象")
+        if not isinstance(flow.get("generation"), int) or isinstance(flow.get("generation"), bool):
+            errors.append("flow.generation 必须是整数")
+    for key in ("gate_latest", "counters", "policy", "ext"):
+        if not isinstance(state.get(key), dict):
+            errors.append(f"{key} 必须是对象")
+    if not isinstance(state.get("checkpoints"), list):
+        errors.append("checkpoints 必须是数组")
+    head = state.get("events_head")
+    if not isinstance(head, dict) or not {"seq", "hash"} <= head.keys():
+        errors.append("events_head 字段不完整（需含 seq/hash）")
+    elif not isinstance(head.get("seq"), int) or isinstance(head.get("seq"), bool) or head["seq"] < 0:
+        errors.append("events_head.seq 必须是非负整数")
+    return errors
+
+
 def validate_state(state: Any) -> list[str]:
     """返回校验错误列表；空列表代表合法。不抛异常，便于 check_gates 复用。"""
     errors: list[str] = []
     if not isinstance(state, dict):
         return ["state 必须是 JSON 对象"]
 
-    missing = CANONICAL_TOP_FIELDS - state.keys()
+    version = state.get("schema_version")
+    is_v2 = version == SCHEMA_VERSION_V2 and not isinstance(version, bool)
+    if "schema_version" in state and (isinstance(version, bool) or version not in SUPPORTED_SCHEMA_VERSIONS):
+        errors.append(f"不支持的 schema_version: {version!r}，应属于 {sorted(SUPPORTED_SCHEMA_VERSIONS)}")
+    allowed_fields = CANONICAL_TOP_FIELDS | (V2_TOP_FIELDS if is_v2 else set())
+
+    missing = allowed_fields - state.keys()
     if missing:
         errors.append(f"缺少顶层字段: {sorted(missing)}")
-    extra = state.keys() - CANONICAL_TOP_FIELDS
+    extra = state.keys() - allowed_fields
     if extra:
         errors.append(f"存在未声明的顶层字段: {sorted(extra)}")
+    if is_v2:
+        errors.extend(_validate_v2_fields(state))
 
     if not isinstance(state.get("report_id"), str) or not state.get("report_id"):
         errors.append("report_id 必须是非空字符串")
@@ -384,8 +477,649 @@ def save_state(root: Path, report_id: str, state: dict[str, Any]) -> dict[str, A
 
 
 # ---------------------------------------------------------------------------
+# 案例锁：所有写操作的「读 → 改 → 写」都在锁内完成
+# ---------------------------------------------------------------------------
+
+
+class StateLockTimeout(RuntimeError):
+    """等待案例锁超时（另一进程持锁未释放）。"""
+
+
+LOCK_FILENAME = ".state.lock"
+LOCK_TIMEOUT_SECONDS = 30.0
+LOCK_STALE_SECONDS = 120.0  # 无法探活时（其他主机 / Windows）按锁龄判断
+LOCK_HARD_STALE_SECONDS = 900.0  # 持锁进程看起来还活着时的兜底上限（防 pid 被复用）
+
+# 同一进程内的重入登记。挂在 sys 上而不是模块变量：本模块可能同时以 `state` 和
+# `tools.state` 两个名字被导入，登记必须只有一份，否则嵌套加锁会自己等自己。
+_HELD_LOCKS: dict[str, dict[str, int]] = sys.__dict__.setdefault("_report_reproduce_case_locks", {})
+
+
+def lock_path(root: Path, report_id: str) -> Path:
+    return workspace_dir(root, report_id) / LOCK_FILENAME
+
+
+def _pid_alive(pid: int) -> bool:
+    if os.name == "nt":
+        # Windows 上 os.kill(pid, 0) 会直接终止目标进程，不能用来探活；只靠锁龄判断。
+        return True
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True
+    return True
+
+
+def _lock_is_stale(path: Path) -> bool:
+    """锁文件是否已失效：持锁进程已死，或锁龄超过上限。"""
+    try:
+        age = time.time() - path.stat().st_mtime
+    except FileNotFoundError:
+        return False  # 已被释放，调用方直接重试创建
+    try:
+        info = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return age > 5.0  # 刚创建还没写完内容，给 5 秒宽限
+    pid = info.get("pid") if isinstance(info, dict) else None
+    same_host = isinstance(info, dict) and info.get("host") == socket.gethostname()
+    if same_host and isinstance(pid, int) and not isinstance(pid, bool) and os.name != "nt":
+        return (not _pid_alive(pid)) or age > LOCK_HARD_STALE_SECONDS
+    return age > LOCK_STALE_SECONDS
+
+
+def _break_stale_lock(path: Path) -> None:
+    """移除失效的锁文件。用一把短命的清理锁串行化，并在清理锁内复查，避免误删别人刚拿到的新锁。"""
+    breaker = path.with_name(path.name + ".break")
+    try:
+        fd = os.open(str(breaker), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+    except FileExistsError:
+        # 另一个进程正在清理；清理者崩溃留下的残留超过 10 秒就移除
+        with contextlib.suppress(OSError):
+            if time.time() - breaker.stat().st_mtime > 10.0:
+                breaker.unlink()
+        return
+    try:
+        os.close(fd)
+        if _lock_is_stale(path):
+            with contextlib.suppress(FileNotFoundError):
+                path.unlink()
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            breaker.unlink()
+
+
+@contextlib.contextmanager
+def case_lock(root: Path, report_id: str, timeout: float = LOCK_TIMEOUT_SECONDS) -> Iterator[None]:
+    """案例级互斥锁（跨平台：独占创建锁文件，不依赖 fcntl）。同线程可重入。
+
+    案例目录不存在时不加锁也不建目录，交给后续 load_state 报「不存在」。
+    """
+    ws = workspace_dir(root, report_id)
+    if not ws.is_dir():
+        yield
+        return
+
+    path = ws / LOCK_FILENAME
+    key = str(path.resolve())
+    me = threading.get_ident()
+    held = _HELD_LOCKS.get(key)
+    if held is not None and held["pid"] == os.getpid() and held["thread"] == me:
+        held["depth"] += 1
+        try:
+            yield
+        finally:
+            held["depth"] -= 1
+        return
+
+    deadline = time.monotonic() + timeout
+    delay = 0.01
+    while True:
+        try:
+            fd = os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        except FileExistsError:
+            if _lock_is_stale(path):
+                _break_stale_lock(path)
+            if time.monotonic() >= deadline:
+                raise StateLockTimeout(
+                    f"等待案例锁超时（{timeout:.0f}s）: {path}。若确认没有其他进程在写，删除该文件后重试。"
+                ) from None
+            time.sleep(delay)
+            delay = min(delay * 1.5, 0.2)
+            continue
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump({"pid": os.getpid(), "host": socket.gethostname(), "ts": now_iso()}, f)
+        break
+
+    _HELD_LOCKS[key] = {"pid": os.getpid(), "thread": me, "depth": 1}
+    try:
+        yield
+    finally:
+        _HELD_LOCKS.pop(key, None)
+        with contextlib.suppress(FileNotFoundError):
+            path.unlink()
+
+
+# ---------------------------------------------------------------------------
+# 事件流（schema v2）：events.jsonl 追加写 + 哈希链
+# ---------------------------------------------------------------------------
+
+EVENTS_FILENAME = "events.jsonl"
+
+
+def events_path(root: Path, report_id: str) -> Path:
+    return workspace_dir(root, report_id) / EVENTS_FILENAME
+
+
+def _canonical_json(obj: Any) -> str:
+    return json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def event_hash(prev: str | None, seq: int, ts: str | None, event: str, payload: Any) -> str:
+    """一条事件的哈希：上一条的哈希 + 本条的规范化内容。"""
+    body = _canonical_json({"seq": seq, "ts": ts, "event": event, "payload": payload})
+    return hashlib.sha256(((prev or "") + "\n" + body).encode("utf-8")).hexdigest()
+
+
+def _make_event_record(prev: str | None, seq: int, ts: str | None, event: str, payload: Any) -> dict[str, Any]:
+    return {
+        "seq": seq,
+        "ts": ts,
+        "event": event,
+        "payload": payload,
+        "prev": prev,
+        "hash": event_hash(prev, seq, ts, event, payload),
+    }
+
+
+def _last_event_record(path: Path) -> dict[str, Any] | None:
+    """读 events.jsonl 的最后一条（从文件尾部倒着找，不整读）。"""
+    if not path.is_file():
+        return None
+    with path.open("rb") as f:
+        f.seek(0, os.SEEK_END)
+        pos = f.tell()
+        block = b""
+        while pos > 0:
+            step = min(8192, pos)
+            pos -= step
+            f.seek(pos)
+            block = f.read(step) + block
+            lines = block.split(b"\n")
+            complete = lines if pos == 0 else lines[1:]  # 未读到文件头时首段可能是半行
+            candidates = [ln for ln in complete if ln.strip()]
+            if candidates:
+                try:
+                    return json.loads(candidates[-1].decode("utf-8"))
+                except ValueError as exc:
+                    raise StateValidationError(f"events.jsonl 末行损坏，无法续写: {path}") from exc
+    return None
+
+
+def append_event_record(root: Path, report_id: str, event: str, payload: Any, ts: str | None) -> dict[str, Any]:
+    """向 events.jsonl 追加一条并落盘，返回该条记录（含 seq 与 hash）。调用方须已持案例锁。"""
+    path = events_path(root, report_id)
+    last = _last_event_record(path)
+    seq = int(last["seq"]) + 1 if last else 1
+    record = _make_event_record(last["hash"] if last else None, seq, ts, event, payload)
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+    return record
+
+
+def write_event_log(path: Path, items: list[tuple[str | None, str, Any]]) -> dict[str, Any]:
+    """整份重写事件流（新建 v2 案例与迁移用）：临时文件 + 原子替换。返回链头。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=".events_", suffix=".jsonl.tmp", dir=str(path.parent))
+    tmp_path = Path(tmp_name)
+    prev: str | None = None
+    seq = 0
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            for ts, event, payload in items:
+                seq += 1
+                record = _make_event_record(prev, seq, ts, event, payload)
+                prev = record["hash"]
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, path)
+    except BaseException:
+        if tmp_path.exists():
+            tmp_path.unlink()
+        raise
+    return {"seq": seq, "hash": prev}
+
+
+def read_event_records(root: Path, report_id: str) -> list[dict[str, Any]]:
+    """读出 events.jsonl 的全部记录（文件不存在时返回空列表）。"""
+    path = events_path(root, report_id)
+    if not path.is_file():
+        return []
+    records: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                records.append(json.loads(line))
+    return records
+
+
+def verify_event_chain(root: Path, report_id: str, state: dict[str, Any] | None = None) -> dict[str, Any]:
+    """核对事件流的哈希链，以及它与 state.events_head 是否一致。
+
+    返回 {ok, count, errors, uncommitted_tail}。uncommitted_tail 是写了事件但 state
+    没有落盘的尾部条数（以 state 为准，不算错误）。防的是顺手改动，不防蓄意伪造。
+    """
+    errors: list[str] = []
+    path = events_path(root, report_id)
+    records: list[dict[str, Any]] = []
+    if path.is_file():
+        with path.open("r", encoding="utf-8") as f:
+            for lineno, line in enumerate(f, 1):
+                if not line.strip():
+                    continue
+                try:
+                    records.append(json.loads(line))
+                except ValueError:
+                    errors.append(f"第 {lineno} 行不是合法 JSON")
+                    break
+
+    prev: str | None = None
+    for i, rec in enumerate(records, 1):
+        if rec.get("seq") != i:
+            errors.append(f"第 {i} 条的 seq={rec.get('seq')!r}，应为 {i}")
+            break
+        if rec.get("prev") != prev:
+            errors.append(f"第 {i} 条的 prev 与上一条的 hash 不符")
+            break
+        expected = event_hash(prev, i, rec.get("ts"), rec.get("event"), rec.get("payload"))
+        if rec.get("hash") != expected:
+            errors.append(f"第 {i} 条的内容与 hash 不符（事件被改动过）")
+            break
+        prev = rec["hash"]
+
+    uncommitted = 0
+    head = (state or {}).get("events_head") if state is not None else None
+    if isinstance(head, dict) and not errors:
+        head_seq = head.get("seq") or 0
+        if head_seq > len(records):
+            errors.append(f"state.events_head.seq={head_seq} 超过事件流条数 {len(records)}（事件流被截断）")
+        elif head_seq > 0 and records[head_seq - 1].get("hash") != head.get("hash"):
+            errors.append(f"state.events_head 与事件流第 {head_seq} 条的 hash 不符")
+        else:
+            uncommitted = len(records) - head_seq
+    return {"ok": not errors, "count": len(records), "errors": errors, "uncommitted_tail": uncommitted}
+
+
+def is_v2(state: dict[str, Any]) -> bool:
+    return state.get("schema_version") == SCHEMA_VERSION_V2
+
+
+def _log_event(
+    root: Path, report_id: str, state: dict[str, Any], event: str, payload: Any = None, ts: str | None = None
+) -> None:
+    """记一条事件。v1：追加进 state.events（与旧行为一致）。
+
+    v2：先确认 state 合法，再写 events.jsonl，最后在 state 里留最近若干条并更新链头。
+    先校验是为了不留下「事件写了、state 因校验失败没写」的孤儿事件。
+    """
+    ts = ts or now_iso()
+    entry = {"event": event, "timestamp": ts, "payload": payload}
+    if not is_v2(state):
+        state["events"].append(entry)
+        return
+    errors = validate_state(state)
+    if errors:
+        raise StateValidationError("state.json 校验失败:\n" + "\n".join(f"- {e}" for e in errors))
+    record = append_event_record(root, report_id, event, payload, ts)
+    state["events"].append(entry)
+    del state["events"][:-STATE_EVENTS_KEEP]
+    state["events_head"] = {"seq": record["seq"], "hash": record["hash"]}
+
+
+def _latest_gate_per_stage(gates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """每个阶段只留最新一条门禁记录，整体仍按时间先后排列（最后一条即全局最新）。"""
+    latest: dict[str, tuple[int, dict[str, Any]]] = {}
+    for index, gate in enumerate(gates):
+        latest[str(gate.get("stage"))] = (index, gate)
+    return [gate for _index, gate in sorted(latest.values(), key=lambda item: item[0])]
+
+
+GATE_DETAIL_KEEP = 500  # state 里每条未通过项的明细最多留这么多字符；全文在 events.jsonl
+
+
+def _clip(text: Any, limit: int = GATE_DETAIL_KEEP) -> str:
+    text = str(text)
+    return text if len(text) <= limit else text[:limit] + f"…（共 {len(text)} 字符，全文见 events.jsonl）"
+
+
+def _gate_latest_entry(gate: dict[str, Any]) -> dict[str, Any]:
+    failed = []
+    for c in gate.get("checks", []):
+        if not isinstance(c, dict) or c.get("result") != "FAIL":
+            continue
+        item = {k: c[k] for k in ("id", "desc") if c.get(k)}
+        if c.get("detail"):
+            item["detail"] = _clip(c["detail"])
+        failed.append(item)
+    return {"verdict": gate.get("verdict"), "timestamp": gate.get("timestamp"), "failed": failed}
+
+
+def _strip_check_details(checks: list) -> list:
+    """去掉检查项里的 detail（state.gates 保持与 v1 相同的条目形状，明细只进事件流）。"""
+    return [{k: v for k, v in c.items() if k != "detail"} if isinstance(c, dict) else c for c in checks]
+
+
+def _update_fail_streak(streak: dict[str, int], stage: str, checks: list) -> None:
+    """按（阶段, 检查项）累计连续 FAIL 次数；该检查项通过即清零。
+
+    verify 阶段只有 G-VF-3（指标超差）未过，是进入 iterate 的设计路径，不计入连败也不清零。
+    """
+    items = [c for c in checks if isinstance(c, dict) and c.get("id")]
+    failed = {c["id"] for c in items if c.get("result") == "FAIL"}
+    exempt = "G-VF-3" if stage == "verify" and failed == {"G-VF-3"} else None
+    for check in items:
+        key = f"{stage}:{check['id']}"
+        if check.get("result") == "FAIL":
+            if check["id"] != exempt:
+                streak[key] = int(streak.get(key, 0)) + 1
+        else:
+            streak.pop(key, None)
+
+
+def is_privileged(actor: str) -> bool:
+    """内核命令（flow …）发起的写入不受守卫限制；其余一律按命令行对待。"""
+    return isinstance(actor, str) and actor.startswith("flow")
+
+
+def is_reserved_event(event: str) -> bool:
+    return bool(_RESERVED_EVENT_RE.search(str(event)))
+
+
+def _reject(root: Path, report_id: str, state: dict[str, Any], what: dict[str, Any], message: str) -> None:
+    """守卫拒绝一次写入：先把这次尝试记进事件流，再抛错。"""
+    ts = now_iso()
+    _log_event(root, report_id, state, "guard:rejected", what, ts)
+    state["updated_at"] = ts
+    save_state(root, report_id, state)
+    raise StateGuardError(message)
+
+
+# ---------------------------------------------------------------------------
+# 事务：内核的「读 → 改 → 记事件 → 写」在一把锁里完成，中途出错什么都不落盘
+# ---------------------------------------------------------------------------
+
+
+class Txn:
+    """一次事务里的可变状态与待写事件。事件在提交时才进 events.jsonl。"""
+
+    def __init__(self, root: Path, report_id: str, state: dict[str, Any], actor: str) -> None:
+        self.root = root
+        self.report_id = report_id
+        self.state = state
+        self.actor = actor
+        self.dirty = False
+        self._events: list[tuple[str, Any, str]] = []
+
+    def log(self, event: str, payload: Any = None, ts: str | None = None) -> None:
+        self._events.append((event, payload, ts or now_iso()))
+        self.dirty = True
+
+    def touch(self) -> None:
+        self.dirty = True
+
+    @property
+    def v2(self) -> bool:
+        return is_v2(self.state)
+
+
+def _commit(txn: Txn) -> None:
+    state = txn.state
+    state["updated_at"] = now_iso()
+    errors = validate_state(state)
+    if errors:
+        raise StateValidationError("state.json 校验失败:\n" + "\n".join(f"- {e}" for e in errors))
+    for event, payload, ts in txn._events:
+        _log_event(txn.root, txn.report_id, state, event, payload, ts)
+    save_state(txn.root, txn.report_id, state)
+
+
+@contextlib.contextmanager
+def transaction(root: Path, report_id: str, actor: str = "flow") -> Iterator[Txn]:
+    """内核专用的事务入口。块内改 txn.state、用 txn.log 记事件；正常退出且有改动才提交。"""
+    with case_lock(root, report_id):
+        txn = Txn(root, report_id, load_state(root, report_id), actor)
+        yield txn
+        if txn.dirty:
+            _commit(txn)
+
+
+# ---------------------------------------------------------------------------
+# 检查点的底层读写（策略、审阅包、凭据在 tools/flowlib/checkpoints.py）
+# ---------------------------------------------------------------------------
+
+_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # 去掉了容易看混的 I、O、0、1
+
+
+def checkpoint_code(report_id: str, cp_id: str, opened_at: str) -> str:
+    """检查点短码：放行时由人原样带上，用来把「人说过的话」和这次放行对上。"""
+    digest = hashlib.sha256(f"{report_id}|{cp_id}|{opened_at}".encode("utf-8")).digest()
+    return "".join(_CODE_ALPHABET[b % len(_CODE_ALPHABET)] for b in digest[:4])
+
+
+def pending_checkpoints(state: dict[str, Any], human_only: bool = True) -> list[dict[str, Any]]:
+    return [
+        c
+        for c in state.get("checkpoints") or []
+        if isinstance(c, dict) and c.get("status") == CHECKPOINT_PENDING and (c.get("kind") == "human" or not human_only)
+    ]
+
+
+def find_checkpoint(state: dict[str, Any], key: str) -> dict[str, Any] | None:
+    """按编号（cp_03 / 3）、短码或名称找检查点；名称重复时取最近一个待决的。"""
+    items = [c for c in state.get("checkpoints") or [] if isinstance(c, dict)]
+    norm = str(key).strip()
+    m = re.fullmatch(r"(?:cp_?)?0*(\d+)", norm, re.IGNORECASE)
+    if m:
+        wanted = f"cp_{int(m.group(1)):02d}"
+        for c in items:
+            if c.get("id") == wanted:
+                return c
+    for c in items:
+        if str(c.get("code", "")).upper() == norm.upper():
+            return c
+    named = [c for c in items if c.get("name") == norm]
+    pending = [c for c in named if c.get("status") == CHECKPOINT_PENDING]
+    return (pending or named or [None])[-1]
+
+
+def open_checkpoint_in(
+    txn: Txn,
+    name: str,
+    *,
+    kind: str = "human",
+    stage: str | None = None,
+    reason: str = "",
+    options: list[dict[str, Any]] | None = None,
+    pause_status: str | None = "paused_blocked",
+    pack: str | None = None,
+    payload: Any = None,
+    question: str | None = None,
+) -> dict[str, Any]:
+    """在事务里开一个检查点。human 类会把案例置为等待态；auto 类只留痕不停。"""
+    state = txn.state
+    if not is_v2(state):
+        raise StateGuardError("检查点只在 v2 案例上可用；旧案例请先执行 flow migrate")
+    if kind not in ("human", "auto"):
+        raise ValueError(f"非法检查点类别: {kind}")
+    ts = now_iso()
+    cp_id = f"cp_{len(state['checkpoints']) + 1:02d}"
+    cp: dict[str, Any] = {
+        "id": cp_id,
+        "name": name,
+        "kind": kind,
+        "stage": stage if stage is not None else state.get("current_stage"),
+        "status": CHECKPOINT_PENDING,
+        "opened_at": ts,
+        "reason": reason,
+        "options": options or [],
+        "pack": pack,
+        "payload": payload,
+        "code": checkpoint_code(str(state.get("report_id")), cp_id, ts),
+        "prev_status": state.get("status"),
+        "decision": None,
+    }
+    state["checkpoints"].append(cp)
+    if kind == "human" and pause_status:
+        if pause_status not in WAITING_STATUSES:
+            raise ValueError(f"检查点只能把案例置为等待态，收到: {pause_status}")
+        state["status"] = pause_status
+        if question or reason:
+            state["pending_question"] = question or reason
+    txn.log(f"checkpoint:{name}:opened", {"id": cp_id, "kind": kind, "stage": cp["stage"], "reason": reason}, ts)
+    return cp
+
+
+def resolve_checkpoint_in(
+    txn: Txn,
+    cp: dict[str, Any],
+    *,
+    choice: str,
+    quote: str = "",
+    credential: str = "self_report",
+    by: str = "human",
+    resume_status: str | None = "running",
+    note: str = "",
+) -> dict[str, Any]:
+    """在事务里关闭一个检查点并记下是谁、凭什么、选了什么。
+
+    resume_status 给了且没有别的人工检查点待决时，把案例状态改成它（None 表示不动状态）。
+    """
+    state = txn.state
+    if cp.get("status") != CHECKPOINT_PENDING:
+        raise StateGuardError(f"检查点 {cp.get('id')} 已经处理过（{cp.get('status')}）")
+    ts = now_iso()
+    cp["status"] = CHECKPOINT_RESOLVED
+    cp["decision"] = {"choice": choice, "quote": quote, "credential": credential, "by": by, "at": ts, "note": note}
+    if cp.get("name") == "circuit_breaker" and isinstance(cp.get("payload"), dict):
+        streak = state["counters"].setdefault("gate_fail_streak", {})
+        for key in cp["payload"].get("keys") or []:
+            streak.pop(key, None)
+    others = [c for c in pending_checkpoints(state) if c is not cp]
+    if resume_status and not others:
+        state["status"] = resume_status
+        if resume_status == "running":
+            state["pending_question"] = None
+    txn.log(
+        f"checkpoint:{cp.get('name')}:resolved",
+        {"id": cp.get("id"), "choice": choice, "quote": quote, "credential": credential, "by": by, "note": note},
+        ts,
+    )
+    return cp
+
+
+def _trip_breaker(txn: Txn, stage: str) -> dict[str, Any] | None:
+    """某个检查项连败到阈值就开熔断检查点；同一组检查项已有待决的熔断时不重复开。"""
+    state = txn.state
+    streak = state["counters"].get("gate_fail_streak") or {}
+    keys = sorted(k for k, n in streak.items() if k.startswith(f"{stage}:") and int(n) >= BREAKER_THRESHOLD)
+    if not keys:
+        return None
+    for cp in pending_checkpoints(state):
+        if cp.get("name") == "circuit_breaker" and set(keys) <= set((cp.get("payload") or {}).get("keys") or []):
+            return None
+    detail = "、".join(f"{k.split(':', 1)[1]} 连续 {streak[k]} 次" for k in keys)
+    return open_checkpoint_in(
+        txn,
+        "circuit_breaker",
+        stage=stage,
+        reason=f"{stage} 阶段的门禁 {detail}未过，已熔断，等人决定怎么办",
+        options=[
+            {"key": "retry", "label": "再试一轮（相关计数清零）"},
+            {"key": "pin_card", "label": "这个阶段退回执行卡驱动，由主会话按说明处理"},
+            {"key": "abort", "label": "终止这个案例"},
+        ],
+        pause_status="paused_blocked",
+        payload={"keys": keys, "streak": {k: streak[k] for k in keys}},
+    )
+
+
+# ---------------------------------------------------------------------------
 # 核心操作（供 CLI 与 check_gates.py 复用）
 # ---------------------------------------------------------------------------
+
+
+def set_stage_in(txn: Txn, stage: str, status: str) -> None:
+    """事务内改阶段状态（事件名与 set_stage 相同）。"""
+    if stage not in STAGE_ORDER:
+        raise ValueError(f"未知 stage: {stage}，应属于 {STAGE_ORDER}")
+    if status not in STAGE_STATUS_VALUES:
+        raise ValueError(f"非法 stage status: {status}，应属于 {sorted(STAGE_STATUS_VALUES)}")
+    ts = now_iso()
+    entry = txn.state["stages"].setdefault(stage, _default_stage_entry())
+    entry["status"] = status
+    entry["updated_at"] = ts
+    if status == "running":
+        entry["attempts"] = int(entry.get("attempts", 0)) + 1
+    txn.state["current_stage"] = stage
+    txn.log(f"stage:{stage}:{status}", None, ts)
+
+
+def set_in(txn: Txn, key_path: str, value: Any, log: bool = True) -> None:
+    """事务内设置字段（事件名与 set_field 相同）。内核字段的改动默认也记事件。"""
+    parts = key_path.split(".")
+    if parts[0] not in txn.state:
+        raise ValueError(f"未知顶层字段: {parts[0]}")
+    if key_path in _ENUM_PATHS and value not in _ENUM_PATHS[key_path]:
+        raise ValueError(f"{key_path} 取值非法: {value!r}，应属于 {sorted(_ENUM_PATHS[key_path])}")
+    node = txn.state
+    for part in parts[:-1]:
+        if not isinstance(node, dict) or part not in node:
+            raise ValueError(f"路径不存在: {key_path}（在 {part!r} 处中断）")
+        node = node[part]
+    if not isinstance(node, dict):
+        raise ValueError(f"路径不是对象，无法设置: {key_path}")
+    node[parts[-1]] = value
+    if log:
+        txn.log(f"set:{key_path}", {"value": value})
+    else:
+        txn.touch()
+
+
+def milestone_in(txn: Txn, milestone_id: str, field: str, status: str) -> None:
+    """事务内改 milestone 子状态（事件名与 set_milestone_field 相同）。值没变时不记事件。"""
+    if field not in MILESTONE_FIELDS:
+        raise ValueError(f"非法 milestone 字段: {field}，应属于 {sorted(MILESTONE_FIELDS)}")
+    if status not in MILESTONE_STATUS_VALUES:
+        raise ValueError(f"非法 milestone 状态: {status}，应属于 {sorted(MILESTONE_STATUS_VALUES)}")
+    target = next((m for m in txn.state.get("milestones", []) if m.get("id") == milestone_id), None)
+    if target is None:
+        known = [m.get("id") for m in txn.state.get("milestones", [])]
+        raise ValueError(f"未找到 milestone: {milestone_id!r}，已存在: {known}")
+    if target.get(field) == status:
+        return
+    target[field] = status
+    txn.log(f"milestone:{milestone_id}:{field}:{status}")
+
+
+def gate_in(txn: Txn, stage: str, verdict: str, checks: list) -> dict[str, Any] | None:
+    """事务内给门禁入账（v2）。连败到阈值时开熔断检查点并返回它。"""
+    if verdict not in GATE_VERDICT_VALUES:
+        raise ValueError(f"非法 verdict: {verdict}，应属于 {sorted(GATE_VERDICT_VALUES)}")
+    state = txn.state
+    ts = now_iso()
+    gate = {"stage": stage, "checks": checks, "verdict": verdict, "timestamp": ts}
+    slim = dict(gate, checks=_strip_check_details(checks))
+    state["gates"] = _latest_gate_per_stage(state["gates"] + [slim])
+    state["gate_latest"][stage] = _gate_latest_entry(gate)
+    _update_fail_streak(state["counters"].setdefault("gate_fail_streak", {}), stage, checks)
+    txn.log(f"gate:{stage}", {"verdict": verdict, "checks": checks}, ts)
+    if verdict == "FAIL" and state.get("status") == "running":
+        return _trip_breaker(txn, stage)
+    return None
 
 
 def init_state(
@@ -396,11 +1130,14 @@ def init_state(
     max_iter: int | None = None,
     legacy: bool = False,
     reproduction_mode: str = "strict",
+    schema_version: int = SCHEMA_VERSION,
 ) -> dict[str, Any]:
     if mode not in MODE_VALUES:
         raise ValueError(f"非法 mode: {mode}，应属于 {sorted(MODE_VALUES)}")
     if reproduction_mode not in REPRODUCTION_MODE_VALUES:
         raise ValueError(f"非法 reproduction_mode: {reproduction_mode}，应属于 {sorted(REPRODUCTION_MODE_VALUES)}")
+    if schema_version not in SUPPORTED_SCHEMA_VERSIONS:
+        raise ValueError(f"非法 schema_version: {schema_version}，应属于 {sorted(SUPPORTED_SCHEMA_VERSIONS)}")
 
     for d in (
         workspace_dir(root, report_id) / "spec",
@@ -423,8 +1160,160 @@ def init_state(
         state["current_stage"] = STAGE_ORDER[-1]
         state["events"].append({"event": "state:init_legacy", "timestamp": ts, "payload": None})
 
-    save_state(root, report_id, state)
+    with case_lock(root, report_id):
+        if schema_version == SCHEMA_VERSION_V2:
+            head = write_event_log(
+                events_path(root, report_id),
+                [(e["timestamp"], e["event"], e["payload"]) for e in state["events"]],
+            )
+            state["schema_version"] = SCHEMA_VERSION_V2
+            state.update(default_v2_fields())
+            state["events_head"] = head
+        save_state(root, report_id, state)
     return state
+
+
+def _ts_sort_key(ts: Any) -> tuple[int, Any]:
+    """时间戳排序键：能解析成带时区的时间就按时间比，否则退回按字符串比。"""
+    if isinstance(ts, str):
+        try:
+            # Python 3.10 的 fromisoformat 不认结尾的 Z，先换成等价的偏移写法
+            parsed = datetime.fromisoformat(ts[:-1] + "+00:00" if ts.endswith("Z") else ts)
+        except ValueError:
+            return (1, ts)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=TZ_CN)
+        return (0, parsed.timestamp())
+    return (1, "")
+
+
+def _merge_history(events: list[dict[str, Any]], gates: list[dict[str, Any]]) -> list[tuple[str | None, str, Any]]:
+    """把 v1 的事件列表与门禁列表按时间归并成一条时间线。
+
+    两个列表各自都是按发生先后追加的，所以做两路归并：事件保持原有相对顺序，
+    门禁按时间戳插到第一个晚于它的事件之前。没有时间戳的事件不参与比较。
+    """
+    timeline: list[tuple[str | None, str, Any]] = []
+    pending = [g for g in gates if isinstance(g, dict)]
+    gi = 0
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        ets = event.get("timestamp")
+        if isinstance(ets, str):
+            ekey = _ts_sort_key(ets)
+            while gi < len(pending):
+                gkey = _ts_sort_key(pending[gi].get("timestamp"))
+                # 同一秒内门禁排在事件之前：实际流程是先记门禁、再把阶段置为 done
+                if gkey[0] != ekey[0] or gkey[1] > ekey[1]:
+                    break
+                gate = pending[gi]
+                timeline.append(
+                    (gate.get("timestamp"), f"gate:{gate.get('stage')}", {"verdict": gate.get("verdict"), "checks": gate.get("checks")})
+                )
+                gi += 1
+        timeline.append((ets, str(event.get("event")), event.get("payload")))
+    for gate in pending[gi:]:
+        timeline.append(
+            (gate.get("timestamp"), f"gate:{gate.get('stage')}", {"verdict": gate.get("verdict"), "checks": gate.get("checks")})
+        )
+    return timeline
+
+
+def migrate_to_v2(root: Path, report_id: str, dry_run: bool = False) -> dict[str, Any]:
+    """把 v1 案例升级为 v2：完整历史写入 events.jsonl，state 只留最近事件与各阶段最新门禁。
+
+    幂等：已是 v2 时不动。首次迁移把原文件备份为 state.v1.json。dry_run 只返回会怎么改。
+    """
+    with case_lock(root, report_id):
+        state = load_state(root, report_id)
+        if is_v2(state):
+            return {"report_id": report_id, "migrated": False, "reason": "already_v2"}
+        errors = validate_state(state)
+        if errors:
+            raise StateValidationError("迁移前 state.json 校验失败:\n" + "\n".join(f"- {e}" for e in errors))
+
+        events = state.get("events") or []
+        gates = state.get("gates") or []
+        timeline = _merge_history(events, gates)
+        kept_gates = _latest_gate_per_stage(gates)
+        streak: dict[str, int] = {}
+        for gate in gates:
+            _update_fail_streak(streak, str(gate.get("stage")), gate.get("checks") or [])
+
+        summary: dict[str, Any] = {
+            "report_id": report_id,
+            "migrated": not dry_run,
+            "events": len(events),
+            "gates": len(gates),
+            "log_records": len(timeline) + 1,  # 另加一条 migrate:v2
+            "state_events_kept": min(len(events) + 1, STATE_EVENTS_KEEP),
+            "state_gates_kept": len(kept_gates),
+            "gate_fail_streak": dict(streak),
+        }
+        if dry_run:
+            summary["reason"] = "dry_run"
+            return summary
+
+        spath = state_path(root, report_id)
+        backup = spath.with_name("state.v1.json")
+        if not backup.exists():
+            shutil.copy2(spath, backup)
+        summary["backup"] = _rel(root, backup)
+
+        head = write_event_log(events_path(root, report_id), timeline)
+        state["schema_version"] = SCHEMA_VERSION_V2
+        state.update(default_v2_fields())
+        state["events_head"] = head
+        state["gates"] = kept_gates
+        state["gate_latest"] = {str(g.get("stage")): _gate_latest_entry(g) for g in kept_gates}
+        state["counters"]["gate_fail_streak"] = streak
+        del state["events"][:-STATE_EVENTS_KEEP]
+        ts = now_iso()
+        state["updated_at"] = ts
+        migrate_payload: dict[str, Any] = {"events": len(events), "gates": len(gates)}
+
+        # 在途的阶段钉在执行卡上跑完，下一阶段起才交给内核；已收尾的案例不用钉
+        current = state.get("current_stage")
+        current_status = (state["stages"].get(current) or {}).get("status")
+        if (
+            state.get("status") not in TERMINAL_STATUSES
+            and current in STAGE_ORDER
+            and current != "review"
+            and current_status in {"running", "failed", "blocked"}
+        ):
+            state["flow"]["pinned"][current] = {
+                "mode": "card",
+                "reason": "legacy_inflight：迁移时这个阶段已经在执行卡驱动下进行到一半",
+                "at": ts,
+            }
+            summary["pinned"] = current
+            migrate_payload["pinned"] = current
+        # 等待态必须对应一个待决的人工检查点，否则迁移之后没有合法出口。
+        # 这个检查点是迁移补出来的，不单独记事件（迁移不算业务动作，不能刷新「等了多久」）。
+        if state.get("status") in WAITING_STATUSES:
+            txn = Txn(root, report_id, state, "flow:migrate")
+            review = state.get("status") == "awaiting_review"
+            cp = open_checkpoint_in(
+                txn,
+                "final_review" if review else "legacy_pause",
+                stage="review" if review else current,
+                reason="迁移前已在等待评审" if review else (str(state.get("pending_question") or "") or "迁移前已暂停，等人处理"),
+                options=[
+                    {"key": "accept", "label": "通过并收尾（flow accept）"},
+                    {"key": "revise", "label": "修改假设后定向重跑（flow revise）"},
+                    {"key": "abort", "label": "终止"},
+                ]
+                if review
+                else [{"key": "continue", "label": "已处理，继续"}, {"key": "abort", "label": "终止"}],
+                pause_status=None,
+            )
+            cp["prev_status"] = "running"
+            summary["checkpoint"] = cp["id"]
+            migrate_payload["checkpoint"] = {"id": cp["id"], "name": cp["name"]}
+        _log_event(root, report_id, state, "migrate:v2", migrate_payload, ts)
+        save_state(root, report_id, state)
+        return summary
 
 
 def migrate_stages(root: Path, report_id: str) -> list[str]:
@@ -434,48 +1323,67 @@ def migrate_stages(root: Path, report_id: str) -> list[str]:
     （done / done_partial / aborted）时补 skipped（不影响终态语义），
     否则补 pending。幂等：无缺键时不写文件。
     """
-    state = load_state(root, report_id)
-    terminal = state.get("status") in {"done", "done_partial", "aborted"}
-    added: list[str] = []
-    if "reproduction_mode" not in state:
-        state["reproduction_mode"] = "strict"
-        added.append("reproduction_mode=strict")
-    for stage in STAGE_ORDER:
-        if stage not in state.get("stages", {}):
-            entry = _default_stage_entry()
-            if terminal:
-                entry["status"] = "skipped"
-            state["stages"][stage] = entry
-            added.append(stage)
-    if added:
-        state["events"].append({
-            "event": "migrate_stages",
-            "timestamp": now_iso(),
-            "payload": {"added": added, "as": "skipped" if terminal else "pending"},
-        })
-        state["updated_at"] = now_iso()
-        save_state(root, report_id, state)
+    with case_lock(root, report_id):
+        state = load_state(root, report_id)
+        terminal = state.get("status") in {"done", "done_partial", "aborted"}
+        added: list[str] = []
+        if "reproduction_mode" not in state:
+            state["reproduction_mode"] = "strict"
+            added.append("reproduction_mode=strict")
+        for stage in STAGE_ORDER:
+            if stage not in state.get("stages", {}):
+                entry = _default_stage_entry()
+                if terminal:
+                    entry["status"] = "skipped"
+                state["stages"][stage] = entry
+                added.append(stage)
+        if added:
+            _log_event(
+                root,
+                report_id,
+                state,
+                "migrate_stages",
+                {"added": added, "as": "skipped" if terminal else "pending"},
+                now_iso(),
+            )
+            state["updated_at"] = now_iso()
+            save_state(root, report_id, state)
     return added
 
 
-def set_stage(root: Path, report_id: str, stage: str, status: str) -> dict[str, Any]:
+def _guard_running(root: Path, report_id: str, state: dict[str, Any], actor: str, what: dict[str, Any]) -> None:
+    """v2 案例在等待态或终态下，命令行不能改阶段、milestone 这类推进用的状态。"""
+    if not is_v2(state) or is_privileged(actor) or state.get("status") == "running":
+        return
+    _reject(
+        root,
+        report_id,
+        state,
+        dict(what, status=state.get("status"), actor=actor),
+        f"案例当前状态是 {state.get('status')}，不能直接改推进状态；等待态由人经 flow decide / flow accept / flow revise 放行后再继续。",
+    )
+
+
+def set_stage(root: Path, report_id: str, stage: str, status: str, actor: str = "cli") -> dict[str, Any]:
     if stage not in STAGE_ORDER:
         raise ValueError(f"未知 stage: {stage}，应属于 {STAGE_ORDER}")
     if status not in STAGE_STATUS_VALUES:
         raise ValueError(f"非法 stage status: {status}，应属于 {sorted(STAGE_STATUS_VALUES)}")
 
-    state = load_state(root, report_id)
-    ts = now_iso()
-    entry = state["stages"].setdefault(stage, _default_stage_entry())
-    entry["status"] = status
-    entry["updated_at"] = ts
-    if status == "running":
-        entry["attempts"] = int(entry.get("attempts", 0)) + 1
+    with case_lock(root, report_id):
+        state = load_state(root, report_id)
+        _guard_running(root, report_id, state, actor, {"op": "set-stage", "stage": stage, "to": status})
+        ts = now_iso()
+        entry = state["stages"].setdefault(stage, _default_stage_entry())
+        entry["status"] = status
+        entry["updated_at"] = ts
+        if status == "running":
+            entry["attempts"] = int(entry.get("attempts", 0)) + 1
 
-    state["current_stage"] = stage
-    state["updated_at"] = ts
-    state["events"].append({"event": f"stage:{stage}:{status}", "timestamp": ts, "payload": None})
-    save_state(root, report_id, state)
+        state["current_stage"] = stage
+        state["updated_at"] = ts
+        _log_event(root, report_id, state, f"stage:{stage}:{status}", None, ts)
+        save_state(root, report_id, state)
     return state
 
 
@@ -498,63 +1406,109 @@ def _parse_cli_value(raw: str) -> Any:
         return raw
 
 
-def set_field(root: Path, report_id: str, key_path: str, raw_value: str) -> dict[str, Any]:
-    state = load_state(root, report_id)
-    parts = key_path.split(".")
-    top_key = parts[0]
-    if top_key not in state:
-        raise ValueError(f"未知顶层字段: {top_key}（不允许通过 set 新增未声明字段）")
+def _guard_set(root: Path, report_id: str, state: dict[str, Any], key_path: str, value: Any, actor: str) -> None:
+    """v2 案例的两条写入守卫：内核字段只能由内核改；离开等待态、进入收尾态只能经合法出口。"""
+    if not is_v2(state) or is_privileged(actor):
+        return
+    top_key = key_path.split(".")[0]
+    if top_key in KERNEL_OWNED_FIELDS:
+        _reject(
+            root,
+            report_id,
+            state,
+            {"op": "set", "key": key_path, "actor": actor},
+            f"{top_key} 归内核管理，不能用 state.py set 直接改；请用对应的 flow 命令。",
+        )
+    if key_path != "status":
+        return
+    current = state.get("status")
+    if value == current:
+        return
+    leaving_gate = current in WAITING_STATUSES or current in TERMINAL_STATUSES
+    entering_final = value in {"done", "done_partial"}
+    if leaving_gate or entering_final:
+        _reject(
+            root,
+            report_id,
+            state,
+            {"op": "set", "key": "status", "from": current, "to": value, "actor": actor},
+            f"状态不能从 {current} 直接改成 {value}。等待态要由人放行：flow decide（检查点）、flow accept（收尾）、"
+            "flow revise（定向重跑）、flow reopen（回退重开）。",
+        )
 
-    value = _parse_cli_value(raw_value)
-    if key_path in _ENUM_PATHS and value not in _ENUM_PATHS[key_path]:
-        raise ValueError(f"{key_path} 取值非法: {value!r}，应属于 {sorted(_ENUM_PATHS[key_path])}")
 
-    node = state
-    for part in parts[:-1]:
-        if not isinstance(node, dict) or part not in node:
-            raise ValueError(f"路径不存在: {key_path}（在 {part!r} 处中断）")
-        node = node[part]
-    if not isinstance(node, dict):
-        raise ValueError(f"路径不是对象，无法设置: {key_path}")
-    node[parts[-1]] = value
+def set_field(root: Path, report_id: str, key_path: str, raw_value: str, actor: str = "cli") -> dict[str, Any]:
+    with case_lock(root, report_id):
+        state = load_state(root, report_id)
+        parts = key_path.split(".")
+        top_key = parts[0]
+        if top_key not in state:
+            raise ValueError(f"未知顶层字段: {top_key}（不允许通过 set 新增未声明字段）")
 
-    ts = now_iso()
-    state["updated_at"] = ts
-    state["events"].append({"event": f"set:{key_path}", "timestamp": ts, "payload": {"value": value}})
-    save_state(root, report_id, state)
+        value = _parse_cli_value(raw_value)
+        if key_path in _ENUM_PATHS and value not in _ENUM_PATHS[key_path]:
+            raise ValueError(f"{key_path} 取值非法: {value!r}，应属于 {sorted(_ENUM_PATHS[key_path])}")
+        _guard_set(root, report_id, state, key_path, value, actor)
+
+        node = state
+        for part in parts[:-1]:
+            if not isinstance(node, dict) or part not in node:
+                raise ValueError(f"路径不存在: {key_path}（在 {part!r} 处中断）")
+            node = node[part]
+        if not isinstance(node, dict):
+            raise ValueError(f"路径不是对象，无法设置: {key_path}")
+        node[parts[-1]] = value
+
+        ts = now_iso()
+        state["updated_at"] = ts
+        _log_event(root, report_id, state, f"set:{key_path}", {"value": value}, ts)
+        save_state(root, report_id, state)
     return state
 
 
-def record_event(root: Path, report_id: str, event: str, payload: Any = None) -> dict[str, Any]:
-    state = load_state(root, report_id)
-    ts = now_iso()
-    state["events"].append({"event": event, "timestamp": ts, "payload": payload})
-    state["updated_at"] = ts
-    save_state(root, report_id, state)
+def record_event(root: Path, report_id: str, event: str, payload: Any = None, actor: str = "cli") -> dict[str, Any]:
+    with case_lock(root, report_id):
+        state = load_state(root, report_id)
+        if is_v2(state) and not is_privileged(actor) and is_reserved_event(event):
+            _reject(
+                root,
+                report_id,
+                state,
+                {"op": "record-event", "event": event, "actor": actor},
+                f"事件名 {event!r} 是内核与人工放行专用的，不能用 record-event 写入。",
+            )
+        ts = now_iso()
+        _log_event(root, report_id, state, event, payload, ts)
+        state["updated_at"] = ts
+        save_state(root, report_id, state)
     return state
 
 
-def set_milestone_field(root: Path, report_id: str, milestone_id: str, field: str, status: str) -> dict[str, Any]:
+def set_milestone_field(
+    root: Path, report_id: str, milestone_id: str, field: str, status: str, actor: str = "cli"
+) -> dict[str, Any]:
     if field not in MILESTONE_FIELDS:
         raise ValueError(f"非法 milestone 字段: {field}，应属于 {sorted(MILESTONE_FIELDS)}")
     if status not in MILESTONE_STATUS_VALUES:
         raise ValueError(f"非法 milestone 状态: {status}，应属于 {sorted(MILESTONE_STATUS_VALUES)}")
 
-    state = load_state(root, report_id)
-    target = None
-    for m in state.get("milestones", []):
-        if m.get("id") == milestone_id:
-            target = m
-            break
-    if target is None:
-        known = [m.get("id") for m in state.get("milestones", [])]
-        raise ValueError(f"未找到 milestone: {milestone_id!r}，已存在: {known}")
+    with case_lock(root, report_id):
+        state = load_state(root, report_id)
+        _guard_running(root, report_id, state, actor, {"op": "milestone", "milestone": milestone_id, "field": field, "to": status})
+        target = None
+        for m in state.get("milestones", []):
+            if m.get("id") == milestone_id:
+                target = m
+                break
+        if target is None:
+            known = [m.get("id") for m in state.get("milestones", [])]
+            raise ValueError(f"未找到 milestone: {milestone_id!r}，已存在: {known}")
 
-    target[field] = status
-    ts = now_iso()
-    state["updated_at"] = ts
-    state["events"].append({"event": f"milestone:{milestone_id}:{field}:{status}", "timestamp": ts, "payload": None})
-    save_state(root, report_id, state)
+        target[field] = status
+        ts = now_iso()
+        state["updated_at"] = ts
+        _log_event(root, report_id, state, f"milestone:{milestone_id}:{field}:{status}", None, ts)
+        save_state(root, report_id, state)
     return state
 
 
@@ -566,11 +1520,28 @@ def record_gate(root: Path, report_id: str, stage: str, verdict: str, checks: li
     if not isinstance(checks, list):
         raise ValueError("checks 必须是数组")
 
-    state = load_state(root, report_id)
-    ts = now_iso()
-    state["gates"].append({"stage": stage, "checks": checks, "verdict": verdict, "timestamp": ts})
-    state["updated_at"] = ts
-    save_state(root, report_id, state)
+    with case_lock(root, report_id):
+        state = load_state(root, report_id)
+        ts = now_iso()
+        gate = {"stage": stage, "checks": checks, "verdict": verdict, "timestamp": ts}
+        state["updated_at"] = ts
+        if is_v2(state):
+            # v2：完整门禁历史（含未通过项明细全文）进 events.jsonl；state 只留各阶段最新一条，
+            # 未通过项的明细截短后放在 gate_latest，并累计连败次数
+            slim = dict(gate, checks=_strip_check_details(checks))
+            state["gates"] = _latest_gate_per_stage(state["gates"] + [slim])
+            state["gate_latest"][stage] = _gate_latest_entry(gate)
+            _update_fail_streak(state["counters"].setdefault("gate_fail_streak", {}), stage, checks)
+            _log_event(root, report_id, state, f"gate:{stage}", {"verdict": verdict, "checks": checks}, ts)
+            if verdict == "FAIL" and state.get("status") == "running":
+                # 熔断放在状态层：阶段不管由内核还是由执行卡推进，连败到阈值都会停下
+                txn = Txn(root, report_id, state, "flow:breaker")
+                if _trip_breaker(txn, stage) is not None:
+                    for event, payload, ets in txn._events:
+                        _log_event(root, report_id, state, event, payload, ets)
+        else:
+            state["gates"].append(gate)
+        save_state(root, report_id, state)
     return state
 
 
@@ -776,7 +1747,7 @@ def main(argv: list[str] | None = None) -> int:
             print(resolve_case_id(root, args.query))
         else:  # pragma: no cover - argparse 已保证 command 合法
             raise ValueError(f"未知命令: {args.command}")
-    except (ValueError, FileNotFoundError, StateValidationError, json.JSONDecodeError) as exc:
+    except (ValueError, FileNotFoundError, StateValidationError, StateLockTimeout, json.JSONDecodeError) as exc:
         print(f"错误: {exc}", file=sys.stderr)
         return 1
     return 0

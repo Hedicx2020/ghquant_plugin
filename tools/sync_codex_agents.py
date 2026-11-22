@@ -11,6 +11,10 @@ from pathlib import Path
 import yaml
 
 MODEL_REASONING = {"opus": "high", "sonnet": "medium"}
+# 经济档：这几个角色另生成一份 <角色>-economy.toml，推理强度按 sonnet 一档。
+# 与内核 tools/flowlib/core.py 的 ECONOMY_ROLES 保持一致（tests/test_sync_codex_agents.py 有断言）。
+ECONOMY_ROLES = ("quant-extractor", "quant-verifier", "quant-oos-analyst")
+ECONOMY_SUFFIX = "-economy"
 
 
 @dataclass(frozen=True)
@@ -59,29 +63,52 @@ def _source_agents(root: Path) -> list[Path]:
     return sorted((root / "agents").glob("quant-*.md"))
 
 
+def economy_variant(agent: AgentDefinition) -> AgentDefinition:
+    """经济档变体：合同正文不变，只是名字带后缀、推理强度降到 sonnet 一档。"""
+
+    return AgentDefinition(agent.name + ECONOMY_SUFFIX, agent.description + "（经济档）", agent.body, MODEL_REASONING["sonnet"])
+
+
+def expected_files(root: Path) -> dict[str, str]:
+    """按 Markdown 正本应当生成的全部文件：{文件名: 内容}。"""
+
+    files: dict[str, str] = {}
+    for source in _source_agents(root.resolve()):
+        agent = parse_agent(source)
+        files[f"{agent.name}.toml"] = render_toml(agent)
+        if agent.name in ECONOMY_ROLES:
+            variant = economy_variant(agent)
+            files[f"{variant.name}.toml"] = render_toml(variant)
+    return files
+
+
 def sync_agents(root: Path, output_dir: Path | None = None) -> list[Path]:
     root = root.resolve()
     destination = (output_dir or root / ".codex" / "agents").resolve()
     destination.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
-    for source in _source_agents(root):
-        agent = parse_agent(source)
-        target = destination / f"{agent.name}.toml"
-        target.write_text(render_toml(agent), encoding="utf-8")
+    for name, text in expected_files(root).items():
+        target = destination / name
+        target.write_text(text, encoding="utf-8")
         written.append(target)
     return written
 
 
-def check_agents(root: Path, output_dir: Path | None = None) -> None:
+def drifted_agents(root: Path, output_dir: Path | None = None) -> list[str]:
+    """与 Markdown 正本对不上的文件清单（缺失或内容不同）；一致时返回空列表。"""
+
     root = root.resolve()
     destination = (output_dir or root / ".codex" / "agents").resolve()
     drift: list[str] = []
-    for source in _source_agents(root):
-        agent = parse_agent(source)
-        target = destination / f"{agent.name}.toml"
-        expected = render_toml(agent)
+    for name, expected in expected_files(root).items():
+        target = destination / name
         if not target.is_file() or target.read_text(encoding="utf-8") != expected:
             drift.append(str(target.relative_to(root)) if target.is_relative_to(root) else str(target))
+    return drift
+
+
+def check_agents(root: Path, output_dir: Path | None = None) -> None:
+    drift = drifted_agents(root, output_dir)
     if drift:
         raise SystemExit(f"Codex agent 与 Markdown 正本不同步: {', '.join(drift)}")
 

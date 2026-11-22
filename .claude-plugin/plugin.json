@@ -1,7 +1,7 @@
 {
   "name": "quant-report-reproduce",
   "description": "Claude Code 与 Codex 双宿主量化研报复现流水线：12 阶段门禁状态机 + 8 个量化角色 + 异构外审。首次使用运行 /reproduce setup。",
-  "version": "2.12.0",
+  "version": "3.0.0",
   "author": {
     "name": "Hedi"
   }

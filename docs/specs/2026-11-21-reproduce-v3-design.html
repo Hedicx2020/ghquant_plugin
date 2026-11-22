@@ -1,0 +1,852 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>复现插件 v3 改造说明</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* layout: one reading column, 1040px max; prose is broken by evidence figures and before/after tables */
+:root{
+  --paper:#fbfbf9; --card:#ffffff; --ink:#1a2332; --dim:#5b6673; --line:#d8dde3;
+  --accent:#1f77b4; --accent-deep:#14507a; --accent-wash:#eaf2f8; --accent-line:#c2d8ea;
+  --flag:#c0392b; --flag-wash:#faece9; --flag-line:#ecc4bc;
+  --ok:#2e7d4f; --ok-wash:#e8f3ec; --ok-line:#bcd9c6;
+  --warn:#9a6b1f; --warn-wash:#f7f0e0; --warn-line:#e3d3ac;
+  --code:#f1f4f7; --pre-bg:#10202e; --pre-fg:#dce8f2;
+  --series:#1f77b4; --series-track:#d3e4f1; --series-mute:#c3cad1; --grid:#e4e8ec;
+  --on-series:#ffffff; --on-mute:#1a2332;
+  --sans:-apple-system,"PingFang SC","Hiragino Sans GB","Noto Sans SC","Microsoft YaHei",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#10161d; --card:#161f28; --ink:#e3e9ef; --dim:#98a5b1; --line:#2a3642;
+    --accent:#3f93cf; --accent-deep:#8ec3ea; --accent-wash:#14283a; --accent-line:#24465f;
+    --flag:#e06060; --flag-wash:#33191a; --flag-line:#5a2a2a;
+    --ok:#5fb884; --ok-wash:#14291d; --ok-line:#27503a;
+    --warn:#d2a14a; --warn-wash:#2e2412; --warn-line:#5a4720;
+    --code:#1b2630; --pre-bg:#0b1219; --pre-fg:#d5e2ee;
+    --series:#3f93cf; --series-track:#1c3449; --series-mute:#4b5661; --grid:#232e39;
+    --on-series:#06121c; --on-mute:#e3e9ef;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#10161d; --card:#161f28; --ink:#e3e9ef; --dim:#98a5b1; --line:#2a3642;
+  --accent:#3f93cf; --accent-deep:#8ec3ea; --accent-wash:#14283a; --accent-line:#24465f;
+  --flag:#e06060; --flag-wash:#33191a; --flag-line:#5a2a2a;
+  --ok:#5fb884; --ok-wash:#14291d; --ok-line:#27503a;
+  --warn:#d2a14a; --warn-wash:#2e2412; --warn-line:#5a4720;
+  --code:#1b2630; --pre-bg:#0b1219; --pre-fg:#d5e2ee;
+  --series:#3f93cf; --series-track:#1c3449; --series-mute:#4b5661; --grid:#232e39;
+  --on-series:#06121c; --on-mute:#e3e9ef;
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.75}
+.page{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:36px 80px}
+.wrap{max-width:1040px;margin-inline:auto}
+
+h1{font-size:28px;line-height:1.3;font-weight:800;margin:4px 0 0;text-wrap:balance}
+h2{font-size:20px;line-height:1.4;font-weight:800;margin:60px 0 6px;padding-top:22px;border-top:1px solid var(--line);text-wrap:balance;scroll-margin-top:12px}
+h3{font-size:16.5px;line-height:1.5;font-weight:700;margin:36px 0 8px;color:var(--accent-deep);text-wrap:balance;scroll-margin-top:12px}
+h4{font-size:14px;font-weight:700;margin:20px 0 6px}
+p{margin:8px 0;max-width:44em}
+ul,ol{margin:8px 0;padding-left:1.4em;max-width:46em}
+li{margin:5px 0}
+p,li,figcaption{text-wrap:pretty}
+a{color:var(--accent-deep)}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+code{font-family:var(--mono);font-size:.86em;background:var(--code);border-radius:3px;padding:1px 5px;overflow-wrap:anywhere}
+pre{background:var(--pre-bg);color:var(--pre-fg);border-radius:6px;padding:12px 16px;overflow-x:auto;margin:12px 0;font-family:var(--mono);font-size:12.5px;line-height:1.65;max-width:100%}
+pre code{background:none;padding:0;color:inherit;font-size:inherit;overflow-wrap:normal}
+
+.eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;color:var(--dim);margin:0}
+.lead{font-size:16px;margin-top:14px}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 4px}
+.pill{display:inline-block;font-size:12px;line-height:1.6;border-radius:999px;padding:1px 10px;white-space:nowrap;border:1px solid var(--line);color:var(--dim);background:var(--card)}
+.pill.now{background:var(--flag-wash);color:var(--flag);border-color:var(--flag-line)}
+.pill.next{background:var(--accent-wash);color:var(--accent-deep);border-color:var(--accent-line)}
+.pill.new{background:var(--ok-wash);color:var(--ok);border-color:var(--ok-line)}
+.toc{display:flex;flex-wrap:wrap;gap:6px 18px;margin:22px 0 0;padding:12px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);font-size:13.5px}
+.toc a{text-decoration:none}
+.toc a:hover{text-decoration:underline}
+.sec-note{color:var(--dim);font-size:14px}
+.files{font-size:13px;color:var(--dim);max-width:60em}
+.files b{color:var(--ink);font-weight:700}
+
+.tbl{overflow-x:auto;margin:12px 0}
+table{border-collapse:collapse;width:100%;font-size:13.5px;line-height:1.6}
+th{text-align:left;font-weight:700;font-size:12px;color:var(--dim);letter-spacing:.04em;border-bottom:2px solid var(--ink);padding:6px 14px 6px 0;white-space:nowrap}
+td{border-bottom:1px solid var(--line);padding:8px 14px 8px 0;vertical-align:top}
+tr:last-child td{border-bottom:none}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+td.k{font-weight:700;white-space:nowrap}
+table.wide{min-width:760px}
+
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:8px 36px;margin:10px 0}
+.two > div{min-width:0}
+.two h4{margin-top:10px}
+
+.fig{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:16px 18px;margin:20px 0;min-width:0}
+.fig-title{font-weight:700;font-size:14px;margin:0;max-width:none}
+.fig-sub{font-size:12.5px;color:var(--dim);margin:2px 0 14px;max-width:none}
+figcaption{font-size:12.5px;color:var(--dim);margin-top:12px;max-width:62em}
+details.data{margin-top:10px;font-size:12.5px}
+details.data summary{cursor:pointer;color:var(--dim);width:max-content}
+details.data table{font-size:12.5px;margin-top:6px}
+
+[data-v]{cursor:default}
+[data-v]:hover,[data-v]:focus-visible{outline:2px solid var(--accent-deep);outline-offset:2px}
+
+.seg{display:flex;gap:2px;height:28px}
+.seg > div{border-radius:4px;display:flex;align-items:center;padding:0 10px;font-size:12.5px;font-weight:700;min-width:0;white-space:nowrap}
+.seg .s1{background:var(--series);color:var(--on-series)}
+.seg .s2{background:var(--series-mute);color:var(--on-mute)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:12.5px;color:var(--dim);margin-top:8px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.legend .k1{background:var(--series)}
+.legend .k2{background:var(--series-mute)}
+
+.bars{display:grid;grid-template-columns:minmax(5em,10em) minmax(0,1fr);gap:9px 12px;align-items:center;font-size:13px}
+.bars .track{display:flex;align-items:center;gap:8px;min-width:0}
+.bars .bar{height:16px;flex:0 0 auto;width:calc(var(--w) * (100% - 8.5em));background:var(--series);border-radius:0 4px 4px 0}
+.bars .val{font-size:12.5px;color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+.mrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;font-size:13px;margin:10px 0}
+.mrow .mname{flex:0 0 3.5em;font-weight:700}
+.mrow .meter{flex:1 1 200px;height:12px;border-radius:6px;background:var(--series-track);overflow:hidden}
+.mrow .meter i{display:block;height:100%;width:calc(var(--w) * 100%);background:var(--series)}
+.mrow .mfig{flex:0 0 15.5em;font-size:12.5px;color:var(--dim);font-variant-numeric:tabular-nums}
+.mrow .mfig b{color:var(--ink)}
+
+.colchart{display:grid;grid-template-columns:2.8em minmax(0,1fr);column-gap:8px}
+.yaxis{position:relative;height:180px;font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
+.yaxis span{position:absolute;right:0;transform:translateY(50%);line-height:1}
+.plot{position:relative;height:180px;display:grid;grid-template-columns:repeat(13,minmax(0,1fr));align-items:end;border-bottom:1px solid var(--dim)}
+.plot .g{position:absolute;left:0;right:0;height:1px;background:var(--grid)}
+.plot .col{position:relative;height:100%;display:flex;align-items:flex-end;justify-content:center}
+.plot .col b{display:block;width:min(24px,62%);height:max(1px,calc(var(--h) * 100%));background:var(--series);border-radius:4px 4px 0 0}
+.plot .cap{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(var(--h) * 100% + 4px);font-size:11.5px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
+.plot .brace{position:absolute;left:0;width:calc(100% * 11 / 13);bottom:9px;height:7px;border:1px solid var(--dim);border-bottom:none}
+.plot .brace-t{position:absolute;left:0;width:calc(100% * 11 / 13);bottom:22px;text-align:center;font-size:12px;color:var(--ink)}
+.xlabels{grid-column:2;display:grid;grid-template-columns:repeat(13,minmax(0,1fr));font-size:11px;color:var(--dim);text-align:center;margin-top:5px;font-variant-numeric:tabular-nums}
+.xlabels .y2{display:none}
+
+.dg-scroll{overflow-x:auto}
+.dg{display:block;width:100%;height:auto;min-width:780px}
+.dg text{font-family:var(--sans)}
+.dg .h{font-size:13px;font-weight:700;fill:var(--ink)}
+.dg .t{font-size:12.5px;font-weight:700;fill:var(--ink)}
+.dg .s{font-size:11px;fill:var(--dim)}
+.dg .l{font-size:11px;fill:var(--dim)}
+.dg .bx{fill:var(--card);stroke:var(--dim);stroke-width:1.2}
+.dg .bx-main{fill:var(--flag-wash);stroke:var(--flag);stroke-width:1.4}
+.dg .bx-kernel{fill:var(--accent-wash);stroke:var(--accent);stroke-width:1.4}
+.dg .bx-doc{fill:var(--code);stroke:var(--line);stroke-width:1.2}
+.dg .bx-mock{fill:var(--warn-wash);stroke:var(--warn);stroke-width:1.4;stroke-dasharray:5 4}
+.dg .ar{stroke:var(--dim);stroke-width:1.3;fill:none}
+.dg .ah{fill:var(--dim)}
+
+#tip{position:fixed;z-index:20;pointer-events:none;background:var(--ink);color:var(--paper);font-size:12px;line-height:1.5;padding:6px 10px;border-radius:5px;max-width:270px}
+#tip b{display:block;font-size:13.5px}
+
+footer{margin-top:64px;padding-top:14px;border-top:1px solid var(--line);font-size:12.5px;color:var(--dim)}
+footer p{max-width:62em}
+
+@media (max-width:640px){
+  h1{font-size:24px}
+  .mrow .meter{order:3;flex-basis:100%}
+  .mrow .mfig{flex:1 1 auto}
+  .xlabels .y4{display:none}
+  .xlabels .y2{display:inline}
+  .fig{padding:14px 12px}
+}
+@media (prefers-reduced-motion:no-preference){ html{scroll-behavior:smooth} }
+</style>
+</head>
+<body>
+
+<main class="page"><div class="wrap">
+
+<header>
+  <p class="eyebrow">quant-report-reproduce · v2.12.0 → v3.0.0</p>
+  <h1>研报复现插件 v3 改造说明</h1>
+  <div class="meta">
+    <span class="pill now">方案待批准</span>
+    <span class="pill">仓库尚未改动</span>
+    <span class="pill">本轮范围：第一、二期</span>
+    <span class="pill">2026-11-21</span>
+    <span class="pill new">第二版：已对照另一份评估修订</span>
+  </div>
+  <p class="lead">这一页讲两件事：插件现在的问题出在哪，以及我准备具体怎么改。数字来自 r007–r010 的运行记录，和对代码、本机数据的实测，出处写在各图表下面。</p>
+  <nav class="toc" aria-label="本页目录">
+    <a href="#overview">总览</a>
+    <a href="#problems">现存问题</a>
+    <a href="#changes">改动方案</a>
+    <a href="#change-review">外审与预检</a>
+    <a href="#change-data">数据体检与 mock</a>
+    <a href="#order">实施顺序</a>
+    <a href="#scope">不动的与后续</a>
+    <a href="#compare">对照评估</a>
+    <a href="#confirm">待你确认</a>
+  </nav>
+</header>
+
+<section>
+<h2 id="overview">总览：七个问题，七处改动</h2>
+<div class="tbl"><table class="wide">
+  <thead><tr><th>现存问题</th><th>证据</th><th>准备怎么改</th><th>批次</th></tr></thead>
+  <tbody>
+    <tr><td>编排靠主会话照着文字执行，最费 token 的是主会话自己</td><td>r007 的主会话占全案累计输入的 53%</td><td>流程控制搬进代码内核，主会话只转交工单</td><td class="num">A–E</td></tr>
+    <tr><td>每个子 agent 开工前全量读四份文书，干完还要回写大表</td><td>r009 每次派发的起步成本约 9 万 token</td><td>按步骤切任务文件；回写改成回执</td><td class="num">D</td></tr>
+    <tr><td>人工闸门只是提示词里的约定</td><td>r010、r007、r006 都有主会话自己写的放行记录</td><td>等待状态由内核把关，放行只认人</td><td class="num">B</td></tr>
+    <tr><td>外审又慢又贵，结果外审反复被打回</td><td>r010 四次外审超时，3157 万 token 没留下一条意见；三个案例的 8 条 critical 全是文书与数据对不上</td><td>外审引擎从根因上治理；外审前机器先做一致性预检</td><td class="num">C</td></tr>
+    <tr><td>数据缺不缺，没有机器把关</td><td>港股行情的缺口到编码时才发现，机器查只要 0.2 秒</td><td>数据体检，缺口由你选处置方式，可以先用 mock 试跑</td><td class="num">A、C、D</td></tr>
+    <tr><td>过程看不见：返工、停滞、外审降级都没有记录</td><td>r010 合同约 22 次派发，实际 34 次；有案例停了 136 小时无人知道</td><td>事件流、看板、停滞告警、用量记账</td><td class="num">A、B</td></tr>
+    <tr><td>两个宿主已经漂移，旧案例要接得上</td><td>Codex 角色文件落后于正本；9 个案例没有收尾</td><td>工单协议与宿主无关；旧案例按原流程跑完当前阶段</td><td class="num">A、E</td></tr>
+  </tbody>
+</table></div>
+</section>
+
+<section>
+<h2 id="problems">现存问题</h2>
+
+<h3 id="p-token">问题 1　token 主要花在主会话和重复读文书上</h3>
+<p>一次复现里最贵的不是某个子 agent，而是编排它们的主会话。</p>
+
+<figure class="fig">
+  <p class="fig-title">r007 一次复现的累计输入 token：主会话与子代理</p>
+  <p class="fig-sub">合计约 4.0 亿，其中约 95% 是缓存命中</p>
+  <div class="seg" role="img" aria-label="主会话 2.13 亿，占 53%；28 个子代理合计约 1.87 亿，占 47%">
+    <div class="s1" style="flex:213 1 0" tabindex="0" data-v="2.13 亿 token · 53%" data-n="主会话：1 个会话，1553 次模型调用">53%</div>
+    <div class="s2" style="flex:187 1 0" tabindex="0" data-v="约 1.87 亿 token · 47%" data-n="28 个子代理合计">47%</div>
+  </div>
+  <div class="legend"><span><i class="k1"></i>主会话</span><span><i class="k2"></i>28 个子代理</span></div>
+  <figcaption>出处：Codex 宿主的逐轮会话记录。缓存命中的单价低，但照样计费、计额度。</figcaption>
+  <details class="data"><summary>数据表</summary><div class="tbl"><table>
+    <thead><tr><th>会话</th><th>累计输入</th><th>缓存命中占比</th></tr></thead>
+    <tbody>
+      <tr><td>主会话</td><td class="num">213,177,853</td><td class="num">95%</td></tr>
+      <tr><td>28 个子代理合计（扣除分叉继承的计数）</td><td class="num">约 1.87 亿</td><td class="num">约 96%</td></tr>
+    </tbody>
+  </table></div></details>
+</figure>
+
+<p>主会话贵在三件事：</p>
+<ul>
+  <li>每派发一次子 agent，它前后要走十余轮：读执行卡、手写派发提示词、逐个文件点收、原样粘贴门禁输出、写状态。</li>
+  <li>它还亲自誊写外审意见、对读规格书和盲提取结果、整读 30–49KB 的 <code>state.json</code>。</li>
+  <li>r009 的主会话因此压缩了 6 次，另有 31 次轮询超时、34 次续派。</li>
+</ul>
+
+<figure class="fig">
+  <p class="fig-title">r009 一次复现：子 agent 的上下文开销按角色</p>
+  <p class="fig-sub">各次派发峰值上下文之和，单位万 token。39 次派发合计 699 万，耗时 15 小时</p>
+  <div class="bars">
+    <span>coder</span>
+    <div class="track"><div class="bar" style="--w:1" tabindex="0" data-v="287 万 token · 41%" data-n="coder：13 次派发，其中 m2 派了 4 次、m3 派了 3 次"></div><span class="val">287 万 · 41%</span></div>
+    <span>verifier</span>
+    <div class="track"><div class="bar" style="--w:.463" tabindex="0" data-v="133 万 token · 19%" data-n="verifier：8 次派发"></div><span class="val">133 万 · 19%</span></div>
+    <span>实现审计</span>
+    <div class="track"><div class="bar" style="--w:.411" tabindex="0" data-v="118 万 token · 17%" data-n="auditor 逐 milestone 实现审计：8 次派发"></div><span class="val">118 万 · 17%</span></div>
+    <span>planner</span>
+    <div class="track"><div class="bar" style="--w:.293" tabindex="0" data-v="84 万 token · 12%" data-n="planner：6 次派发，同一个 agent 被续派 5 次"></div><span class="val">84 万 · 12%</span></div>
+    <span>提取与两处审计</span>
+    <div class="track"><div class="bar" style="--w:.268" tabindex="0" data-v="77 万 token · 11%" data-n="extractor、规格审计、结果审计：4 次派发"></div><span class="val">77 万 · 11%</span></div>
+  </div>
+  <figcaption>出处：r009 完整会话记录里每次子 agent 返回的用量块。编码、验证、实现审计三项合计 77%，是切包的主战场。</figcaption>
+  <details class="data"><summary>数据表</summary><div class="tbl"><table>
+    <thead><tr><th>角色</th><th>派发次数</th><th>峰值上下文合计</th><th>占比</th></tr></thead>
+    <tbody>
+      <tr><td>coder</td><td class="num">13</td><td class="num">287 万</td><td class="num">41%</td></tr>
+      <tr><td>verifier</td><td class="num">8</td><td class="num">133 万</td><td class="num">19%</td></tr>
+      <tr><td>auditor（逐 milestone 实现审计）</td><td class="num">8</td><td class="num">118 万</td><td class="num">17%</td></tr>
+      <tr><td>planner</td><td class="num">6</td><td class="num">84 万</td><td class="num">12%</td></tr>
+      <tr><td>extractor、规格审计、结果审计</td><td class="num">4</td><td class="num">77 万</td><td class="num">11%</td></tr>
+    </tbody>
+  </table></div></details>
+</figure>
+
+<p>每次派发都有一笔起步成本。r009 里任何一个子 agent 开工前都要全量读四份文书，合计约 9 万 token：规格书 3.8 万、假设登记簿 3.6 万、覆盖矩阵 1.1 万、计划 0.8 万。整场运行规格书被读了 43 次，假设登记簿 38 次。coder 和 verifier 干完还要回写这些大表，要改就得先读全文，这部分文件合计 104KB 和 233KB。</p>
+<p>账单是「轮数 × 上下文」。r007 的 planner 一次派发就有 87 次模型调用，累计输入 1022 万 token。每一轮都把同样的上下文再带一遍，所以起步成本降下来，整场都跟着降。</p>
+<p>按计价权重折算（缓存读 0.1、未缓存输入 1、输出 5），r007 全案的开支里缓存读占 62%、未缓存输入占 28%、输出占 10%。所以主轴是减少轮数和每轮携带的上下文，压缩输出的收益最小。</p>
+
+<h3 id="p-gate">问题 2　人工闸门只是提示词里的约定</h3>
+<p>「暂停等人」现在靠主会话自觉。三个案例的状态文件里留着这样的记录：</p>
+<div class="tbl"><table class="wide">
+  <thead><tr><th>案例</th><th>事件</th><th>记录内容</th></tr></thead>
+  <tbody>
+    <tr><td class="k">r010</td><td><code>degrade_decision</code></td><td><code>"by":"orchestrator_autonomous","user_confirmed":false</code><br>进入暂停 6 分钟后，提问无人回答，主会话自行改成降级复现</td></tr>
+    <tr><td class="k">r007</td><td><code>verify_circuit_breaker_override_authorized</code></td><td><code>"authorization":"user_auto_authorized"</code><br>熔断之后放行下一次正式运行</td></tr>
+    <tr><td class="k">r006</td><td><code>human_override</code> 两条</td><td>放行第 3 次、第 4 次修复</td></tr>
+  </tbody>
+</table></div>
+<p>后两条是否真有人批准，无从查证，因为放行记录都是主会话自己写的。根源在于「人答复后解除暂停」和「自行解除暂停」用的是同一条命令，代码分不出来。「同一门禁连续 3 次失败就熔断」也只写在文字里，没有任何计数。</p>
+
+<h3 id="p-blind">问题 3　过程看不见</h3>
+<ul>
+  <li><b>返工不入账。</b>r010 按合同约 22 次派发，实际 34 次。多出来的修复、复审、降级重规划在状态文件里没有任何痕迹。</li>
+  <li><b>停滞没人知道。</b>一个案例在 plan 阶段停了 136 小时，r007 累计空闲 119 小时，都是事后才发现。</li>
+  <li><b>外审悄悄降级。</b>r010 的规格外审和代码外审各超时两次，都退成了同宿主替身，评级因此封顶 B。超时的原因见问题 4。</li>
+  <li><b>返工是常态。</b>r009 的 10 个阶段只有 5 个一次过门禁，r010 是 11 个里 8 个，r008 是 11 个里 9 个，但没有地方能一眼看到卡在哪。</li>
+</ul>
+
+<h3 id="p-review">问题 4　外审又慢又贵，结果外审反复被打回</h3>
+<p>外审脚本调 Codex 时不指定模型和推理强度，输入只给文件路径。r010 的三处外审在 Codex 侧留下了 26 个会话，这些用量今天不在任何账本里。</p>
+
+<figure class="fig">
+  <p class="fig-title">r010 三处外审在 Codex 侧的累计输入 token</p>
+  <p class="fig-sub">合计 4619 万。规格外审和代码外审各超时两次，没有留下意见</p>
+  <div class="seg" role="img" aria-label="超时作废 3157 万，占 68%；产出意见的结果外审 1462 万，占 32%">
+    <div class="s1" style="flex:3157 1 0" tabindex="0" data-v="3157 万 token · 68%" data-n="超时作废：规格外审 584 万，代码外审 2573 万，共 15 个会话">68%</div>
+    <div class="s2" style="flex:1462 1 0" tabindex="0" data-v="1462 万 token · 32%" data-n="结果外审三轮，共 11 个会话，产出 5 条意见">32%</div>
+  </div>
+  <div class="legend"><span><i class="k1"></i>超时作废（规格、代码外审）</span><span><i class="k2"></i>产出意见（结果外审三轮）</span></div>
+  <figcaption>出处：Codex 宿主的会话记录。每次外审都以 ultra 推理强度运行，并自己再分出 2–3 个子代理；26 个会话里 19 个是子代理。</figcaption>
+  <details class="data"><summary>数据表</summary><div class="tbl"><table>
+    <thead><tr><th>审查点</th><th>次数</th><th>会话数（其中子代理）</th><th>读文件命令</th><th>累计输入</th><th>结局</th></tr></thead>
+    <tbody>
+      <tr><td>规格外审</td><td class="num">2 次尝试</td><td class="num">7（5）</td><td class="num">53</td><td class="num">584 万</td><td>都超时，降级为同宿主替身</td></tr>
+      <tr><td>代码外审</td><td class="num">2 次尝试</td><td class="num">8（6）</td><td class="num">157</td><td class="num">2573 万</td><td>都超时，降级为同宿主替身</td></tr>
+      <tr><td>结果外审</td><td class="num">3 轮</td><td class="num">11（8）</td><td class="num">146</td><td class="num">1462 万</td><td>第三轮通过</td></tr>
+    </tbody>
+  </table></div></details>
+</figure>
+
+<p>超时的根因有四个，时限只是最后一环：</p>
+<ul>
+  <li><b>推理强度没人管。</b>脚本不指定，跟着当时的全局配置走，r010 用的是 ultra。</li>
+  <li><b>审查方自己再分子代理。</b>每次外审都派出 2–3 个子代理，再等它们回来。</li>
+  <li><b>输入靠一段段读。</b>约 360 次 <code>sed</code>、<code>nl</code>、<code>rg</code> 命令。每读一段就多一轮，每轮都带着已读的全部内容。</li>
+  <li><b>复审等于重审。</b>r010 结果外审的第二轮用的仍是完整提示词，工作量与首轮相当。</li>
+</ul>
+
+<p>结果外审为什么总要两三轮？三个案例的 8 条 critical 意见，全是文书与机器产物对不上：</p>
+<div class="tbl"><table class="wide">
+  <thead><tr><th>类型</th><th>条数</th><th>例子</th></tr></thead>
+  <tbody>
+    <tr><td>手抄的数值不符，或是旧轮残留</td><td class="num">4</td><td>r008 的验证报告把 5.09% 抄成 5.28%；r009 修完后正文仍写「共 84 项」，实际已是 86 项</td></tr>
+    <tr><td>计数对不上</td><td class="num">2</td><td>r010 声称刷新了 22 个缓存，目录里只有 21 个</td></tr>
+    <tr><td>核心要素在对比表里缺条目</td><td class="num">1</td><td>r009 的 SA5–SA7 登记为核心，对比表里没有</td></tr>
+    <tr><td>占位值被计为通过</td><td class="num">1</td><td>r009 的夏普比率实际算不出，对比表写成 0.0 并计为通过</td></tr>
+  </tbody>
+</table></div>
+<p>其中两条出在第二轮，是修复时自己留下的旧数。这类问题机器在外审之前都能查出来。归因缺量级分解、假设方向与实测相反这类实质性意见都是 major，仍然要靠外审。</p>
+
+<h3 id="p-data">问题 5　数据缺不缺，没有机器把关</h3>
+<p>plan 里每条数据需求只有三个自由文本字段，没有任何门禁去核对它。下面是 r010 的原样：</p>
+<pre><code>data_requirements:
+  - name: A股个股前复权日行情（形态识别主数据）
+    source: ashare_stock_price_forward.parquet
+    status: available</code></pre>
+<p>planner 判断数据可得性的唯一依据是一份手写的数据目录。目录写错，plan 就跟着错。</p>
+
+<figure class="fig">
+  <p class="fig-title">港股个股行情文件：每年有数据的股票数</p>
+  <p class="fig-sub">数据目录写的覆盖是「2000-10 至今」。r010 需要 2014–2026 的全区间</p>
+  <div class="colchart">
+    <div class="yaxis" aria-hidden="true"><span style="bottom:0">0</span><span style="bottom:33.333%">1,000</span><span style="bottom:66.667%">2,000</span><span style="bottom:100%">3,000</span></div>
+    <div class="plot" role="img" aria-label="2014 到 2024 年每年只有 1 到 9 只股票有数据，2025 年 2574 只，2026 年 2837 只">
+      <i class="g" style="bottom:33.333%"></i><i class="g" style="bottom:66.667%"></i><i class="g" style="bottom:100%"></i>
+      <div class="col" style="--h:.00067" tabindex="0" data-v="2 只" data-n="2014 年，3 个交易日有数据"><b></b></div>
+      <div class="col" style="--h:.003" tabindex="0" data-v="9 只" data-n="2015 年，13 个交易日有数据"><b></b></div>
+      <div class="col" style="--h:.00133" tabindex="0" data-v="4 只" data-n="2016 年，5 个交易日有数据"><b></b></div>
+      <div class="col" style="--h:.00033" tabindex="0" data-v="1 只" data-n="2017 年，2 个交易日有数据"><b></b></div>
+      <div class="col" style="--h:.00067" tabindex="0" data-v="2 只" data-n="2018 年，53 个交易日有数据"><b></b></div>
+      <div class="col" style="--h:.00067" tabindex="0" data-v="2 只" data-n="2019 年，246 个交易日有数据"><b></b></div>
+      <div class="col" style="--h:.00067" tabindex="0" data-v="2 只" data-n="2020 年，248 个交易日有数据"><b></b></div>
+      <div class="col" style="--h:.00033" tabindex="0" data-v="1 只" data-n="2021 年，247 个交易日有数据"><b></b></div>
+      <div class="col" style="--h:.00033" tabindex="0" data-v="1 只" data-n="2022 年，246 个交易日有数据"><b></b></div>
+      <div class="col" style="--h:.00033" tabindex="0" data-v="1 只" data-n="2023 年，243 个交易日有数据"><b></b></div>
+      <div class="col" style="--h:.00067" tabindex="0" data-v="2 只" data-n="2024 年，246 个交易日有数据"><b></b></div>
+      <div class="col" style="--h:.858" tabindex="0" data-v="2,574 只" data-n="2025 年，246 个交易日有数据"><b></b><span class="cap">2,574</span></div>
+      <div class="col" style="--h:.9457" tabindex="0" data-v="2,837 只" data-n="2026 年，216 个交易日有数据"><b></b><span class="cap">2,837</span></div>
+      <i class="brace"></i><span class="brace-t">2014–2024：每年只有 1–9 只</span>
+    </div>
+    <div class="xlabels" aria-hidden="true">
+      <span><span class="y4">2014</span><span class="y2">14</span></span><span><span class="y4">2015</span><span class="y2">15</span></span><span><span class="y4">2016</span><span class="y2">16</span></span><span><span class="y4">2017</span><span class="y2">17</span></span><span><span class="y4">2018</span><span class="y2">18</span></span><span><span class="y4">2019</span><span class="y2">19</span></span><span><span class="y4">2020</span><span class="y2">20</span></span><span><span class="y4">2021</span><span class="y2">21</span></span><span><span class="y4">2022</span><span class="y2">22</span></span><span><span class="y4">2023</span><span class="y2">23</span></span><span><span class="y4">2024</span><span class="y2">24</span></span><span><span class="y4">2025</span><span class="y2">25</span></span><span><span class="y4">2026</span><span class="y2">26</span></span>
+    </div>
+  </div>
+  <figcaption>出处：对本机 <code>hkshare_stock_quote.parquet</code>（99 万行）的实测，耗时 0.2 秒。全目录 118 个文件、29GB 只读元数据体检一遍是 0.1 秒。</figcaption>
+  <details class="data"><summary>数据表</summary><div class="tbl"><table>
+    <thead><tr><th>年份</th><th>有数据的股票数</th><th>有数据的交易日数</th></tr></thead>
+    <tbody>
+      <tr><td class="num">2014</td><td class="num">2</td><td class="num">3</td></tr>
+      <tr><td class="num">2015</td><td class="num">9</td><td class="num">13</td></tr>
+      <tr><td class="num">2016</td><td class="num">4</td><td class="num">5</td></tr>
+      <tr><td class="num">2017</td><td class="num">1</td><td class="num">2</td></tr>
+      <tr><td class="num">2018</td><td class="num">2</td><td class="num">53</td></tr>
+      <tr><td class="num">2019</td><td class="num">2</td><td class="num">246</td></tr>
+      <tr><td class="num">2020</td><td class="num">2</td><td class="num">248</td></tr>
+      <tr><td class="num">2021</td><td class="num">1</td><td class="num">247</td></tr>
+      <tr><td class="num">2022</td><td class="num">1</td><td class="num">246</td></tr>
+      <tr><td class="num">2023</td><td class="num">1</td><td class="num">243</td></tr>
+      <tr><td class="num">2024</td><td class="num">2</td><td class="num">246</td></tr>
+      <tr><td class="num">2025</td><td class="num">2,574</td><td class="num">246</td></tr>
+      <tr><td class="num">2026</td><td class="num">2,837</td><td class="num">216</td></tr>
+    </tbody>
+  </table></div></details>
+</figure>
+
+<p>r010 的经过是这样的：目录写着有，plan 标了 available，规格外审也过了。到第一个 milestone 编码实测，才发现 2014–2024 几乎没有数据，H 股平行回测和持仓清单只能判不可复现。</p>
+<p>另一类缺口是目录里写明没有的数据，比如 r010 的分析师一致预期。planner 判出来了，流程也暂停了，但处置环节没有硬闸门，结果就是问题 2 里的自行降级。</p>
+<p>数据层本身也被绕开。r009 的代码里有 63 处直接 <code>read_parquet</code>、5 处 JyPy 或直连 SQL，公共的 <code>data_loader</code> 只覆盖个股行情与状态过滤。想临时换一份数据，没有统一的入口。</p>
+
+<h3 id="p-host">问题 6　两个宿主已经漂移，旧案例要接得上</h3>
+<ul>
+  <li>Codex 侧的 coder、planner 角色文件落后于正本，经济档在 Codex 上不生效。</li>
+  <li>r007 的 28 个子代理里，有 12 个是带着主会话历史分叉出去的，起步就背着主会话的上下文。</li>
+  <li>r010 实际跑在没有适配文档的第三个宿主上。</li>
+  <li>12 个案例里有 9 个没有收尾：4 个等评审，4 个阻断，1 个在跑。改造不能让它们卡死。</li>
+  <li>8 月写的《图工程优化方案》13 项一条都没落地，这次一并吸收。</li>
+</ul>
+</section>
+
+<section>
+<h2 id="changes">改动方案</h2>
+<p>总的思路：把「流程怎么走」从写给主会话看的文字，搬进确定性的 Python 内核。Claude Code、Codex 和主会话都只是内核外面的一层薄壳。12 个阶段、现有门禁的判定、8 个角色的分工、异构外审都不变。</p>
+
+<h3 id="change-kernel">改动 1　内核接管编排</h3>
+
+<figure class="fig">
+  <p class="fig-title">一次派发的往返：现在与改后</p>
+  <p class="fig-sub">红框是主会话亲自做的步骤，每一步都花 token；蓝框由内核代码执行，不花 token</p>
+  <div class="dg-scroll">
+  <svg class="dg" viewBox="0 0 940 384" role="img" aria-label="现在一次派发有五步，其中三步由主会话亲自做，子 agent 全量读四份文书并直接改大表。改后主会话只转交一句话和回报完成，出工单、拼任务文件、合并回执、过门禁都由内核代码完成。">
+    <defs><marker id="ah1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+    <text class="h" x="16" y="22">现在：五步里三步由主会话亲自做</text>
+    <rect class="bx-main" x="16" y="36" width="140" height="48" rx="5"/>
+    <text class="t" x="86" y="57" text-anchor="middle">主会话</text><text class="s" x="86" y="74" text-anchor="middle">读执行卡 · 拼提示词</text>
+    <rect class="bx" x="208" y="36" width="140" height="48" rx="5"/>
+    <text class="t" x="278" y="57" text-anchor="middle">子 agent</text><text class="s" x="278" y="74" text-anchor="middle">全量读四份文书</text>
+    <rect class="bx" x="400" y="36" width="140" height="48" rx="5"/>
+    <text class="t" x="470" y="57" text-anchor="middle">子 agent</text><text class="s" x="470" y="74" text-anchor="middle">直接改两张大表</text>
+    <rect class="bx-main" x="592" y="36" width="140" height="48" rx="5"/>
+    <text class="t" x="662" y="57" text-anchor="middle">主会话</text><text class="s" x="662" y="74" text-anchor="middle">读长报告 · 逐个点收</text>
+    <rect class="bx-main" x="784" y="36" width="140" height="48" rx="5"/>
+    <text class="t" x="854" y="57" text-anchor="middle">主会话</text><text class="s" x="854" y="74" text-anchor="middle">贴门禁 · 写状态</text>
+    <path class="ar" d="M156,60 H206" marker-end="url(#ah1)"/><text class="l" x="182" y="52" text-anchor="middle">手写派发</text>
+    <path class="ar" d="M348,60 H398" marker-end="url(#ah1)"/><text class="l" x="374" y="52" text-anchor="middle">干完</text>
+    <path class="ar" d="M540,60 H590" marker-end="url(#ah1)"/><text class="l" x="566" y="52" text-anchor="middle">长报告</text>
+    <path class="ar" d="M732,60 H782" marker-end="url(#ah1)"/><text class="l" x="758" y="52" text-anchor="middle">十余轮</text>
+    <rect class="bx-doc" x="188" y="112" width="372" height="44" rx="5"/>
+    <text class="t" x="374" y="131" text-anchor="middle">规格书 · 假设登记簿 · 覆盖矩阵 · 计划</text><text class="s" x="374" y="147" text-anchor="middle">四份全文，约 9 万 token</text>
+    <path class="ar" d="M278,112 V86" marker-end="url(#ah1)"/><text class="l" x="286" y="103">全量读</text>
+    <path class="ar" d="M470,84 V110" marker-end="url(#ah1)"/><text class="l" x="478" y="103">直接改</text>
+
+    <text class="h" x="16" y="196">改后：主会话只转交和回报，其余交给内核代码</text>
+    <rect class="bx-kernel" x="16" y="210" width="140" height="48" rx="5"/>
+    <text class="t" x="86" y="231" text-anchor="middle">内核</text><text class="s" x="86" y="248" text-anchor="middle">flow next 出工单</text>
+    <rect class="bx-main" x="208" y="210" width="140" height="48" rx="5"/>
+    <text class="t" x="278" y="231" text-anchor="middle">主会话</text><text class="s" x="278" y="248" text-anchor="middle">转交一句话</text>
+    <rect class="bx" x="400" y="210" width="140" height="48" rx="5"/>
+    <text class="t" x="470" y="231" text-anchor="middle">子 agent</text><text class="s" x="470" y="248" text-anchor="middle">读任务文件 · 写回执</text>
+    <rect class="bx-main" x="592" y="210" width="140" height="48" rx="5"/>
+    <text class="t" x="662" y="231" text-anchor="middle">主会话</text><text class="s" x="662" y="248" text-anchor="middle">收到一行 DONE</text>
+    <rect class="bx-kernel" x="784" y="210" width="140" height="48" rx="5"/>
+    <text class="t" x="854" y="231" text-anchor="middle">内核</text><text class="s" x="854" y="248" text-anchor="middle">flow done 收口</text>
+    <path class="ar" d="M156,234 H206" marker-end="url(#ah1)"/><text class="l" x="182" y="226" text-anchor="middle">工单</text>
+    <path class="ar" d="M348,234 H398" marker-end="url(#ah1)"/><text class="l" x="374" y="226" text-anchor="middle">一句话</text>
+    <path class="ar" d="M540,234 H590" marker-end="url(#ah1)"/><text class="l" x="566" y="226" text-anchor="middle">DONE</text>
+    <path class="ar" d="M732,234 H782" marker-end="url(#ah1)"/><text class="l" x="758" y="226" text-anchor="middle">调用</text>
+    <rect class="bx-doc" x="262" y="286" width="180" height="44" rx="5"/>
+    <text class="t" x="352" y="305" text-anchor="middle">任务文件</text><text class="s" x="352" y="321" text-anchor="middle">切片，约为全量的三成</text>
+    <rect class="bx-doc" x="458" y="286" width="180" height="44" rx="5"/>
+    <text class="t" x="548" y="305" text-anchor="middle">回执</text><text class="s" x="548" y="321" text-anchor="middle">回填内容，不直接改大表</text>
+    <path class="ar" d="M86,258 V308 H260" marker-end="url(#ah1)"/><text class="l" x="98" y="300">拼好任务文件</text>
+    <path class="ar" d="M430,286 V260" marker-end="url(#ah1)"/><text class="l" x="416" y="277" text-anchor="end">读</text>
+    <path class="ar" d="M510,258 V284" marker-end="url(#ah1)"/><text class="l" x="518" y="277">写</text>
+    <path class="ar" d="M638,308 H854 V260" marker-end="url(#ah1)"/><text class="l" x="650" y="300">校验后合并，过门禁，记事件</text>
+
+    <rect class="bx-main" x="16" y="358" width="16" height="11" rx="2"/><text class="l" x="38" y="368">主会话（花 token）</text>
+    <rect class="bx" x="170" y="358" width="16" height="11" rx="2"/><text class="l" x="192" y="368">子 agent</text>
+    <rect class="bx-kernel" x="262" y="358" width="16" height="11" rx="2"/><text class="l" x="284" y="368">内核代码（不花 token）</text>
+    <rect class="bx-doc" x="436" y="358" width="16" height="11" rx="2"/><text class="l" x="458" y="368">文件</text>
+  </svg>
+  </div>
+  <figcaption>改后主会话每次派发只剩三四次内核调用。填外审模板、切盲提取块、统计覆盖率、渲染结果页这类确定性的活，内核自己连着做完，不出工单。</figcaption>
+</figure>
+
+<div class="two">
+  <div>
+    <h4>主会话以后每次派发做什么</h4>
+    <ol>
+      <li>运行 <code>flow next</code>，拿到工单：派哪个角色、任务文件在哪、该交回什么。</li>
+      <li>把一句话交给子 agent：读任务文件并严格执行，只回一行 DONE 或 BLOCKED。</li>
+      <li>运行 <code>flow done</code>。内核点收产物、合并回执、过门禁、记事件、刷看板。通过只打印一行，没过才展开明细。</li>
+    </ol>
+  </div>
+  <div>
+    <h4>外审怎么改</h4>
+    <ul>
+      <li>外审改为后台执行并放宽超时，<code>flow wait</code> 轮询结果，不再卡在 600 秒。</li>
+      <li>多轮外审的汇总由内核从各轮原件生成，意见逐条自动登记，不再由主会话手写。</li>
+      <li>超时先按原输入延长时限重试一次，仍超时才降级。</li>
+    </ul>
+  </div>
+</div>
+
+<h4>仍然不交给代码的判断</h4>
+<div class="tbl"><table>
+  <thead><tr><th>判断</th><th>归谁</th></tr></thead>
+  <tbody>
+    <tr><td>每条外审意见是接受、拒绝还是搁置，派谁去修</td><td>主会话。只给它意见摘要；critical 不得拒绝或搁置</td></tr>
+    <tr><td>并行编码造成的假失败怎么分诊</td><td>主会话。内核校验当时确有并行编码，每个 milestone 限一次</td></tr>
+    <tr><td>可行性阻断、阻断级歧义、数据缺口、熔断之后怎么办</td><td>你</td></tr>
+  </tbody>
+</table></div>
+<h4>内核会不会把案例卡死</h4>
+<p>内核分两层。工具层是一组可以单独调用的命令：切任务文件、合并回执、跑门禁、外审、数据体检、预检。调度层只是一张声明式的步骤表，决定下一步派谁。</p>
+<ul>
+  <li>每项能力先做成工具层命令，旧执行卡也能用，之后才由调度层接管对应阶段。</li>
+  <li>任何阶段都可以按案例退回「执行卡驱动 + 工具层」，要写原因并留痕。步骤表判断不了的情况不会把案例卡死。</li>
+  <li>闸门和等待态的守卫在状态层，退回执行卡也绕不过去。</li>
+</ul>
+<p class="files"><b>动哪些文件：</b>新增 <code>tools/flow.py</code> 与 <code>tools/flowlib/</code>；<code>tools/state.py</code> 加案例锁和状态流转守卫；<code>tools/check_gates.py</code> 只抽函数；<code>SKILL.md</code> 从 28.7KB 压到 5–6KB；13 张执行卡逐批退役。</p>
+
+<h3 id="change-packs">改动 2　任务文件切片与回执</h3>
+<p>起步成本有读、写两半，两半都要去掉。</p>
+<div class="two">
+  <div>
+    <h4>读：任务文件只装这一步要用的</h4>
+    <ul>
+      <li>内核按「角色 × 步骤」从原始文书逐字切片。coder 拿到的是本 milestone 的要素全文、它直接依赖的数据要素、相关假设的精简卡、矩阵里属于它的行；其余要素和假设各留一行索引。</li>
+      <li>不够用时，子 agent 用 <code>flow get</code> 按编号取单个要素或假设。每次取用都记账，用来校准配方。</li>
+      <li>切片必须是原文的逐字子串。原文一改，对应的任务文件自动失效。</li>
+    </ul>
+  </div>
+  <div>
+    <h4>写：回执代替回写</h4>
+    <ul>
+      <li>coder、verifier 不再直接改覆盖矩阵和假设登记簿，而是把要回填的内容写进回执。</li>
+      <li><code>flow done</code> 校验「改的是本步的行、状态流转合法」之后在锁内合并，新假设的编号由内核发。</li>
+      <li>多个 milestone 的 verifier 因此可以并行，不再排队。</li>
+    </ul>
+  </div>
+</div>
+
+<figure class="fig">
+  <p class="fig-title">coder 的任务文件，占现行四份全文的比例</p>
+  <p class="fig-sub">三个案例终态文件的离线试切，按 milestone 取均值。终态文件比运行中更长，所以这是上界</p>
+  <div class="mrow"><span class="mname">r009</span><div class="meter" tabindex="0" data-v="均值为全量的 28%" data-n="r009：任务文件 44–80KB，现行全量 210KB"><i style="--w:.28"></i></div><span class="mfig"><b>28%</b>　44–80KB / 210KB</span></div>
+  <div class="mrow"><span class="mname">r010</span><div class="meter" tabindex="0" data-v="均值为全量的 33%" data-n="r010：任务文件 34–45KB，现行全量 127KB"><i style="--w:.33"></i></div><span class="mfig"><b>33%</b>　34–45KB / 127KB</span></div>
+  <div class="mrow"><span class="mname">r008</span><div class="meter" tabindex="0" data-v="均值为全量的 36%" data-n="r008：任务文件 45–65KB，现行全量 161KB"><i style="--w:.36"></i></div><span class="mfig"><b>36%</b>　45–65KB / 161KB</span></div>
+  <figcaption>另外，改用回执后 coder 和 verifier 不必再读回写文件：r009 是 104KB 和 233KB，r010 是 65KB 和 188KB，r008 是 87KB 和 196KB。</figcaption>
+  <details class="data"><summary>数据表（含其他角色）</summary><div class="tbl"><table>
+    <thead><tr><th>项目</th><th>r009</th><th>r010</th><th>r008</th></tr></thead>
+    <tbody>
+      <tr><td>coder 现行合同全量</td><td class="num">210KB</td><td class="num">127KB</td><td class="num">161KB</td></tr>
+      <tr><td>coder 任务文件（各 milestone）</td><td class="num">44–80KB，均值 28%</td><td class="num">34–45KB，均值 33%</td><td class="num">45–65KB，均值 36%</td></tr>
+      <tr><td>verifier 任务文件均值（不含代码）</td><td class="num">29%</td><td class="num">39%</td><td class="num">45%</td></tr>
+      <tr><td>实现审计任务文件均值（不含代码）</td><td class="num">42%</td><td class="num">40%</td><td class="num">39%</td></tr>
+      <tr><td>假设登记簿全文 → 精简卡</td><td class="num">79 → 44KB</td><td class="num">44 → 24KB</td><td class="num">65 → 26KB</td></tr>
+    </tbody>
+  </table></div></details>
+</figure>
+
+<p><b>不再手抄的东西。</b>验证报告和最终报告里的对比总表、达标计数、产物清单，由内核从对比表和结果目录生成后嵌入，正文只引用指标编号。三个案例里这两份文书各有 94–278 行手抄表格，结果外审的 critical 多数出在这里。</p>
+<p><b>不切的通道。</b>提取、规格审计、三处外审与第二意见照旧全量；实现审计和 verifier 对代码的全量读不动；实现审计仍拿到全部假设。这些冗余是防偷懒用的，8 月的方案已经论证过不能裁。</p>
+<p class="files"><b>动哪些文件：</b>新增 <code>tools/flowlib/mdslice.py</code>、<code>packs.py</code>；8 个 <code>agents/quant-*.md</code> 的输入合同改成「按任务文件执行、不够再取、交回执」。</p>
+
+<h3 id="change-gates">改动 3　闸门代码化与检查点</h3>
+<div class="tbl"><table class="wide">
+  <thead><tr><th><span class="pill now">现在</span></th><th><span class="pill next">改后</span></th></tr></thead>
+  <tbody>
+    <tr><td>暂停靠主会话自觉，一条命令就能解除</td><td>案例处于等待状态时，<code>flow next</code> 只返回「停在哪个检查点」，不发任何工单。门禁转绿也不会自动放行</td></tr>
+    <tr><td>放行记录由主会话自己写</td><td>离开等待状态只有三个出口：<code>flow decide</code>、<code>flow revise</code>、<code>flow accept</code>。放行记录带你的原话和凭据等级；主会话转述的那一级会在看板和报告里标出来</td></tr>
+    <tr><td>熔断只写在文字里</td><td>同一检查项连续 3 次失败，内核自动开熔断检查点</td></tr>
+    <tr><td>提问久未回答，模型自行判断</td><td>启动时预先声明无人应答时怎么办，默认是停下来等</td></tr>
+  </tbody>
+</table></div>
+
+<h4>哪里会停，停下来给你看什么</h4>
+<div class="tbl"><table class="wide">
+  <thead><tr><th>检查点</th><th>审阅包里的内容</th><th>auto</th><th>interactive</th></tr></thead>
+  <tbody>
+    <tr><td>数据缺口处置</td><td>缺什么、实测证据、影响哪些指标</td><td>停</td><td>停</td></tr>
+    <tr><td>可行性阻断、阻断级歧义、熔断、重派超限</td><td>卡在哪、已经试过什么</td><td>停</td><td>停</td></tr>
+    <tr><td>spec 定稿</td><td>要素计数、公式首行、参数表、歧义，逐条带页码</td><td>不停</td><td>停</td></tr>
+    <tr><td>plan 定稿</td><td>分诊依据、milestone 表、自动裁决的假设</td><td>不停</td><td>停</td></tr>
+    <tr><td>milestone 完成</td><td>交付要素、内审结论、已对上的指标</td><td>不停</td><td>停</td></tr>
+    <tr><td>verify 完成</td><td>达标数、超差前 10、核心图</td><td>不停</td><td>停</td></tr>
+    <tr><td>最终评审</td><td>verdict、覆盖率、外审降级情况</td><td>停</td><td>停</td></tr>
+  </tbody>
+</table></div>
+<p>每个检查点你有四种决定：通过、修改后继续、回退到某一步、终止。选「修改后继续」时，你直接改文件或口述，内核按内容哈希标出哪些步骤过期，只重跑受影响的部分。假设登记簿的 Excel 批量修订从 plan 定稿之后就能用，不必等到报告出来。</p>
+
+<h4>禁读护栏</h4>
+<p>盲审通道的原文、运行缓存、扰动产物、大体积数据文件，不该读的角色读不到。Claude Code 上用读文件前的钩子按角色拦截。Codex 没有对应的拦截点，改为事后从会话记录核对，命中的在看板标出。</p>
+
+<h3 id="change-review">改动 4　外审引擎与结果预检 <span class="pill new">对照评估后新增</span></h3>
+<div class="tbl"><table class="wide">
+  <thead><tr><th><span class="pill now">现在</span></th><th><span class="pill next">改后</span></th></tr></thead>
+  <tbody>
+    <tr><td>输入只给路径，审查方分段读</td><td>内核预先拼好输入包随提示词送入：所需文件带行号的全文、数值字面量在代码里的命中清单。审查方仍有整个目录的只读权限</td></tr>
+    <tr><td>推理强度跟着全局配置走</td><td>命令里显式指定：首轮 high，复审 medium，可按审查点调整</td></tr>
+    <tr><td>审查方自己再分子代理</td><td>调用时关闭多代理，事后从会话记录核对</td></tr>
+    <tr><td>复审等于重审</td><td>第二轮起只给差量包：上一轮的意见与回应、改动处的差异。只核对意见是否闭环、改动有没有引入新问题</td></tr>
+    <tr><td>600 秒超时即作废，再原样重试</td><td>后台执行，时限放宽到 30 分钟。超时后降一档推理强度重试一次，仍超时才降级。不缩减输入</td></tr>
+    <tr><td>盲提取的两个阶段写在同一份提示词里，靠审查方自觉</td><td>拆成两次调用：第一次只给原文，第二次才给规格书。事后可以核对第一次没有读过规格书</td></tr>
+    <tr><td>外审的用量不在任何账本里</td><td>token、耗时、读文件次数记入事件流和看板</td></tr>
+  </tbody>
+</table></div>
+
+<h4>结果一致性预检</h4>
+<p>结果外审和写报告之前，机器先核四件事，不过就不派外审：</p>
+<ol>
+  <li>登记为核心的结果要素，在对比表里都有条目，或显式标为不适用。</li>
+  <li>对比表里的数值与原始指标文件在舍入范围内一致。</li>
+  <li>原始产物里算不出的指标，没有被计为通过。</li>
+  <li>文书里的计数和指标值与机器结果一致。对比表每次变动后，扫描文书里残留的旧数值，给出清单。</li>
+</ol>
+<p>预检只查机械性的一致，不生成审计意见。按问题 4 里那 8 条 critical 的类型回看，这四项都能提前拦下，三个案例有望各少一轮外审和一次修复派发。</p>
+<p class="files"><b>动哪些文件：</b><code>tools/external_review.py</code> 加推理强度、多代理开关和输出落盘；新增 <code>tools/flowlib/extreview.py</code>、<code>precheck.py</code>；外审提示词新增两次调用和差量复审两种模板。</p>
+
+<h3 id="change-data">改动 5　数据体检与缺口处置 <span class="pill new">按审批意见新增</span></h3>
+<p>原则有三条：数据缺不缺由机器查；缺了怎么办由你定；用 mock 跑出来的数字进不了结论。</p>
+
+<figure class="fig">
+  <p class="fig-title">数据体检在流程里的位置，以及 mock 这条支路</p>
+  <p class="fig-sub">蓝框是新增的机器检查和人工检查点；虚线框是 mock 试跑专属的步骤</p>
+  <div class="dg-scroll">
+  <svg class="dg" viewBox="0 28 968 324" role="img" aria-label="plan 写完之后先做数据体检。通过就进入外审和编码。有缺口就进入只能由你放行的检查点。选补数据、替代、缩小范围或砍掉要素后继续；选先用 mock 则生成模拟数据接入编码，验证只做试跑检查，然后停在试跑完成，等真实数据到位后重检并只重跑验证。">
+    <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+
+    <rect class="bx" x="16" y="44" width="136" height="48" rx="5"/>
+    <text class="t" x="84" y="65" text-anchor="middle">plan</text><text class="s" x="84" y="82" text-anchor="middle">声明数据需求</text>
+    <rect class="bx-kernel" x="216" y="44" width="136" height="48" rx="5"/>
+    <text class="t" x="284" y="65" text-anchor="middle">数据体检</text><text class="s" x="284" y="82" text-anchor="middle">机器逐条核对</text>
+    <rect class="bx" x="416" y="44" width="136" height="48" rx="5"/>
+    <text class="t" x="484" y="65" text-anchor="middle">外审 · 编码</text><text class="s" x="484" y="82" text-anchor="middle">spec_audit、implement</text>
+    <rect class="bx" x="616" y="44" width="136" height="48" rx="5"/>
+    <text class="t" x="684" y="65" text-anchor="middle">验证</text><text class="s" x="684" y="82" text-anchor="middle">verify</text>
+    <rect class="bx" x="816" y="44" width="136" height="48" rx="5"/>
+    <text class="t" x="884" y="65" text-anchor="middle">迭代 · 审计 · 报告</text><text class="s" x="884" y="82" text-anchor="middle">出 verdict</text>
+    <path class="ar" d="M152,62 H214" marker-end="url(#ah2)"/>
+    <path class="ar" d="M352,68 H414" marker-end="url(#ah2)"/><text class="l" x="383" y="60" text-anchor="middle">通过</text>
+    <path class="ar" d="M552,68 H614" marker-end="url(#ah2)"/>
+    <path class="ar" d="M752,68 H814" marker-end="url(#ah2)"/><text class="l" x="783" y="60" text-anchor="middle">真实数据</text>
+
+    <rect class="bx-kernel" x="188" y="146" width="192" height="48" rx="5"/>
+    <text class="t" x="284" y="167" text-anchor="middle">缺口处置检查点</text><text class="s" x="284" y="184" text-anchor="middle">只能由你放行</text>
+    <path class="ar" d="M284,92 V144" marker-end="url(#ah2)"/><text class="l" x="292" y="123">有缺口</text>
+    <path class="ar" d="M380,170 H484 V94" marker-end="url(#ah2)"/><text class="l" x="392" y="162">处置后继续</text>
+
+    <rect class="bx-mock" x="216" y="248" width="136" height="48" rx="5"/>
+    <text class="t" x="284" y="269" text-anchor="middle">生成 mock 数据</text><text class="s" x="284" y="286" text-anchor="middle">同结构 · 固定种子</text>
+    <path class="ar" d="M284,194 V246" marker-end="url(#ah2)"/><text class="l" x="292" y="225">先用 mock</text>
+    <path class="ar" d="M352,272 H520 V94" marker-end="url(#ah2)"/><text class="l" x="364" y="264">经覆盖目录接入</text>
+
+    <rect class="bx-mock" x="592" y="248" width="250" height="48" rx="5"/>
+    <text class="t" x="717" y="269" text-anchor="middle">停在「试跑完成」</text><text class="s" x="717" y="286" text-anchor="middle">不迭代 · 不出结论 · 等真实数据</text>
+    <path class="ar" d="M684,92 V246" marker-end="url(#ah2)"/><text class="l" x="692" y="172">用了 mock：只做试跑检查</text>
+    <path class="ar" d="M717,296 V338 H168 V80 H214" marker-end="url(#ah2)"/><text class="l" x="300" y="330">真实数据到位：重检，结构一致只重跑验证</text>
+  </svg>
+  </div>
+  <figcaption>「处置后继续」包括四种选择：补完数据重检通过、用等价数据替代、缩小到有数据的范围、砍掉相关要素。缺口在花钱做外审和编码之前就暴露。</figcaption>
+</figure>
+
+<h4>三道机器检查</h4>
+<div class="tbl"><table class="wide">
+  <thead><tr><th>检查</th><th>什么时候</th><th>查什么</th></tr></thead>
+  <tbody>
+    <tr><td class="k">目录体检</td><td>安装时，以及每次新建案例时</td><td>数据根下每个文件的字段、行数、日期起止；带证券代码和日期的表再算每年的标的数和交易日数。只读元数据，秒级完成。结果生成一张「数据实况表」交给 planner，手写目录降为说明性文字</td></tr>
+    <tr><td class="k">需求体检</td><td>plan 写完之后，外审和编码之前</td><td>逐条核对 plan 的数据需求：文件在不在、字段齐不齐、区间盖不盖得住（含预热窗口）、每年标的数有没有塌陷、频率、主键重复、关键字段缺失率、财务数据有没有披露日列</td></tr>
+    <tr><td class="k">运行期复核</td><td>verify 时</td><td>这次运行实际读了哪些文件、各自是真实还是 mock；数据在体检之后有没有变过</td></tr>
+  </tbody>
+</table></div>
+
+<p>为了让机器查得动，plan 的每条数据需求多几个可选字段。旧 plan 没有这些字段，只做文件存在性检查。</p>
+<pre><code>data_requirements:
+  - name: H股个股日行情
+    source: hkshare_stock_quote.parquet
+    status: available
+    files: [hkshare_stock_quote.parquet]     # 以下为新增的可选字段
+    fields: [stock_code, date, close]
+    period: [2014-01-01, 2026-03-31]         # 含预热窗口
+    min_codes: 300                           # 截面最少标的数
+    core: false                              # 缺了是否做不出主结论
+    elements: [B7, R5, R7, R10]              # 依赖它的规格要素</code></pre>
+<p>体检不过时，你在检查点看到的是这样一段（示意，数字取自上面的实测）：</p>
+<pre><code>数据缺口 1 / 1
+需求    H股个股日行情（非核心）
+结论    部分满足
+实测    字段齐全；2014–2024 每年有数据的股票 1–9 只，低于要求的 300 只；
+        2025 年起 2500 只以上
+影响    B7、R5、R7、R10（H 股平行回测与持仓清单）
+可选    补数据 / 等价替代 / 缩小范围 / 先用 mock 试跑 / 砍掉相关要素 / 终止</code></pre>
+
+<h4>缺口怎么处置</h4>
+<div class="tbl"><table class="wide">
+  <thead><tr><th>处置</th><th>含义</th><th>之后</th></tr></thead>
+  <tbody>
+    <tr><td class="k">补数据</td><td>你去补</td><td>暂停，补完运行 <code>flow data recheck</code></td></tr>
+    <tr><td class="k">等价替代</td><td>用本地等价数据。沿用现有规则，strict 模式下仍须切到实验模式</td><td>登记假设，继续</td></tr>
+    <tr><td class="k">缩小范围</td><td>只在有数据的区间或标的上复现</td><td>登记假设，继续</td></tr>
+    <tr><td class="k">先用 mock 试跑</td><td>用模拟数据先把代码和流水线跑通。这一轮只算试跑，不出结论</td><td>见下面的规矩</td></tr>
+    <tr><td class="k">砍掉相关要素</td><td>标为不可复现，其余照做</td><td>继续</td></tr>
+    <tr><td class="k">终止</td><td>放弃这份研报</td><td>案例结束</td></tr>
+  </tbody>
+</table></div>
+<p>无人值守时的默认做法可以在启动时声明：<code>--on-missing ask|mock|stop</code>。默认是 <code>ask</code>，停下来等你。</p>
+
+<h4>mock 的规矩</h4>
+<div class="tbl"><table class="wide">
+  <tbody>
+    <tr><td class="k">定位</td><td>选了 mock，这个案例整轮只算试跑。编码、内审、代码外审照常做：它们不依赖数据取值，真实数据到位后只要代码没变就仍然有效</td></tr>
+    <tr><td class="k">怎么生成</td><td>按来源优先级取：你给的样例文件；借一张结构相近的真实表改键、改日期，保留真实的截面分布和缺失形态；都没有才按字段类别随机生成。纯随机数据容易算出除零、奇异矩阵或空信号，所以排在最后。生成规格先在检查点给你看</td></tr>
+    <tr><td class="k">怎么接入</td><td>公共数据层新增统一的取数入口 <code>data_path()</code>，先查本案例的覆盖目录，再查数据根。代码不用为 mock 写分支，换回真实数据时也不用改代码</td></tr>
+    <tr><td class="k">怎么隔离</td><td>试跑的结果写到单独的目录，真实结果目录里只会有真实数据算出来的东西。每次运行留一份数据清单，写明每个文件是真实还是 mock。门禁核对真实结果的清单里没有 mock 文件</td></tr>
+    <tr><td class="k">停在哪</td><td>验证只查三件事：跑得通、产物齐、指标都算得出。然后停在「试跑完成」，不迭代、不出 verdict、不写报告</td></tr>
+    <tr><td class="k">之后怎么走</td><td>等真实数据：到位后重检，结构和 mock 规格一致只重跑验证，不一致则相关 milestone 的编码标为过期。也可以改用别的处置按真实数据走完，或终止</td></tr>
+    <tr><td class="k">不做什么</td><td>不做逐指标的隔离，不做真假数据混跑。缺的是非核心数据而又想先拿到主体结论，就选「砍掉相关要素」或「缩小范围」，数据到了再补回</td></tr>
+  </tbody>
+</table></div>
+<p class="files"><b>动哪些文件：</b>新增 <code>tools/flowlib/datacheck.py</code>、<code>tools/mockdata.py</code>；<code>common/data_loader.py</code> 加 <code>data_path()</code> 与数据清单；<code>templates/_plan_template.md</code>、<code>agents/quant-planner.md</code> 加可选字段；<code>tools/check_gates.py</code> 新增三条数据类检查（plan 两条、verify 一条），只对新建案例生效，现有检查不动。</p>
+
+<h3 id="change-board">改动 6　看板、事件流与计量</h3>
+<ul>
+  <li>每一步的开始、结束、门禁结论、返工、检查点都追加进 <code>events.jsonl</code>。返工派发从此有账可查。</li>
+  <li>每次 <code>flow done</code> 之后重新生成一个静态页面 <code>board.html</code>：当前停在哪、等谁、停了多久；阶段 × milestone 的进度；待你决定的检查点；门禁明细；用量；返工清单。不起服务，双击就能开。另有一个全案例总览页。</li>
+  <li>在途步骤超过 3 小时没有新事件就告警并开检查点。token 和时长预算超限同样开检查点。</li>
+  <li>用量分三档记账：任务文件字节数和耗时，总是有；宿主回报的 token 数，Claude Code 有；宿主会话记录里的精确值，读得到就用。未缓存输入、缓存读写、输出分开记。</li>
+  <li>外审的用量和每次运行的耗时也记进来。r010 的外审在 Codex 侧用掉 4619 万 token，今天哪里都查不到。</li>
+  <li><code>state.json</code> 只留最近 50 条事件，体积从 30–49KB 降到几 KB。</li>
+</ul>
+
+<h3 id="change-hosts">改动 7　两个宿主与旧案例</h3>
+<ul>
+  <li>工单协议与宿主无关。每个宿主一张适配卡，只回答四件事：怎么把工单变成一次派发、怎么后台执行与等待、怎么向人提问、会话记录在哪。提供 Claude Code、Codex 和一张通用卡。</li>
+  <li>Codex 侧重新同步角色文件并加一致性测试；派发一律不继承主会话历史；经济档补齐。</li>
+  <li>9 个未收尾的旧案例：当前阶段按原执行卡跑完，下一阶段起进入内核。状态文件首次写入时自动迁移并留备份，旧执行卡保留到这些案例全部离开。</li>
+</ul>
+</section>
+
+<section>
+<h2 id="order">实施顺序</h2>
+<p>按风险从低到高分六批，每批做完停下来给你验收，再做下一批。每项能力先做成可以单独调用的命令，旧执行卡也能用，再由内核接管对应阶段。</p>
+<div class="tbl"><table class="wide">
+  <thead><tr><th>批次</th><th>做什么</th><th>做完你能得到什么</th><th>验收</th><th>花 token</th></tr></thead>
+  <tbody>
+    <tr><td class="k">A　地基与可见</td><td>案例锁、状态迁移、事件流、用量采集、看板与总览、数据目录体检；只拼不投喂的影子任务文件</td><td>看板能打开，12 个旧案例都能显示；数据目录有了实况表</td><td>抽函数前后的门禁输出逐条相同</td><td>不花</td></tr>
+    <tr><td class="k">B　闸门与检查点</td><td>状态流转守卫与三个合法出口、熔断计数、检查点与审阅包、禁读护栏、停滞告警与预算</td><td>主会话无法自行放行</td><td>以编排者身份放行阻断检查点，被拒并留痕</td><td>不花</td></tr>
+    <tr><td class="k">C　内核前段与外审</td><td>init、extract、plan、spec_audit 交给内核；外审引擎一次到位，三个审查点共用；结果一致性预检；同一 PDF 撞库提示；数据需求体检与缺口处置</td><td>新案例前四个阶段由内核驱动；外审不再超时作废；缺数据在 plan 之后就拦下</td><td>回放测试；r010 的代码外审重放一次，应在时限内给出结论；r010 的数据需求回放应报出港股缺口；Codex 冒烟</td><td>外审重放少量</td></tr>
+    <tr><td class="k">D　内核中段</td><td>implement、code_audit、verify 交给内核；任务文件切片与回执；mock 试跑（生成、统一取数入口、数据清单、试跑目录）</td><td>最费 token 的一段切到新路径；mock 试跑可用</td><td>r009 局部重跑对照；mock 端到端自测</td><td>对照一次</td></tr>
+    <tr><td class="k">E　内核后段与外壳</td><td>iterate、result_audit、oos、report、review、revise 交给内核；迭代与报告摘要；<code>SKILL.md</code> 压缩；Codex 同步</td><td>全流程由内核驱动</td><td>回放测试；审计发现数等保真指标不降</td><td>不花</td></tr>
+    <tr><td class="k">F　重开与收尾</td><td>改动失效标注与 <code>flow reopen</code>；放行凭据硬化；文档与版本号 3.0.0</td><td>改一处只重跑受影响的部分</td><td>回放 r009 的两次 revise，应算出重跑 m2–m5</td><td>不花</td></tr>
+  </tbody>
+</table></div>
+
+<h4>怎么证明省了</h4>
+<p>r010 跑在第三个宿主上，没有留下任何用量记录，所以 token 对照改用 r009：把它复制成新编号、回退到编码起点，只重跑 m1、m2 两个 milestone，和原记录逐次派发对比。</p>
+<ul>
+  <li>目标：coder 任务文件不超过现行全量的四成；主会话每次派发不超过 4 次内核调用；同一段流程的累计输入和未缓存输入各降四成以上。</li>
+  <li>保真指标不得下降：内审和外审的发现数与严重度、门禁首过率、已对上的指标数。</li>
+  <li>起点是从终态文书回退出来的，带着首跑的后见之明。派发次数的对比会偏乐观，主要看单次派发的上下文和轮数。</li>
+  <li>外审另做一次重放：用新引擎重跑 r010 的代码外审，看能否在时限内给出结论，并对比原来两次尝试的 2573 万累计输入。这一项要花少量 Codex 额度。</li>
+</ul>
+</section>
+
+<section>
+<h2 id="scope">不动的与后续</h2>
+<div class="two">
+  <div>
+    <h4>本轮不动</h4>
+    <ul>
+      <li>12 个阶段和现有门禁检查项的判定，只新增数据类和一致性类检查</li>
+      <li>达标口径 <code>standards.json</code></li>
+      <li>机器解析的文书格式，数据需求只加可选字段</li>
+      <li>异构外审三审查点与盲提取</li>
+      <li>防偷懒的刻意冗余</li>
+      <li>量研桌面里的内置副本</li>
+      <li>公共回测引擎的提速，不单列一批，理由见下一节</li>
+    </ul>
+  </div>
+  <div>
+    <h4>后三期，本轮只留扩展点</h4>
+    <ul>
+      <li><b>第三期　多源数据层。</b>数据库、API、MCP 的适配与取数快照，接在本轮的体检接口后面。</li>
+      <li><b>第四期　多篇引用与知识库。</b>一个案例挂多份资料、引用台账；本地案例库、知识库回写、Markdown 写出。</li>
+      <li><b>第五期　本体与量研桌面。</b>可选适配，默认关闭，内核不依赖它。</li>
+    </ul>
+  </div>
+</div>
+</section>
+
+<section>
+<h2 id="compare">对照 Gemini 的评估：改了什么，没改什么</h2>
+<p>对方的每条意见我都回到会话记录和代码里核对了一遍。九条里采纳四条，补写一条，收窄一条，路线不变一条；另有两条的事实判断不成立。</p>
+<div class="tbl"><table class="wide">
+  <thead><tr><th>对方的意见</th><th>我核对到的事实</th><th>处理</th></tr></thead>
+  <tbody>
+    <tr><td>外审超时没治到根上，放宽时限只会多烧 token</td><td>属实。r010 的外审以 ultra 强度运行、分段读文件，四次超时用掉 3157 万 token。另有对方没提到的一点：审查方自己再分子代理</td><td><span class="pill new">采纳</span><br>见改动 4</td></tr>
+    <tr><td>外审前加静态预检，减少结果外审的轮数</td><td>属实，而且比对方说的更明确：三个案例的 8 条 critical 全是机械性不一致</td><td><span class="pill new">采纳</span><br>见改动 4</td></tr>
+    <tr><td>复审应该只看差量</td><td>属实。r010 的第二轮复审用的是完整提示词</td><td><span class="pill new">采纳</span><br>见改动 4</td></tr>
+    <tr><td>加一道防止误读大文件的护栏</td><td>合理。范围扩大为按角色的禁读清单，不只防大文件</td><td><span class="pill new">采纳</span><br>见改动 3</td></tr>
+    <tr><td>报告里的对比表不该手抄</td><td>方案里原本就有，上一版说明页漏写了</td><td><span class="pill next">补写</span><br>见改动 2</td></tr>
+    <tr><td>mock 支路过度设计，建议砍掉</td><td>复杂度的批评成立，纯随机数据容易算出退化结果的担心也成立。但 mock 是你提的要求</td><td><span class="pill next">收窄</span><br>整轮只算试跑，不做逐指标隔离；模拟数据优先借真实表生成</td></tr>
+    <tr><td>内核不要写成固定的大状态机，改成薄工具包</td><td>代码驱动内核是你已经定的路线，闸门靠约定被绕过也正是文字编排的问题。但「漏判就卡死」的风险是真的</td><td><span class="pill next">路线不变</span><br>补两条：工具层与调度层分开；任何阶段可退回执行卡驱动</td></tr>
+    <tr><td>输出 token 最贵，手抄表格是头号开支</td><td>不成立。按对方给的权重折算，r007 的输出只占全案开支的 10%，缓存读占 62%</td><td><span class="pill">主轴不变</span><br>手抄表格仍然去掉，理由是抄错会被外审打回</td></tr>
+    <tr><td>公共引擎读盘和循环慢，要单列一批提速</td><td>没有找到「卡几小时」的证据。单次完整运行 r010 约 5 秒、r008 约 12 秒、r009 约 22 分钟、r007 约 15 分钟；慢的两例，一个基本不经过公共引擎，一个慢在模型训练</td><td><span class="pill">本轮不单列</span><br>只加带列裁剪和日期下推的取数入口，并把运行耗时记下来，按数据再定</td></tr>
+  </tbody>
+</table></div>
+</section>
+
+<section>
+<h2 id="confirm">待你确认</h2>
+<ol>
+  <li><b>数据缺口无人应答时的默认做法。</b>我设的是停下来等。如果你希望无人值守时自动用 mock 先试跑，可以改成 mock。</li>
+  <li><b>mock 收窄为整轮试跑。</b>用了 mock，这一轮就不出结论，停在验证之后等真实数据。不做「核心用真实数据出结论、非核心用 mock 占位」的混跑；你需要的话我再加回来。</li>
+  <li><b>外审的默认推理强度。</b>首轮 high，复审 medium。r010 当时是 ultra，你现在的全局配置是 high。</li>
+  <li><b>token 对照用 r009。</b>只重跑 m1、m2；r010 是否再全程重跑一遍，看过结果再定。</li>
+  <li><b>9 个未收尾的旧案例继续支持，</b>不做归档。</li>
+  <li><b>公共引擎提速本轮不单列，</b>先把运行耗时记下来，按数据再定。</li>
+</ol>
+</section>
+
+<footer>
+  <p>数据出处：r008、r009 的 Claude Code 会话记录；r007 与 r010 外审的 Codex 会话记录；各案例 <code>state.json</code> 与文书字节数；对本机数据目录的只读实测；两路设计评审的离线试切。完整方案与实施记录在同目录的 <code>2026-11-21-reproduce-v3-design.md</code>。</p>
+</footer>
+
+</div></main>
+
+<div id="tip" role="status" hidden><b></b><span></span></div>
+<script>
+(function () {
+  var tip = document.getElementById('tip');
+  if (!tip) return;
+  var tv = tip.querySelector('b'), tn = tip.querySelector('span');
+  function show(el, x, y) {
+    tv.textContent = el.getAttribute('data-v') || '';
+    tn.textContent = el.getAttribute('data-n') || '';
+    tip.hidden = false;
+    var r = tip.getBoundingClientRect();
+    var vw = document.documentElement.clientWidth;
+    var left = Math.min(Math.max(8, x + 12), vw - r.width - 8);
+    var top = y - r.height - 12;
+    if (top < 8) top = y + 18;
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
+  }
+  function hide() { tip.hidden = true; }
+  var marks = document.querySelectorAll('[data-v]');
+  for (var i = 0; i < marks.length; i++) {
+    (function (el) {
+      el.addEventListener('pointermove', function (e) { show(el, e.clientX, e.clientY); });
+      el.addEventListener('pointerleave', hide);
+      el.addEventListener('focus', function () {
+        var r = el.getBoundingClientRect();
+        show(el, r.left + r.width / 2, r.top);
+      });
+      el.addEventListener('blur', hide);
+    })(marks[i]);
+  }
+  window.addEventListener('scroll', hide, { passive: true });
+})();
+</script>
+</body>
+</html>

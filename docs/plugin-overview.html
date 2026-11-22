@@ -227,18 +227,21 @@
   <a href="#pipeline">复现流水线全景</a>
   <a href="#install">安装与首次配置</a>
   <a class="lv2" href="#setup5">配置详解</a>
-  <a class="lv2" href="#catalog">数据目录维护</a>
+  <a class="lv2" href="#catalog">数据体检与缺口处置</a>
   <a href="#how">运作方式</a>
+  <a class="lv2" href="#kernel">内核与工单</a>
   <a class="lv2" href="#rules">六条硬规则</a>
-  <a class="lv2" href="#stages">十一阶段与门禁</a>
-  <a class="lv2" href="#agents">七个子 agent</a>
+  <a class="lv2" href="#stages">十二阶段与门禁</a>
+  <a class="lv2" href="#agents">八个子 agent</a>
   <a class="lv2" href="#audit">三层审计体系</a>
-  <a class="lv2" href="#iterate">迭代引擎与人工闸门</a>
+  <a class="lv2" href="#iterate">迭代引擎</a>
+  <a class="lv2" href="#checkpoints">检查点：停在哪、谁放行</a>
+  <a class="lv2" href="#board">看板与用量</a>
   <a class="lv2" href="#verdict">达标判定与可信度评级</a>
   <a href="#modes">复现模式</a>
   <a href="#manual">使用手册</a>
   <a class="lv2" href="#commands">子命令速查</a>
-  <a class="lv2" href="#scenarios">三个典型场景</a>
+  <a class="lv2" href="#scenarios">五个典型场景</a>
   <a class="lv2" href="#artifacts">产物地图</a>
   <a href="#faq">常见问题</a>
   <a href="#versions">版本演进</a>
@@ -248,20 +251,25 @@
 
 <main>
 <header class="hero" id="overview">
-  <div class="eyebrow">Claude Code Plugin · Quant Research</div>
+  <div class="eyebrow">Claude Code / Codex Plugin · Quant Research</div>
   <h1>quant-report-reproduce<br>量化研报复现流水线</h1>
-  <p class="lede">给它一份量化研报 PDF，它产出与原文逐项对齐的策略代码、回测结果，和一份带可信度评级的复现报告——中间的提取、规划、实现、验证、审计、迭代，全部由带门禁的多 agent 流水线自动完成。</p>
+  <p class="lede">给它一份量化研报 PDF，它产出与原文逐项对齐的策略代码、回测结果，和一份带可信度评级的复现报告——中间的提取、规划、实现、验证、审计、迭代，由带门禁的多 agent 流水线完成；每一步派谁、读什么、过不过关由一个确定性的内核决定，需要人拍板的地方它会停下来等你。</p>
   <div class="hero-meta">
-    <span class="pill gate">v2.11.0</span>
+    <span class="pill gate">v3.0.0</span>
     <span class="pill dim">1 skill + 8 agents</span>
     <span class="pill dim">12 阶段门禁状态机</span>
-    <span class="pill dim">codex 三审查点外审</span>
+    <span class="pill dim">代码驱动内核</span>
+    <span class="pill dim">异构外审三审查点</span>
   </div>
   <pre><code><span class="cmt"># 安装（Claude Code 内执行，两步缺一不可：注册源 → 安装）</span>
 /plugin marketplace add https://github.com/Hedicx2020/ghquant_plugin
 /plugin install quant-report-reproduce@hedi-quant
 
-<span class="cmt"># 进入你的工作目录，首次配置（五项问卷 + 自动落地骨架）</span>
+<span class="cmt"># Codex CLI 里对应的两步</span>
+codex plugin marketplace add https://github.com/Hedicx2020/ghquant_plugin
+codex plugin add quant-report-reproduce@hedi-quant-codex
+
+<span class="cmt"># 进入你的工作目录，首次配置（六项问卷 + 自动落地骨架 + 数据目录体检）</span>
 /reproduce setup
 
 <span class="cmt"># 把研报 PDF 放进 reports/，起跑</span>
@@ -273,16 +281,16 @@
 
 <section id="pipeline">
   <h2>复现流水线全景</h2>
-  <p>一份研报从 PDF 到最终报告要过 12 个阶段。每个阶段结束时由机器门禁（<code>check_gates</code>）逐项核验产物，<span class="pill pass">PASS</span> 才放行，<span class="pill fail">FAIL</span> 按预设分支修复重来——口头声称完成无效，判定只认文件和数字。</p>
+  <p>一份研报从 PDF 到最终报告要过 12 个阶段。每个阶段结束时由机器门禁（<code>check_gates</code>）逐项核验产物，<span class="pill pass">PASS</span> 才放行，<span class="pill fail">FAIL</span> 按预设分支修复重来——口头声称完成无效，判定只认文件和数字。v3 起门禁由内核在阶段收口处自己执行并记入事件流，不再依赖编排会话「记得去跑」。</p>
   <div class="track-scroll">
     <div class="track">
-      <div class="stage"><div class="s-num">01</div><div class="s-name">init</div><div class="s-cn">初始化</div><div class="s-gate"><span class="pill gate term" tabindex="0" data-tip="初始化出口门禁：工作区骨架建立、PDF 转文本页数一致、状态文件就绪">G-IN</span></div></div>
+      <div class="stage"><div class="s-num">01</div><div class="s-name">init</div><div class="s-cn">初始化</div><div class="s-gate"><span class="pill gate term" tabindex="0" data-tip="初始化出口门禁：工作区骨架建立、PDF 转文本页数一致、状态文件就绪（同时查同一份 PDF 是否已有案例、体检数据目录）">G-IN</span></div></div>
       <div class="stage"><div class="s-num">02</div><div class="s-name">extract</div><div class="s-cn">研报提取</div><div class="s-gate"><span class="pill gate term" tabindex="0" data-tip="研报提取出口门禁：规格三件套齐全、要素带页码引用、覆盖矩阵行数与要素守恒">G-EX</span></div></div>
-      <div class="stage"><div class="s-num">03</div><div class="s-name">plan</div><div class="s-cn">复现规划</div><div class="s-gate"><span class="pill gate term" tabindex="0" data-tip="复现规划出口门禁：分诊字段合法、每条要素有数据映射与里程碑归属、歧义全登记">G-PL</span></div></div>
+      <div class="stage"><div class="s-num">03</div><div class="s-name">plan</div><div class="s-cn">复现规划</div><div class="s-gate"><span class="pill gate term" tabindex="0" data-tip="复现规划出口门禁：分诊字段合法、每条要素有数据映射与里程碑归属、歧义全登记；v3 新建案例另查每条数据需求都有体检结论、每个缺口都有处置决定">G-PL</span></div></div>
       <div class="stage"><div class="s-num">04</div><div class="s-name">spec_audit</div><div class="s-cn">规格审计</div><div class="s-gate"><span class="pill gate term" tabindex="0" data-tip="规格审计出口门禁：盲提取对照零漏抄、审计意见逐条回应闭环">G-SA</span></div></div>
       <div class="stage"><div class="s-num">05</div><div class="s-name">implement</div><div class="s-cn">代码实现</div><div class="s-gate"><span class="pill gate term" tabindex="0" data-tip="代码实现出口门禁：代码可编译、逐里程碑完成登记、矩阵回填真实实现位置">G-IM</span></div></div>
       <div class="stage"><div class="s-num">06</div><div class="s-name">code_audit</div><div class="s-cn">代码审计</div><div class="s-gate"><span class="pill gate term" tabindex="0" data-tip="代码审计出口门禁：公式逐要素对照、未来函数与数据对齐核查、意见闭环">G-CA</span></div></div>
-      <div class="stage"><div class="s-num">07</div><div class="s-name">verify</div><div class="s-cn">运行验证</div><div class="s-gate"><span class="pill gate term" tabindex="0" data-tip="运行验证出口门禁：亲自跑通 main.py、逐项对数重算容差、图表与 Excel 产物齐全新鲜">G-VF</span></div></div>
+      <div class="stage"><div class="s-num">07</div><div class="s-name">verify</div><div class="s-cn">运行验证</div><div class="s-gate"><span class="pill gate term" tabindex="0" data-tip="运行验证出口门禁：亲自跑通 main.py、逐项对数重算容差、图表与 Excel 产物齐全新鲜；v3 新建案例另查真实结果的数据清单里没有模拟数据">G-VF</span></div></div>
       <div class="stage cond"><div class="s-num">08</div><div class="s-name">iterate</div><div class="s-cn">迭代修正</div><div class="s-gate"><span class="pill gate term" tabindex="0" data-tip="迭代修正出口门禁：每轮三件套（诊断/修改/复验对数）齐全、防兜圈规则、超差项全归因">G-IT</span></div></div>
       <div class="stage"><div class="s-num">09</div><div class="s-name">result_audit</div><div class="s-cn">结果审计</div><div class="s-gate"><span class="pill gate term" tabindex="0" data-tip="结果审计出口门禁：结论没有编——数字与产物一致、归因真实、无未闭环的阻断意见">G-RA</span></div></div>
       <div class="stage cond"><div class="s-num">10</div><div class="s-name">oos</div><div class="s-cn">样本外分析</div><div class="s-gate"><span class="pill gate term" tabindex="0" data-tip="样本外分析出口门禁：复现达标才跑，样本外区间与研报区间零重叠、结论四选一、短样本强制警示">G-OS</span></div></div>
@@ -303,18 +311,20 @@
   <h3>环境要求</h3>
   <ul>
     <li><strong>uv</strong>（硬前置）：所有工具经 <code>uv run</code> 调用；依赖缺失时在工作目录执行 <code>uv sync</code>。</li>
-    <li><strong>Claude 订阅档位</strong>：7 个子 agent 中 6 个使用 opus，建议 Max 档位。可自行编辑安装副本 <code>agents/*.md</code> 的 model 字段下调（复现质量自负）。</li>
-    <li><strong>codex CLI</strong>（软前置）：外部三审查点使用。<strong>未安装或额度用完都不断链</strong>——自动降级为 Claude 替身盲审（同一审查任务、独立上下文、意见照样逐条回应闭环），替身也不可行才标记跳过；发生失败性降级时最终报告如实标注，可信度评级封顶 B。装好 / 额度恢复后无需重新配置，下次运行自动启用。</li>
+    <li><strong>订阅档位</strong>：8 个子 agent 中 7 个使用 opus，建议 Max 档位。可开经济模式让机械性角色降档，或自行编辑安装副本 <code>agents/*.md</code> 的 model 字段下调（复现质量自负）。</li>
+    <li><strong>外审引擎</strong>（软前置）：外审由<strong>另一家族</strong>的命令行工具执行——在 Claude Code 里跑用 <code>codex</code> CLI，在 Codex 里跑用 <code>claude</code> CLI。<strong>未安装或额度用完都不断链</strong>——自动降级为同宿主替身盲审（同一审查任务、独立上下文、意见照样逐条回应闭环），替身也不可行才标记跳过；发生失败性降级时最终报告如实标注，可信度评级封顶 B。装好 / 额度恢复后无需重新配置，下次运行自动启用。</li>
+    <li><strong>python3</strong>（软前置，仅 Claude Code）：两个钩子脚本靠它启动——读文件前的禁读护栏、检查点待决时记下你的原话作为放行凭据。<code>python3</code> 不在 PATH 上时钩子不生效，流程照常，放行记录降为「自述」级并在看板标出。</li>
   </ul>
   <h3>三步开始</h3>
   <ol>
     <li>安装插件（两步）：<code>/plugin marketplace add https://github.com/Hedicx2020/ghquant_plugin</code> 注册源，然后 <code>/plugin install quant-report-reproduce@hedi-quant</code> 安装（重启会话生效）</li>
-    <li>进入你自己的工作目录（任意空目录），运行 <code>/reproduce setup</code>——一次问卷收五项配置，随后自动落地：<code>.reproduce.json</code> 配置、<code>templates/</code>（数据目录模板与达标标准）、<code>common/</code>（内置回测库）、<code>pyproject.toml</code>、目录树，并检测 uv / Python 依赖 / codex。</li>
-    <li>维护 <code>templates/data_catalog.md</code>（见下），把 PDF 放进 <code>reports/</code>，运行 <code>/reproduce reports/xxx.pdf</code>。</li>
+    <li>进入你自己的工作目录（任意空目录），运行 <code>/reproduce setup</code>——分两批问卷收六项配置，随后自动落地：<code>.reproduce.json</code> 配置、<code>templates/</code>（达标标准与各类模板）、<code>common/</code>（内置回测库）、<code>.codex/agents/</code>（Codex 侧角色）、<code>pyproject.toml</code>、目录树，并检测 uv / Python 依赖 / codex / claude / python3，最后体检一遍你的数据目录。</li>
+    <li>看一眼体检结果（见下「数据体检」），把 PDF 放进 <code>reports/</code>，运行 <code>/reproduce reports/xxx.pdf</code>。</li>
   </ol>
   <p>setup 幂等可重跑：已有配置默认保留，你改过的模板文件永不被覆盖（插件侧更新只列清单提示，不动你的文件）。</p>
 
   <h3 id="setup5">配置详解（问卷六项 + 配置文件项）</h3>
+  <p>前六项进问卷；其余有默认值，提到了才需要改——直接编辑 <code>.reproduce.json</code>，或在建案时用同名参数单独指定。</p>
   <div class="tbl-scroll"><table>
     <tr><th class='c-narrow'>配置项</th><th class='c-narrow'>字段</th><th class='c-narrow'>默认</th><th class='c-wide'>含义与影响</th></tr>
     <tr><td class="c-narrow"><strong>数据路径</strong></td><td class="c-narrow"><code>data_root</code></td><td class="c-narrow"><code>~/local_data</code></td><td>本地 parquet 数据库根目录。<code>common/data_loader.py</code> 从这里读行情、财务等数据。</td></tr>
@@ -324,48 +334,86 @@
     <tr><td class="c-narrow"><strong>偏差容忍</strong></td><td class="c-narrow"><code>default_max_rel_dev</code></td><td class="c-narrow">按内置标准</td><td>你能接受的复现值与原报告的偏差。默认走 <code>standards.json</code> 分类型精细容差；自定义（0.5%–50%）后，所有按<strong>相对偏差</strong>判定的指标统一用该容忍度，达标门禁与最终报告一致生效。</td></tr>
     <tr><td class="c-narrow"><strong>经济模式</strong></td><td class="c-narrow"><code>economy</code></td><td class="c-narrow">关闭</td><td>开启后机械性角色（提取 / 验证 / 样本外分析）派发降为 sonnet，token 约降三成；写码 / 审计 / 归因等质量敏感角色保持 opus 不受影响。</td></tr>
     <tr><td class="c-narrow"><strong>外审档位</strong></td><td class="c-narrow"><code>audit_level</code></td><td class="c-narrow"><code>strict</code></td><td>配置文件项（不进问卷）。<code>standard</code> 时规格/代码外审改为触发式（关键歧义、首次类型、hard、ml 才跑，跳过时明示留档），<strong>结果外审任何档位必跑</strong>——反虚报是最后防线。</td></tr>
+    <tr><td class="c-narrow"><strong>数据缺口无人应答时</strong></td><td class="c-narrow"><code>default_on_missing</code></td><td class="c-narrow"><code>ask</code></td><td>体检发现数据有缺口、而当时没人回答时怎么办。<code>ask</code>：停下等你（默认）；<code>mock</code>：先用模拟数据把流程试跑通，停在「试跑完成」等你；<code>stop</code>：停下不追问。建案时可用 <code>--on-missing</code> 单独指定。</td></tr>
+    <tr><td class="c-narrow"><strong>预算</strong></td><td class="c-narrow"><code>default_budget_hours</code><br><code>default_budget_tokens</code></td><td class="c-narrow">不设</td><td>单个案例的耗时 / token 预算，超了就停在检查点问你要不要加。token 预算要读得到宿主的会话记录才生效。</td></tr>
+    <tr><td class="c-narrow"><strong>停滞阈值</strong></td><td class="c-narrow"><code>flow.stall_hours</code></td><td class="c-narrow">3 小时</td><td>在途的一步超过这么久没有新进展，状态与看板告警并开检查点；外审在后台执行期间不误报。</td></tr>
+    <tr><td class="c-narrow"><strong>重派与临时派发上限</strong></td><td class="c-narrow"><code>flow.redispatch_limit</code><br><code>flow.adhoc_limit</code></td><td class="c-narrow">2 次 / 5 次</td><td>同一步在首派之外最多再派几次（可按步骤名单独放宽）；步骤表之外的临时派发每个案例最多几次。重派用完即停在检查点交给你；临时派发用完会被拒绝，由你决定下一步。</td></tr>
+    <tr><td class="c-narrow"><strong>外审设置</strong></td><td class="c-narrow"><code>external_review.*</code></td><td class="c-narrow">见右</td><td>每次调用的时限（默认 30 分钟）、首轮与复审的推理强度（默认 high / medium）、输入包大小上限（默认 codex 320KB、claude 200KB）、是否用差量复审，都可以整体或按审查点调整。</td></tr>
   </table></div>
   <div class="note">
     <strong>偏差是「相对偏差」</strong>：判定式为 |复现值 − 研报值| ÷ |研报值|。研报年化 10%、容忍 5% ⇒ 允许区间 <span class="num">9.5% ~ 10.5%</span>（不是 5%~15%）。研报值越小同样容忍越苛刻，所以近零指标（如因子 IC）在内置标准里配有绝对偏差兜底（abs_eps），自定义容忍不改变这些特殊判定的语义。
   </div>
   <p>优先级固定：<strong>命令行显式参数 &gt; <code>.reproduce.json</code> &gt; 内置默认</strong>。配置文件可直接编辑，或重跑 <code>/reproduce setup</code> 选「重新配置」。</p>
 
-  <h3 id="catalog">数据目录维护（关键一步）</h3>
-  <p><code>templates/data_catalog.md</code> 是分诊阶段判断「研报所需数据是否可得」的<strong>唯一依据</strong>：写漏会被误判为数据缺失（对应支线降级不做），写多会引发运行期报错。建议每张表一节，写明文件名、关键列、时间范围、口径注意事项——尤其财务数据必须按披露日（<code>info_publ_date</code>）对齐，系统的代码审计会逐点核查未来函数。</p>
+  <h3 id="catalog">数据体检与缺口处置</h3>
+  <p>v3 之前，数据够不够用靠规划 agent 对着一份手写的数据目录来判断，机器不查——目录写错一行，缺口要到写代码时才暴露。现在改成<strong>机器先查清，缺了由你选怎么办</strong>：</p>
+  <ol>
+    <li><strong>数据目录体检</strong>（setup 与每次建案时自动跑，只读元数据，秒级）：记下数据根目录里每个文件的字段、行数、日期起止，带证券代码的表再算每年的标的数与交易日数，生成一张「数据实况表」交给规划 agent。手写的 <code>templates/data_catalog.md</code> 降为说明性文字，与实况对不上的地方会列为提示。</li>
+    <li><strong>数据需求体检</strong>（规划阶段内，不花 token）：复现计划里的每条数据需求逐条核对——文件在不在、字段齐不齐、区间盖不盖得住、某些年份标的数有没有塌陷、主键有没有重复、财务数据有没有披露日列。结论四选一：通过 / 部分满足 / 缺失 / 未机检（数据库、接口等查不了的来源）。</li>
+    <li><strong>缺口处置</strong>（只能由你决定）：系统停在检查点，逐条列出缺什么、影响哪些要素与指标、是不是核心，然后等你选：</li>
+  </ol>
+  <div class="tbl-scroll"><table>
+    <tr><th class='c-narrow'>处置</th><th class='c-wide'>含义</th><th class='c-mid'>之后</th></tr>
+    <tr><td class="c-narrow"><strong>补数据</strong></td><td>你去把数据补上</td><td>暂停；补完后重新体检，通过即继续</td></tr>
+    <tr><td class="c-narrow"><strong>等价替代</strong></td><td>用本地的等价数据代替（严格模式下须切到实验模式）</td><td>登记为假设，继续</td></tr>
+    <tr><td class="c-narrow"><strong>缩小范围</strong></td><td>只在有数据的区间或标的上复现</td><td>登记为假设，继续</td></tr>
+    <tr><td class="c-narrow"><strong>先用 mock 试跑</strong></td><td>用模拟数据先把代码和流水线跑通</td><td>整轮只算试跑：不出达标结论、不写报告，停在「试跑完成」等真实数据</td></tr>
+    <tr><td class="c-narrow"><strong>砍掉相关要素</strong></td><td>把依赖这份数据的要素标为不可行，其余照做</td><td>继续</td></tr>
+    <tr><td class="c-narrow"><strong>终止</strong></td><td>放弃这份研报</td><td>案例结束</td></tr>
+  </table></div>
+  <div class="note">
+    <strong>mock 数字不会混进结论</strong>：试跑的结果写在单独的目录（<code>output/&lt;id&gt;/results_mock/</code>）；每次运行读了哪些文件、各自是真实还是模拟，都记在数据清单里；门禁会拦下「真实结果里出现过模拟数据」的情况。真实数据到位后，代码没变的部分（编码、代码审计）继续有效，只重跑验证。
+  </div>
+  <p>财务数据仍须按披露日（<code>info_publ_date</code>）对齐，代码审计会逐点核查未来函数。复现代码一律经 <code>common/data_loader.py</code> 的 <code>data_path()</code> / <code>read_table()</code> 取数，试跑与正式运行靠它们切换数据目录，不需要为 mock 另写分支。</p>
 </section>
 
 <section id="how">
   <h2>运作方式</h2>
-  <p>主会话是<strong>编排大脑</strong>：只派发子 agent、审门禁、调 codex 外审、记状态账。所有内容产物（提取规格、复现计划、代码、验证结论、最终报告）一律出自子 agent；所有达标判定一律出自门禁工具按标准重算。这个分离是防偷懒设计的根基——生产者、验证者、判定者三方互不为师。</p>
+  <p>三方分工：<strong>内核</strong>（一段确定性的 Python 程序）决定下一步派谁、读什么、交什么、门禁过不过；<strong>主会话</strong>只负责照单派发、把内核的话转述给你、把你的决定交回内核；所有内容产物（提取规格、复现计划、代码、验证结论、最终报告）一律出自<strong>子 agent</strong>，所有达标判定一律出自门禁工具按标准重算。这个分离是防偷懒设计的根基——生产者、验证者、判定者三方互不为师。</p>
+
+  <h3 id="kernel">内核与工单：流程写在代码里</h3>
+  <p>v2 的流程写在给模型看的文字里（技能说明与各阶段执行卡），靠编排会话自己记得「下一步该做什么、门禁跑了没有、这里该不该停」。跑了十份研报后发现三类问题反复出现：编排会话自己成了最大的 token 消耗者；返工派发没有记录；该停下等人的地方被它自行越过。v3 把流程控制搬进了代码：</p>
+  <pre><code>flow next &lt;id&gt;        <span class="cmt"># 内核给出工单：派哪个角色、让它读哪个任务文件、该交回哪些文件</span>
+   ↓ 主会话照单派发子 agent（同一并行组的工单一起派）
+flow done &lt;id&gt; &lt;步骤&gt;  <span class="cmt"># 内核点收：查产物 → 合并回执 → 跑门禁 → 记事件 → 记用量 → 刷新看板 → 给出下一批工单</span>
+   ↓ 循环，直到内核返回 halt（停在某个检查点，等你决定）</code></pre>
+  <ul>
+    <li><strong>任务文件</strong>：内核为每一步拼好一份任务文件，只装这一步需要的内容——从规格书、假设登记簿、覆盖矩阵里逐字切出相关片段，其余只给一行索引。子 agent 缺什么可以按编号向内核取原文。原始文书始终是权威来源，切片只是只读的派生物。提取、规格审计与外审仍然读全量，不切。</li>
+    <li><strong>回执</strong>：子 agent 不再直接改覆盖矩阵和假设登记簿，而是把要回填的内容写进回执，由内核核对「这一行归不归你这一步、状态变化合不合法」后合并。并行的多个 agent 因此不会互相覆盖。</li>
+    <li><strong>确定性的事由内核自己做</strong>：填外审提示词、汇总多轮外审意见、统计覆盖率、生成对比总表、拼假设登记簿进报告、渲染结果页，都不再经过模型。</li>
+    <li><strong>可以退回</strong>：步骤表判断不了的情况，任何阶段都能退回「执行卡驱动」（v2 的方式）由编排会话按卡处理，做完再交还内核；停下等人的守卫在状态层，退回执行卡也绕不过去。</li>
+  </ul>
+  <p>内核只依赖 Python 标准库与 pyyaml，与宿主无关：Claude Code、Codex 和其他「读任务文件」式的宿主各有一张薄适配卡，说明怎样把一张工单变成一次子 agent 派发。</p>
 
   <h3 id="rules">六条硬规则</h3>
   <ol>
-    <li><strong>门禁即代码</strong>：每个阶段结束必须运行 <code>check_gates</code> 并原样呈现输出；FAIL 禁止进入下一阶段，口头声称通过无效。</li>
+    <li><strong>推进只经内核</strong>：主会话不直接改状态文件与事件流，不手拼派发提示词。</li>
+    <li><strong>门禁即代码</strong>：门禁由内核在阶段收口处执行并记入事件流；未通过项原样呈现，FAIL 不进入下一阶段，口头声称通过无效。</li>
+    <li><strong>检查点只由人放行</strong>：内核返回「停」就停，把审阅包交给你；你答复后才执行放行命令，并记下你的原话。没人答复就停着，不替你选。</li>
     <li><strong>编排与生产分离</strong>：主会话严禁亲自撰写规格、计划、代码、验证结论、最终报告。</li>
-    <li><strong>产物合同逐一点收</strong>：agent 返回后逐一核验其输出文件是否真的存在——不看自述，看文件。</li>
-    <li><strong>状态先行</strong>：阶段开始/结束先写状态文件（<code>state.json</code>），杜绝「跑完再补账」。</li>
-    <li><strong>审计逐条回应</strong>：每条审计意见编号登记、逐条处置（采纳修复/说理拒绝/搁置备查），critical 必须修复并复审通过。</li>
+    <li><strong>表外派发要登记</strong>：步骤表之外确需派人，走专门的临时派发命令，写明原因，有次数上限，照样入账。</li>
     <li><strong>达标判定唯一出口</strong>：pass / partial 只能由门禁工具按 <code>standards.json</code>（叠加你的偏差容忍）重算得出。</li>
   </ol>
+  <p>v2 的另外几条（产物逐一点收、状态先行、审计意见逐条回应）没有取消，而是从「要求编排会话遵守」变成了内核的固定动作：点收、写状态、把外审意见登记进回应总表都由代码完成。每条外审意见怎么处置（采纳 / 说理拒绝 / 搁置）仍由主会话判断，但 critical 不许拒绝或搁置——它若坚持认为不成立，内核会开检查点交给你裁决。</p>
 
-  <h3 id="stages">十一阶段与门禁：每一关查什么</h3>
+  <h3 id="stages">十二阶段与门禁：每一关查什么</h3>
   <div class="tbl-scroll"><table>
     <tr><th class='c-narrow'>阶段</th><th class='c-narrow'>人话</th><th class='c-mid'>谁干活</th><th class='c-wide'>出口门禁核验（举要）</th></tr>
-    <tr><td class="c-narrow"><code>init</code></td><td class="c-narrow">初始化</td><td>工具链</td><td>工作区骨架建立、PDF 转文本页数一致、状态文件就绪</td></tr>
+    <tr><td class="c-narrow"><code>init</code></td><td class="c-narrow">初始化</td><td>内核（不派 agent）</td><td>工作区骨架建立、PDF 转文本页数一致、状态文件就绪；顺带查同一份 PDF 是否已有案例、体检数据目录</td></tr>
     <tr><td class="c-narrow"><code>extract</code></td><td class="c-narrow">研报提取</td><td>quant-extractor</td><td>规格三件套齐全、要素带页码引用、覆盖矩阵行数与要素守恒</td></tr>
-    <tr><td class="c-narrow"><code>plan</code></td><td class="c-narrow">复现规划</td><td>quant-planner</td><td>分诊字段合法、每条要素有数据映射与里程碑归属、歧义全登记</td></tr>
-    <tr><td class="c-narrow"><code>spec_audit</code></td><td class="c-narrow">规格审计</td><td>codex 外审 + 内审</td><td>盲提取对照零漏抄、审计意见逐条回应闭环</td></tr>
+    <tr><td class="c-narrow"><code>plan</code></td><td class="c-narrow">复现规划</td><td>quant-planner + 内核数据体检</td><td>分诊字段合法、每条要素有数据映射与里程碑归属、歧义全登记；每条数据需求都有体检结论、每个缺口都有处置决定</td></tr>
+    <tr><td class="c-narrow"><code>spec_audit</code></td><td class="c-narrow">规格审计</td><td>异构外审 + 内审</td><td>盲提取对照零漏抄、审计意见逐条回应闭环</td></tr>
     <tr><td class="c-narrow"><code>implement</code></td><td class="c-narrow">代码实现</td><td>quant-coder（可并行）</td><td>代码可编译、逐里程碑完成登记、矩阵回填真实实现位置</td></tr>
-    <tr><td class="c-narrow"><code>code_audit</code></td><td class="c-narrow">代码审计</td><td>codex 外审 + 内审</td><td>公式逐要素对照、未来函数/数据对齐核查、意见闭环</td></tr>
-    <tr><td class="c-narrow"><code>verify</code></td><td class="c-narrow">运行验证</td><td>quant-verifier</td><td>亲自跑通 <code>main.py</code>、逐项对数重算容差、图表/Excel 产物齐全新鲜</td></tr>
+    <tr><td class="c-narrow"><code>code_audit</code></td><td class="c-narrow">代码审计</td><td>异构外审 + 内审</td><td>公式逐要素对照、未来函数/数据对齐核查、意见闭环</td></tr>
+    <tr><td class="c-narrow"><code>verify</code></td><td class="c-narrow">运行验证</td><td>quant-verifier</td><td>亲自跑通 <code>main.py</code>、逐项对数重算容差、图表/Excel 产物齐全新鲜；真实结果的数据清单里不得出现模拟数据</td></tr>
     <tr><td class="c-narrow"><code>iterate</code></td><td class="c-narrow">迭代修正</td><td>diagnoser + coder + verifier</td><td>每轮三件套（诊断/修改/复验对数）齐全、防兜圈规则、超差项全归因</td></tr>
-    <tr><td class="c-narrow"><code>result_audit</code></td><td class="c-narrow">结果审计</td><td>codex 外审 + 反虚报核查</td><td>结论没有编：数字与产物一致、归因真实、无 open critical</td></tr>
+    <tr><td class="c-narrow"><code>result_audit</code></td><td class="c-narrow">结果审计</td><td>一致性预检 + 异构外审 + 反虚报核查</td><td>结论没有编：数字与产物一致、归因真实、无 open critical。派外审之前机器先核一遍文书与机器产物是否对得上</td></tr>
     <tr><td class="c-narrow"><code>oos</code></td><td class="c-narrow">样本外分析</td><td>quant-oos-analyst</td><td>复现达标（pass/partial）才跑：策略原样延伸到研报区间之后的数据，样本外区间零重叠、结论枚举、短样本警示</td></tr>
-    <tr><td class="c-narrow"><code>report</code></td><td class="c-narrow">报告汇总</td><td>quant-reporter + 渲染工具</td><td>八大必需章节齐全、假设登记簿全收录、无遗留占位符；并渲染单文件 HTML 展示页（指标表可筛选、图表内嵌）</td></tr>
-    <tr><td class="c-narrow"><code>review</code></td><td class="c-narrow">人工评审</td><td><strong>你</strong></td><td>唯一人工阶段：读报告后 <code>accept</code> 收尾或 <code>revise</code> 定向重跑</td></tr>
+    <tr><td class="c-narrow"><code>report</code></td><td class="c-narrow">报告汇总</td><td>quant-reporter + 渲染工具</td><td>八大必需章节齐全、假设登记簿全收录、无遗留占位符；对比总表、达标计数、假设登记簿由内核从机器产物生成后嵌入，不手抄；并渲染单文件 HTML 展示页（指标表可筛选、图表内嵌）</td></tr>
+    <tr><td class="c-narrow"><code>review</code></td><td class="c-narrow">人工评审</td><td><strong>你</strong></td><td>最终评审：读报告后 <code>accept</code> 收尾、<code>revise</code> 改假设定向重跑，或 <code>reopen</code> 回退到某个阶段重做</td></tr>
   </table></div>
 
-  <h3 id="agents">七个子 agent：各司其职、互相制衡</h3>
+  <h3 id="agents">八个子 agent：各司其职、互相制衡</h3>
   <div class="agents">
     <div class="agent">
       <div class="a-head"><span class="a-name">quant-extractor</span><span class="pill dim">opus</span></div>
@@ -408,26 +456,55 @@
       <p>把全部管线产物汇总为最终报告（含可信度评级与全量假设登记簿）。只汇总不新增结论、不重算指标——数字一律引用验证产物。</p>
     </div>
   </div>
-  <p>硬约束：8 个子 agent 不得再派 agent、不碰状态文件；并行只由主会话在预设的三处发起（hard 难度无依赖里程碑多 coder、规格审计双通道、代码审计与验证可并发）。</p>
+  <p>硬约束：8 个子 agent 不得再派 agent、不碰状态文件与事件流；哪些步骤可以并行由内核在工单里标出（无依赖里程碑的编码、验证与下一段编码重叠、代码审计与运行验证、结果审计与样本外分析），主会话照单一起派。Claude Code 上另有一道读文件前的钩子：按在途步骤核对该角色的禁读清单（比如规划者不得读研报原文、任何人不得直接读扰动结果与运行缓存），命中即拒绝；Codex 没有对应的拦截点，改为事后从会话记录里核对并在看板标出。</p>
+  <p>角色合同的正本是 <code>agents/*.md</code>。Codex 侧的角色文件由脚本从正本生成；工作目录里的副本落后于正本时，内核会自动改用通用子代理并把合同全文内嵌进派发，不会拿旧合同干活。</p>
 
   <h3 id="audit">三层审计体系：防偷懒、防遗漏、防虚报</h3>
   <div class="tbl-scroll"><table>
     <tr><th class='c-narrow'>层</th><th class='c-mid'>执行者</th><th class='c-mid'>防什么</th><th class='c-wide'>手段</th></tr>
-    <tr><td class="c-narrow"><strong><span class="term" tabindex="0" data-tip="三道外部审查关卡：规格审查（提取有没有漏抄原文）、代码审查（实现是否忠实公式、有无未来函数）、结果审查（结论数字是否与产物一致）。文书中意见编号为 CDX-S/C/R-##">外审三审查点</span></strong></td><td>codex CLI（read-only 沙箱，全难度必跑）</td><td>提取漏抄 / 实现走样 / 结论造假</td><td>规格审计（盲提取对照：codex 不看规格书独立抄一遍研报数值再逐格 diff）、代码审计（公式对照 + 未来函数）、结果审计（数字与产物一致性）。每条意见编号进回应总表，critical 必须修复 + 缩减复审通过。</td></tr>
+    <tr><td class="c-narrow"><strong><span class="term" tabindex="0" data-tip="三道外部审查关卡：规格审查（提取有没有漏抄原文）、代码审查（实现是否忠实公式、有无未来函数）、结果审查（结论数字是否与产物一致）。文书中意见编号为 CDX-S/C/R-##">外审三审查点</span></strong></td><td>另一家族的引擎，只读调用（Claude Code 里跑用 Codex，Codex 里跑用 Claude Code）</td><td>提取漏抄 / 实现走样 / 结论造假</td><td>规格审计（盲提取对照：外审不看规格书独立抄一遍研报数值再逐格对比）、代码审计（公式对照 + 未来函数）、结果审计（数字与产物一致性）。每条意见编号进回应总表，critical 必须修复并复审通过。</td></tr>
     <tr><td class="c-narrow"><strong>内审</strong></td><td>quant-auditor</td><td>同上，独立视角</td><td>三模式对照审计；hard 难度逐里程碑插入实现忠实性审计；ml 类无视难度必审（训练泄漏数值验证抓不到）。</td></tr>
     <tr><td class="c-narrow"><strong>反虚报核查</strong></td><td>quant-auditor（result 模式）+ 机器检查项</td><td>「声称做了实际没做」</td><td><span class="term" tabindex="0" data-tip="反虚报检查 8 项：如结果与研报完美一致嫌疑（K1）、声称修复但代码未变（K2）、覆盖率虚标、跳过项理由造假等——专抓「说做了实际没做」">K 系列（K1–K8）</span>：结果过于完美嫌疑、声称通过实际未改等；<span class="term" tabindex="0" data-tip="证据链检查 6 项：运行日志完整、产物晚于代码生成（新鲜度）、通过数亲自重数、图表与数据一致、时间戳单调等——保证每个数字可追溯">E 系列（E1–E6）证据链</span>：运行日志、产物新鲜度、通过数亲自重数、图表逐张数值级核验。</td></tr>
   </table></div>
 
-  <h3 id="iterate">迭代引擎与人工闸门</h3>
+  <p>v3 重做了外审的执行方式（三个审查点共用）。此前外审只拿到一串文件路径，要靠几百次命令一段段读文件，推理强度跟着全局配置走，还会自己再分出子代理，于是又慢又贵、动辄超时作废。现在：</p>
+  <ul>
+    <li><strong>输入包</strong>：内核把要审的文件带行号拼好，随提示词一次送入；放不下的按优先级只列路径，审查方仍可自己去读。</li>
+    <li><strong>参数显式指定</strong>：首轮默认 high 推理强度、复审 medium；调用时关闭多代理。</li>
+    <li><strong>差量复审</strong>：第二轮起只给上一轮的意见与回应、以及改动处的差异，核对每条意见是否闭环、改动有没有引入新问题；改动面过大时自动整体重审。</li>
+    <li><strong>盲提取拆成两次调用</strong>：第一次只给研报原文与表格，第二次才给规格书和第一次的产出——「盲」不再只靠审查方自觉，事后还能从会话记录里核对。</li>
+    <li><strong>后台执行与重试</strong>：时限 30 分钟（可配）；超时降一档推理强度原样重试一次，仍不行才走降级链，不缩减输入。</li>
+    <li><strong>结果一致性预检</strong>：派结果外审之前，机器先核四件事——核心要素在对比表里都有条目、对比表的数值与原始指标文件一致、空值不被计为通过、文书里的计数和数值与机器结果一致（含修复后残留的旧数）。此前结果外审提出的严重意见几乎都属于这一类，机器能查的就不留给外审。</li>
+  </ul>
+
+  <h3 id="iterate">迭代引擎</h3>
   <p>首轮验证如有指标超差，进入迭代：每轮由 diagnoser 归因 → coder 定向修改 → verifier 全量重跑对数，三件套（诊断 / 修改记录 / 复验对比）落档留痕。迭代受两道约束：</p>
   <ul>
     <li><strong>轮数上限</strong>：难度默认 3/5/6 轮，或你在 setup 配置的全局值；</li>
     <li><strong>防兜圈规则</strong>：同一指标连续三轮无实质改善触发红线，diagnoser 必须改判 <code class="term" tabindex="0" data-tip="迭代结论之一：接受部分达标收尾——修不动的残余偏差逐条说明原因后出报告，不再空耗轮次">stop_partial</code>（接受局部达标，残余项逐条归因）或 <code class="term" tabindex="0" data-tip="迭代结论之一：缺关键信息或数据、自动修不下去——挂起等人工裁决">blocked</code>（上报阻塞），不许无限重试。</li>
   </ul>
-  <p>整条流水线只有两个人工闸门，任何自动驱动（包括 <code>/goal</code> 无人值守）都不得冲过：</p>
+  <p>从第二轮起，内核会给诊断者附一份机器生成的摘要：各指标逐轮的偏差变化、同一指标连续两轮改善不足一成的预警、历史上已排除的假设原文——防止绕回已经试过的路。</p>
+
+  <h3 id="checkpoints">检查点：停在哪、谁放行</h3>
+  <p>流水线只在两种状态下等人：<span class="pill warn term" tabindex="0" data-tip="挂起状态：流水线遇到必须人工拍板的问题（关键口径缺失、数据不可得、流程自己走不下去）时暂停，把审阅包呈给你，决定后继续">paused_blocked</span>（遇到必须人工裁决的问题）和 <span class="pill warn">awaiting_review</span>（等你评审）。v3 把「具体停在哪、为什么停、有哪些选项」做成了<strong>检查点</strong>：每个检查点带一份机器生成的审阅包（几 KB，要点带页码或文件出处）和一组固定选项。处于等待态时内核只返回「停」，门禁转绿也不会自动放行——任何自动驱动（包括 <code>/goal</code> 无人值守）都冲不过去。</p>
+  <div class="tbl-scroll"><table>
+    <tr><th class='c-mid'>类别</th><th class='c-wide'>检查点</th><th class='c-mid'>什么时候出现</th></tr>
+    <tr><td><strong>只能由你决定</strong></td><td>数据缺口处置、等数据、模拟数据规格确认、试跑完成、可行性阻断、阻断级歧义、迭代受阻、严重意见有争议、同一份 PDF 已有案例、最终评审</td><td>任何模式下都会停。唯一的例外是你在建案时用 <code>--on-missing mock</code> 预先授权过：数据缺口与模拟数据规格两项按「先试跑」自动处理，并记为「策略」级放行</td></tr>
+    <tr><td><strong>流程自己走不下去</strong></td><td>熔断（同一门禁检查项连续 3 次不过）、重派次数用完、复审 3 轮仍有严重意见未闭环、子 agent 报告受阻、步骤表派不出下一步、状态文件被改动过、长时间没有进展、超出预算</td><td>任何模式下都会停</td></tr>
+    <tr><td><strong>评审类（可选）</strong></td><td>规格定稿、计划定稿、每个里程碑完成、验证完成、迭代每轮</td><td><code>interactive</code> 模式；或用 <code>--until &lt;阶段&gt;</code> 指定一次性停点、<code>--step</code> 每步都停</td></tr>
+    <tr><td><strong>只留痕不停</strong></td><td>外审降级、按假 FAIL 重跑了一次验证、限额内的重派</td><td>记入事件流和看板</td></tr>
+  </table></div>
+  <p>评审类检查点上你有五种决定：<strong>通过</strong>；<strong>修改后继续</strong>（口述要改什么，内核交给负责的角色去改，改完重过门禁再回到同一个检查点，最多 3 轮）；<strong>我已经直接改了文件</strong>（内核重新核对后回到同一个检查点）；<strong>回退</strong>到更早的阶段或里程碑重做；<strong>终止</strong>。</p>
+  <div class="note amber">
+    <strong>放行记录带凭据等级。</strong>每次放行都记下你的选择和原话，并标明凭什么算数：<strong>钩子级</strong>——Claude Code 的钩子在你提交输入时记到了带检查点短码的原话；<strong>终端级</strong>——你在自己的终端里执行放行命令并输入了短码；<strong>自述级</strong>——只有编排会话的转述。自述级会在看板和最终报告附录里标出来。这防的是编排会话「顺手替你点了通过」，不防蓄意伪造。
+  </div>
+
+  <h3 id="board">看板与用量</h3>
   <ul>
-    <li><span class="pill warn term" tabindex="0" data-tip="挂起状态：流水线遇到必须人工拍板的问题（关键口径缺失、数据不可得）时暂停，把候选方案呈给你，裁决后继续">paused_blocked</span> 遇到必须人工裁决的问题（如关键公式原文缺失、数据无法获取）时挂起，呈候选方案等你拍板；</li>
-    <li><span class="pill warn">awaiting_review</span> 最终报告完成后等你评审——<code>accept</code> 收尾或 <code>revise</code> 定向重跑，系统绝不自行验收。</li>
+    <li><strong>看板</strong>：每次点收后内核重新生成一个静态页面 <code>workspace/&lt;id&gt;/board.html</code>（不起服务，浏览器直接打开，运行中自动刷新）——当前在做哪一步、等谁、停了多久，阶段 × 里程碑的进度，待决检查点，门禁明细，用量，假设与外审台账，返工派发清单。全部案例的总览在 <code>workspace/board.html</code>。</li>
+    <li><strong>事件流</strong>：每个案例一份只追加的事件记录（<code>events.jsonl</code>），带哈希链；状态文件或事件流被内核之外的东西改过会被发现，并开检查点让你确认。</li>
+    <li><strong>用量</strong>：每张工单的任务文件大小与耗时必有记录；读得到宿主会话记录时，再把未缓存输入、缓存读写、输出分开记到每一步；外审进程的用量同样入账。<code>flow cost &lt;id&gt;</code> 按阶段、角色、步骤汇总。</li>
+    <li><strong>失效标注与重开</strong>：内核记下每一步读过哪些片段。你改了规格、计划或某条假设后，<code>flow stale &lt;id&gt;</code> 列出哪些已完成的步骤因此过期；<code>reopen</code> 从最早过期的地方重做，旧产物归档不删。</li>
   </ul>
 
   <h3 id="verdict">达标判定与可信度评级</h3>
@@ -436,7 +513,7 @@
   <div class="tbl-scroll"><table>
     <tr><th class='c-narrow'>评级</th><th class='c-wide'>判据</th></tr>
     <tr><td class="c-narrow"><strong>A</strong></td><td>覆盖率 ≥ 90%（核心要素 100%）＋ 三外审通过 ＋ 零 critical 遗留</td></tr>
-    <tr><td class="c-narrow"><strong>B</strong></td><td>核心要素覆盖 100%，但支线有缺，或外审有<span class="term" tabindex="0" data-tip="指外审引擎降级：文书中对应 engine=claude_fallback（Claude 替身盲审）或 skipped（跳过）字段——缺了异构引擎交叉验证，评级封顶 B">失败性降级</span>（codex 不可用改由 Claude 替身盲审，或替身也不可行被跳过）；外审档位 standard 未触发的配置性跳过不算降级、不封顶</td></tr>
+    <tr><td class="c-narrow"><strong>B</strong></td><td>核心要素覆盖 100%，但支线有缺，或外审有<span class="term" tabindex="0" data-tip="指外审引擎降级：文书中对应 engine=same_host_fallback（同宿主替身盲审，旧案例写作 claude_fallback）或 skipped（跳过）字段——缺了异构引擎交叉验证，评级封顶 B">失败性降级</span>（外审引擎不可用改由同宿主替身盲审，或替身也不可行被跳过）；外审档位 standard 未触发的配置性跳过不算降级、不封顶</td></tr>
     <tr><td class="c-narrow"><strong>C</strong></td><td>存在核心要素未复现或 major 意见遗留未回应——报告结论区显著提示成因</td></tr>
   </table></div>
   <div class="note amber">评级 C 不一定意味着复现质量差：数据客观缺失（如某指数系列本地零覆盖，经穷尽核实）导致核心支线不可行时，字面判据同样触发 C——报告会写明成因与主线结论是否受影响，残余偏差 100% 归因后才能出报告。</div>
@@ -462,41 +539,70 @@
   <h3 id="commands">子命令速查</h3>
   <div class="tbl-scroll"><table>
     <tr><th class='c-mid' style='width:19em'>命令</th><th class='c-wide'>作用</th></tr>
-    <tr><td><code>/reproduce setup</code></td><td>首次配置向导（五项问卷 + 骨架落地 + 环境检测），幂等可重跑</td></tr>
-    <tr><td><code>/reproduce reports/xxx.pdf</code></td><td>新起一份复现，<strong>自动分配案例编号</strong>（report_id 形如 <code>r001_style_factor</code>：三位顺序号 + 语义短名，起跑时明示）。可选参数：<code>--mode auto|interactive</code>、<code>--max-iter N</code>、<code>--id 自定义名</code>（显式覆盖不编号）、<code>--difficulty easy|medium|hard</code>（覆盖自动分诊）</td></tr>
-    <tr><td><code>/reproduce continue &lt;id&gt;</code></td><td>断点续跑：从状态文件定位第一个未完成阶段，幂等自愈后继续推进。id 支持<strong>编号缩写</strong>——<code>r3</code>、<code>r003</code>、<code>3</code> 都指向 <code>r003_xxx</code>，唯一前缀也行（下同）</td></tr>
+    <tr><td><code>/reproduce setup</code></td><td>首次配置向导（六项问卷 + 骨架落地 + 环境检测 + 数据目录体检），幂等可重跑</td></tr>
+    <tr><td><code>/reproduce reports/xxx.pdf</code></td><td>新起一份复现，<strong>自动分配案例编号</strong>（report_id 形如 <code>r001_style_factor</code>：三位顺序号 + 语义短名，起跑时明示）。可选参数：<code>--mode auto|interactive</code>、<code>--max-iter N</code>、<code>--id 自定义名</code>（显式覆盖不编号）、<code>--difficulty easy|medium|hard</code>（覆盖自动分诊）、<code>--experimental</code>（实验模式）、<code>--until &lt;阶段&gt;</code>（跑到这个阶段结束停一次）、<code>--step</code>（每一步都停）、<code>--on-missing ask|mock|stop</code>（数据有缺口而无人应答时怎么办）</td></tr>
+    <tr><td><code>/reproduce continue &lt;id&gt;</code></td><td>断点续跑：内核从步骤级恢复——已点收的步骤不重做，在途的工单重新列出（对应的子 agent 还在跑就等，不在了就重派）。id 支持<strong>编号缩写</strong>——<code>r3</code>、<code>r003</code>、<code>3</code> 都指向 <code>r003_xxx</code>，唯一前缀也行（下同）</td></tr>
     <tr><td><code>/reproduce status [id]</code></td><td>状态摘要；<strong>无参输出按编号排序的案例一览表</strong>（编号 | id | 类型/难度 | 状态 | 当前阶段）——忘了 id 就跑这条</td></tr>
-    <tr><td><code>/reproduce revise &lt;id&gt; --assumption AS编号 "新口径"</code></td><td>评审后不认同某条假设时定向重跑：只重跑受影响链路，不占迭代额度</td></tr>
+    <tr><td><code>/reproduce revise &lt;id&gt; --assumption AS编号 --new-text "新口径"</code></td><td>评审后不认同某条假设时定向重跑：先告诉你影响面和要重跑的范围，确认后只重跑受影响链路，不占迭代额度（最多 3 轮）。要一次改多条，用 <code>--from-excel</code> 读回你在假设表里填的修订</td></tr>
+    <tr><td><code>/reproduce export-assumptions &lt;id&gt;</code></td><td>把假设登记簿导出成 Excel，逐条可填「新口径」「新参数值」，填完用上一条的 <code>--from-excel</code> 批量应用</td></tr>
+    <tr><td><code>/reproduce reopen &lt;id&gt; --from &lt;阶段|mN&gt; --reason "原因"</code></td><td>回退到某个阶段或里程碑重做（比如规格有误要从规划重来）；之前的步骤记录与文书归档不删</td></tr>
     <tr><td><code>/reproduce accept &lt;id&gt;</code></td><td>评审通过收尾：状态转 done（全达标）或 done_partial（局部达标）</td></tr>
   </table></div>
+  <p>技能背后调用的是内核命令 <code>tools/flow.py</code>。下面几条只读命令可以随时在终端里直接跑（在工作目录下，<code>flow</code> 代表 <code>uv run python &lt;插件目录&gt;/tools/flow.py</code>）：</p>
+  <div class="tbl-scroll"><table>
+    <tr><th class='c-mid' style='width:19em'>命令</th><th class='c-wide'>作用</th></tr>
+    <tr><td><code>flow status [id]</code></td><td>进度、在途步骤、停在哪个检查点、停了多久；无参列出全部案例</td></tr>
+    <tr><td><code>flow explain &lt;键&gt;</code></td><td>某个阶段、某项门禁（如 <code>G-VF-6</code>）、某个检查点（如 <code>data_gap</code>）是什么意思、不过时怎么处理；<code>flow explain index</code> 看目录</td></tr>
+    <tr><td><code>flow cost &lt;id&gt;</code></td><td>用量汇总：按阶段、角色、步骤</td></tr>
+    <tr><td><code>flow stale &lt;id&gt;</code></td><td>你改过文书之后，哪些已完成的步骤因此过期（只报告，不执行）</td></tr>
+    <tr><td><code>flow data probe</code> / <code>flow data check &lt;id&gt;</code></td><td>体检数据目录 / 核对某个案例的数据需求</td></tr>
+    <tr><td><code>flow decide &lt;id&gt; &lt;检查点&gt; --choice &lt;选项&gt; --quote "原话"</code></td><td>放行一个检查点。在你自己的终端里执行时会要求输入检查点短码，记为「终端级」凭据</td></tr>
+  </table></div>
 
-  <h3 id="scenarios">三个典型场景</h3>
+  <h3 id="scenarios">五个典型场景</h3>
   <p><strong>场景一：新起复现 + 无人值守。</strong>起跑后系统会打印一条可复制的 <code>/goal</code> 命令，粘贴即启用跨会话自主推进——推进到四个终态之一（等待评审 / 完成 / 局部完成 / 阻塞挂起）自动停下汇报。目标措辞被刻意设计成「到达终态即停」而非「复现成功」，防止驱动层为达标冲撞人工闸门。</p>
   <pre><code>/reproduce reports/treasury_timing.pdf
 <span class="cmt"># → init 完成后照提示粘贴 /goal 命令，然后可以去干别的</span></code></pre>
   <p><strong>场景二：评审后改假设。</strong>报告完成后系统挂起等你评审。假设登记簿里每条自动假设（尤其高亮的 <span class="term" tabindex="0" data-tip="自动模式下影响较大的假设：系统按最合理口径先行放行并高亮登记，报告里重点提示你复核">major-auto</span> 级）都附了一条现成的 revise 命令——不认同就复制改口径：</p>
-  <pre><code>/reproduce revise treasury_timing --assumption AS4 "涨跌幅采用结算价口径而非收盘价"
-<span class="cmt"># → planner 改假设 → 按影响面只重跑受影响链路 → 报告增量更新 → 回到评审</span></code></pre>
+  <pre><code>/reproduce revise treasury_timing --assumption AS4 --new-text "涨跌幅采用结算价口径而非收盘价"
+<span class="cmt"># → 先报告影响面与重跑范围，你确认 → planner 改假设 → 只重跑受影响链路 → 报告更新 → 回到评审</span></code></pre>
   <p><strong>场景三：断点续跑。</strong>会话中断、机器重启都不丢进度——状态文件是唯一真相源：</p>
   <pre><code>/reproduce status            <span class="cmt"># 案例一览表：编号 | id | 状态 | 阶段</span>
 /reproduce continue r3       <span class="cmt"># 编号缩写即可，不必敲全名</span></code></pre>
+  <p><strong>场景四：中途打断校验。</strong>不想等它一口气跑完再看——让它在你关心的地方停下：</p>
+  <pre><code>/reproduce reports/xxx.pdf --mode interactive   <span class="cmt"># 规格定稿、计划定稿、每个里程碑、验证完成各停一次</span>
+/reproduce reports/xxx.pdf --until plan         <span class="cmt"># 只在规划结束时停一次，其余自动</span>
+<span class="cmt"># 停下后看审阅包（workspace/&lt;id&gt;/reviews/）或看板，然后告诉它：通过 / 要改什么 / 我已经改了文件 / 回退到哪里</span></code></pre>
+  <p>你直接改了规格、计划或假设登记簿也没关系：内核会比对出改了哪些片段、哪些已完成的步骤因此过期，重过所属阶段的门禁后再继续。</p>
+  <p><strong>场景五：数据还没到齐，先把流程跑通。</strong>规划阶段体检出缺口后停下问你；选「先用 mock 试跑」：</p>
+  <pre><code><span class="cmt"># → planner 起草模拟数据规格，你确认 → 生成模拟数据 → 编码、代码审计照常 → 验证只查「跑得通、产物齐、指标算得出」</span>
+<span class="cmt"># → 停在「试跑完成」。真实数据补齐后：</span>
+flow data recheck &lt;id&gt;       <span class="cmt"># 重新体检；通过后只重跑验证（数据结构与模拟规格不一致的，相关编码一并重做）</span></code></pre>
 
   <h3 id="artifacts">产物地图：跑完后东西都在哪</h3>
   <div class="tree">你的工作目录/
-├── .reproduce.json                <span class="c"># 五项配置</span>
-├── templates/                     <span class="c"># 达标标准 standards.json + 数据目录 data_catalog.md（可改）</span>
+├── .reproduce.json                <span class="c"># 配置</span>
+├── templates/                     <span class="c"># 达标标准 standards.json + 各类模板（可改）</span>
 ├── common/                        <span class="c"># 内置回测库（复用，coder 按类型扩展）</span>
 ├── reports/{id}.pdf               <span class="c"># PDF 收件箱</span>
+├── workspace/board.html           <span class="c"># 全部案例的总览看板</span>
+├── workspace/_registry/           <span class="c"># 跨案例登记：数据目录体检结果、PDF 指纹索引</span>
 ├── workspace/{id}/                <span class="c"># 管线文书（全程留痕，均为可读 markdown/json）</span>
-│   ├── state.json                 <span class="c"># 唯一状态源：阶段进度 / 门禁记录 / 达标判定</span>
+│   ├── state.json                 <span class="c"># 唯一状态源：阶段进度 / 最新门禁结论 / 检查点 / 达标判定</span>
+│   ├── events.jsonl               <span class="c"># 事件流：每次派发、点收、门禁、放行的完整历史（只追加）</span>
+│   ├── board.html                 <span class="c"># 本案例的看板</span>
+│   ├── reviews/                   <span class="c"># 各检查点的审阅包</span>
+│   ├── flow/                      <span class="c"># 内核写的任务文件、回执、清单（每次派发可追溯）</span>
 │   ├── spec/                      <span class="c"># 研报规格书 / 覆盖矩阵 / 歧义清单</span>
 │   ├── plan.md · assumptions.md   <span class="c"># 复现计划 / 假设登记簿（每条附 revise 指引）</span>
-│   ├── audit/                     <span class="c"># 三审查点意见 + 内审 + 反虚报核查 + 逐条回应总表</span>
+│   ├── data_check.json            <span class="c"># 数据需求体检结论与缺口处置</span>
+│   ├── audit/                     <span class="c"># 三审查点意见（各轮原件在 audit/external/）+ 内审 + 反虚报核查 + 逐条回应总表</span>
 │   ├── iterations/iter_NN/        <span class="c"># 每轮迭代三件套 + 改前改后对数快照</span>
 │   └── final_report.md            <span class="c"># 最终复现报告（评审对象）</span>
 ├── src/{id}/                      <span class="c"># 策略代码：strategy / config / main</span>
 └── output/{id}/
-    ├── results/                   <span class="c"># 回测对数表 comparison.json / 图表 PNG / Excel</span>
+    ├── results/                   <span class="c"># 回测对数表 comparison.json / 图表 PNG / Excel / 数据清单 data_manifest.json</span>
+    ├── results_mock/              <span class="c"># 模拟数据试跑的结果（与真实结果隔离，试跑时才有）</span>
     ├── final_report.html          <span class="c"># 单文件结果展示页（图表内嵌，浏览器直接打开可分享）</span>
     └── verify_report.md           <span class="c"># 验证过程记录（含证据链）</span></div>
 
@@ -510,9 +616,9 @@
     <div><p>三个途径：① 起跑时终端会明示「本案例编号 rNNN（report_id=<code>rNNN_短名</code>）」——新案例的 id 由系统自动编号，形如 <code>r001_style_factor</code>（三位顺序号 + 看名知义的语义短名，短名取 PDF 文件名或研报标题）；② 任何时候跑无参 <code>/reproduce status</code>，得到按编号排序的案例一览表（编号、id、类型、状态、当前阶段）；③ 目录名即 id：<code>workspace/</code> 下每个子目录对应一个案例。日常引用不必敲全名——<code>continue</code>/<code>status</code>/<code>revise</code>/<code>accept</code> 都接受编号缩写（<code>r3</code>、<code>r003</code>、<code>3</code> 等价）或唯一前缀，输入有歧义时系统会列出候选让你挑。想用自己的命名跑 <code>--id 自定义名</code> 即可（不强加编号）。</p></div>
   </details>
   <details>
-    <summary>没装 codex CLI，或跑到一半额度用完了，会怎样？</summary>
-    <div><p>都不会断。外审走两级降级链：<strong>一级降级</strong>——派一个全新的 Claude 子 agent 作"外审替身"，执行与 codex 完全相同的审查任务（同一份审查指令、只读原始材料、禁止接触流水线过程叙事），意见照样逐条编号进回应总表、critical 照样必须修复闭环；<strong>二级降级</strong>——替身也不可行（罕见）才把该审查点标记跳过并在报告显著标注。细节上做了三处省时设计：未安装时零成本直接降级（不做无谓调用，且同一案例后续审查点不再反复探测）；额度/认证类报错（usage limit、429 等）直接降级（不做无意义的缩减重试）；临时性失败（超时/网络）才重试一次。</p>
-    <p>代价如实：替身与被审代码同为 Claude 家族，少了异构引擎交叉验证这一层，所以发生任一失败性降级时可信度评级封顶 B（替身保住的是审查覆盖，不是评级）。结果审计（反虚报最后防线）在任何配置下都必须至少走到替身，不允许直接跳过。装好 codex / 额度恢复后无需重新配置，下次运行自动用回 codex。</p></div>
+    <summary>没装外审用的命令行工具，或跑到一半额度用完了，会怎样？</summary>
+    <div><p>都不会断。外审走两级降级链：<strong>一级降级</strong>——派一个全新的、不带任何历史上下文的子 agent 作「外审替身」，执行与外审引擎完全相同的审查任务（同一份审查指令、只读原始材料、禁止接触流水线过程叙事），意见照样逐条编号进回应总表、critical 照样必须修复闭环；<strong>二级降级</strong>——替身也交不出来（罕见）才把该审查点标记跳过并在报告显著标注。外审自己会先重试一次，输入不缩减：超时就降一档推理强度再跑，普通失败原样再跑；额度、鉴权、没安装这三种不做无谓重试，直接降级。</p>
+    <p>代价如实：替身与被审代码出自同一家族的模型，少了异构引擎交叉验证这一层，所以发生任一失败性降级时可信度评级封顶 B（替身保住的是审查覆盖，不是评级）。装好命令行工具 / 额度恢复后无需重新配置，下次运行自动用回异构外审。</p></div>
   </details>
   <details>
     <summary>偏差容忍 5% 到底是什么意思？研报年化 10%，容到 10.5% 还是 15%？</summary>
@@ -540,7 +646,7 @@
   </details>
   <details>
     <summary>流水线跑一半会话断了 / 想换台机器继续？</summary>
-    <div><p><code>/reproduce continue &lt;id&gt;</code>。全部进度在 <code>workspace/{id}/state.json</code> 与产物文件里，续跑时逐阶段幂等自愈：产物齐全的阶段直接跳过，缺的从断点重做。换机器把工作目录同步过去即可。</p></div>
+    <div><p><code>/reproduce continue &lt;id&gt;</code>。全部进度在 <code>workspace/{id}/state.json</code>、事件流与产物文件里，续跑从步骤级恢复：已点收的步骤不重做，中断时在途的工单重新列出后重派。换机器把工作目录同步过去即可。</p></div>
   </details>
   <details>
     <summary>复现海外报告/论文，本地没有原文市场的数据怎么办？</summary>
@@ -548,11 +654,32 @@
   </details>
   <details>
     <summary>报告被分诊为 hard，跑得又慢又贵怎么办？</summary>
-    <div><p>先看分诊依据（plan.md 的难度判定节）。v2.6.0 起判据以<strong>方法复杂度</strong>为主轴：只有训练模型 / 优化求解 / 多资产联动才 hard，结果表多、指标多属于"工作量大"，只影响里程碑数量不抬难度档。若仍觉得过重：起跑时 <code>--difficulty medium</code> 直接覆盖分诊；配置 <code>economy: true</code> 让机械性角色降为 sonnet；把 <code>audit_level</code> 调为 <code>standard</code> 让规格/代码外审只在关键条件下触发。三者叠加约可省三分之二 token 消耗。v2.7.0 又叠加了<strong>墙钟流水线</strong>（自动生效无需配置）：milestone 验证与下一段编码重叠、代码外审与运行验证默认并行、结果审计与样本外分析并发——medium 每跑再省约半小时。结果反虚报、达标门禁、人工闸门一处不动。</p></div>
+    <div><p>先看分诊依据（plan.md 的难度判定节）。v2.6.0 起判据以<strong>方法复杂度</strong>为主轴：只有训练模型 / 优化求解 / 多资产联动才 hard，结果表多、指标多属于"工作量大"，只影响里程碑数量不抬难度档。若仍觉得过重：起跑时 <code>--difficulty medium</code> 直接覆盖分诊；配置 <code>economy: true</code> 让机械性角色降为 sonnet；把 <code>audit_level</code> 调为 <code>standard</code> 让规格/代码外审只在关键条件下触发。三者叠加约可省三分之二 token 消耗。v2.7.0 又叠加了<strong>墙钟流水线</strong>（自动生效无需配置）：milestone 验证与下一段编码重叠、代码外审与运行验证默认并行、结果审计与样本外分析并发——medium 每跑再省约半小时。结果反虚报、达标门禁、人工闸门一处不动。</p>
+    <p>v3 从另一头下手：此前每次派发子 agent 都要把规格书、假设登记簿、覆盖矩阵整份读一遍，编排会话自己还要读执行卡、手写派发提示词。现在每一步只拿到一份按需切好的任务文件，编排会话只做取工单与点收。用三个历史案例的终态文书离线试切，写码角色的任务文件约为原先整份文书的三成；真实跑下来省多少以 <code>flow cost &lt;id&gt;</code> 的记录为准，每个案例都能自己查。</p></div>
+  </details>
+  <details>
+    <summary>它停下来问我了，我怎么回答才算数？</summary>
+    <div><p>直接在对话里回答就行：编排会话会把审阅包的要点和各选项的后果讲给你，你选定后它把你的原话交回内核。在 Claude Code 里，钩子会在你提交输入时记下这句话作为凭据（钩子级）。你也可以在自己的终端里执行 <code>flow decide</code>，按提示输入检查点短码（终端级）——短码写在审阅包和看板上。两者都没有时放行照样生效，但记为「自述级」并在看板和报告附录里标出，方便你事后核对「这一步真是我批的吗」。</p></div>
+  </details>
+  <details>
+    <summary>我想知道它现在在干什么、卡在哪、花了多少？</summary>
+    <div><p>打开 <code>workspace/&lt;id&gt;/board.html</code>（浏览器直接打开的静态页，运行中会自动刷新）：当前步骤、等谁、停了多久、各阶段门禁结论、待决检查点、返工派发清单、用量都在上面。全部案例的总览在 <code>workspace/board.html</code>。终端里对应 <code>flow status</code> 和 <code>flow cost &lt;id&gt;</code>。在途的一步超过 3 小时（可配）没有新进展，状态和看板会告警并开检查点。</p></div>
+  </details>
+  <details>
+    <summary>研报要用的数据我本地不全，会怎样？</summary>
+    <div><p>规划阶段内核会逐条核对数据需求，把缺口连同证据列给你（缺哪段、哪些年份标的数塌陷、影响哪些指标），然后停下等你选：补数据、等价替代、缩小范围、先用模拟数据试跑、砍掉相关要素、终止。它不会自己替你降级。想无人值守时让它先试跑，建案时加 <code>--on-missing mock</code>：缺口会按「先试跑」处理，跑通后停在「试跑完成」——试跑不出达标结论、不写报告。详见上文「数据体检与缺口处置」。</p></div>
+  </details>
+  <details>
+    <summary>v2 跑到一半的旧案例，升级到 v3 之后怎么办？</summary>
+    <div><p>不用动，也不会被自动迁移。旧案例续跑时内核只给出「按旧执行卡做」的工单，行为与 v2 一致（旧执行卡保留在插件里）。想把某个旧案例交给内核推进，需要先把它的状态文件升级到新格式（<code>flow migrate &lt;id&gt;</code>，会留一份原文件备份）——这一步编排会话会先征得你同意，不会擅自做。升级后的状态文件 v2.12 及更早的工具读不了；要退回，用备份覆盖回去并删掉新生成的事件流文件即可。</p></div>
+  </details>
+  <details>
+    <summary>在 Codex 里用和在 Claude Code 里用有什么不同？</summary>
+    <div><p>流程、门禁、角色、产物完全相同，同一个案例可以在两边接着跑。差别有三处：外审引擎相反（Claude Code 里用 Codex 审，Codex 里用 Claude Code 审）；Claude Code 有钩子（禁读护栏当场拦截、放行凭据可达钩子级），Codex 没有对应的拦截点，改为事后从会话记录核对，放行凭据最高到终端级；Codex 沙箱不能联网时外审会失败并自动降级。其他能读任务文件、能派子代理的宿主走通用适配卡，同样可用。</p></div>
   </details>
   <details>
     <summary>怎么更新插件？</summary>
-    <div><p><code>/plugin update quant-report-reproduce</code>（重启会话生效）。你目录里的 templates/common 不会被自动覆盖——setup 重跑时会列出「插件侧较新」的文件清单，由你决定是否手动同步。</p></div>
+    <div><p><code>/plugin update quant-report-reproduce</code>（重启会话生效）。你目录里的 templates/common 不会被自动覆盖——setup 重跑时会列出「插件侧较新」的文件清单，由你决定是否手动同步。Codex 侧工作目录里的角色文件（<code>.codex/agents/</code>）同样不会被覆盖；它们落后于新版合同时内核会自动改用通用子代理并内嵌新合同，想用回命名角色就删掉旧文件后重跑 setup。</p></div>
   </details>
 </section>
 
@@ -560,6 +687,8 @@
   <h2>版本演进</h2>
   <div class="tbl-scroll"><table>
     <tr><th class="c-narrow">版本</th><th class="c-narrow">日期</th><th class="c-wide">要点</th></tr>
+    <tr><td class="c-narrow"><code>3.0.0</code></td><td class="num c-narrow">11-22</td><td>代码驱动内核：流程控制从技能文字搬进 <code>tools/flow.py</code>（取工单 / 点收）；按步骤切好的任务文件与回执；检查点、审阅包与放行凭据；数据体检、缺口处置与 mock 试跑；外审引擎重做（输入包、指定推理强度、差量复审、盲提取两次调用）；结果一致性预检；看板、事件流与用量记账；失效标注与回退重开</td></tr>
+    <tr><td class="c-narrow"><code>2.12.0</code></td><td class="num c-narrow">07-14</td><td>Claude Code / Codex 双宿主：同一技能运行时识别宿主，互为异构外审；Codex 插件清单与生成式角色文件；对称降级链</td></tr>
     <tr><td class="c-narrow"><code>2.11.0</code></td><td class="num c-narrow">07-12</td><td>术语人话化：手册代号悬浮释义（22 处）、结果页枚举值中文化（判定/审查台账/归因）、最终报告人话化硬约束（代号首现附中文说明、审计表加人话列）</td></tr>
     <tr><td class="c-narrow"><code>2.10.0</code></td><td class="num c-narrow">07-11</td><td>案例统一编号：新案例自动分配 rNNN_短名 形式 id，全部子命令接受编号缩写（r3/r003/3），status 输出编号排序一览表</td></tr>
     <tr><td class="c-narrow"><code>2.9.0</code></td><td class="num c-narrow">07-11</td><td>codex 备用方案补强：未安装/额度耗尽自动降级 Claude 替身盲审（速判直降、额度类报错免重试、替身规范化），评级封顶口径统一</td></tr>
@@ -580,9 +709,11 @@
   <ul>
     <li><strong>分发一律用 git URL</strong>：<code>marketplace add https://github.com/Hedicx2020/ghquant_plugin</code> 只取 git 跟踪内容（约 4.6M）。<code>marketplace add &lt;本地路径&gt;</code> 会全量拷贝目录——含 <code>.venv</code>、<code>output/</code> 等被 gitignore 的内容（实测 400M+），仅限本机自测。</li>
     <li><strong>公开仓库是脱敏快照</strong>：远程 main 由 <code>pub_snapshot</code> 孤儿分支强推而来，不带开发历史，且剔除了验收案例文书（<code>workspace/test_v2</code>、<code>src/test_v2</code>）与研报原文 PDF。本地 main 保留完整历史，两者刻意不同源——不要在 main 上直接 <code>git push</code>。</li>
-    <li><strong>同步公开仓库的流程</strong>：切到 <code>pub_snapshot</code> → <code>git checkout main -- .</code> 铺最新内容 → <code>git rm -r --cached</code> 剔除脱敏项 → amend 重写快照提交 → 强推 <code>origin main</code> → 用 GitHub API 核查远程树零残留。（在维护者的 Claude Code 会话里说「同步公开仓库」即可自动执行。）</li>
+    <li><strong>同步公开仓库的流程</strong>：用 <code>git worktree</code> 在独立的临时目录里检出 <code>pub_snapshot</code>（<strong>不要在主工作目录里切换分支</strong>——并行跑着的案例会有未提交的改动）→ 在那个目录里铺上 main 的最新内容 → 剔除脱敏项并核对文件差集 → amend 重写快照提交（提交说明同步版本号）→ 强推到远程 main → 移除临时目录。</li>
     <li><strong>路径定位机制</strong>：skill 正文不替换 <code>${CLAUDE_PLUGIN_ROOT}</code>、Bash 也不注入该环境变量（已实测）——工具定位依赖 SKILL.md 协议第 0 级（skill base directory 上两级即插件根），不要在 skill/stages 中引入对该变量的新依赖。</li>
-    <li><strong>版本与更新</strong>：功能变更时同步 <code>.claude-plugin/plugin.json</code> 的 version；使用者 <code>/plugin update quant-report-reproduce</code> 后重启会话生效。用户目录的 templates/common 种子永不被自动覆盖。</li>
+    <li><strong>版本与更新</strong>：功能变更时同步 <code>.claude-plugin/plugin.json</code> 与 <code>.codex-plugin/plugin.json</code> 两处的 version；使用者 <code>/plugin update quant-report-reproduce</code> 后重启会话生效。用户目录的 templates/common 种子永不被自动覆盖。</li>
+    <li><strong>角色合同改了要重新生成 Codex 角色文件</strong>：<code>uv run python tools/sync_codex_agents.py</code>（加 <code>--check</code> 只检查不写）。<code>.codex/agents/</code> 若被全局 gitignore 忽略，新增的文件提交时要 <code>git add -f</code>。</li>
+    <li><strong>内核资产按文件位置定位</strong>：步骤表、处理说明（<code>skills/reproduce/explain/</code>）、钩子、外审提示词模板都在插件根，不进种子目录；外审种子模板（<code>templates/codex_prompts/</code>）的占位符集合保持向后兼容，因为用户目录里的副本不会被覆盖。</li>
   </ul>
 </section>
 
@@ -593,7 +724,7 @@
     <tr><th class='c-mid' style='width:16em'>代号</th><th class='c-wide'>含义</th></tr>
     <tr><td><code>G-IN / G-EX / G-PL / G-SA / G-IM / G-CA / G-VF / G-IT / G-RA / G-OS / G-FN</code></td><td>各阶段出口门禁（初始化/提取/规划/规格审计/实现/代码审计/验证/迭代/结果审计/样本外/报告），每个门禁含若干编号检查项（如 G-VF-3 = 验证门禁第 3 项：容差重算）</td></tr>
     <tr><td><code>D# / F# / B# / R# / SA#</code></td><td>研报要素 ID：数据(Data) / 因子或信号(Factor) / 回测设定(Backtest) / 结果(Result) / 稳健性分析(Sensitivity)——覆盖矩阵逐行追踪每条要素从提取到验证的状态</td></tr>
-    <tr><td><code>CDX-S-## / CDX-C-## / CDX-R-##</code></td><td>codex 外审意见编号（三审查点：Spec / Code / Result）</td></tr>
+    <tr><td><code>CDX-S-## / CDX-C-## / CDX-R-##</code></td><td>外审意见编号（三审查点：Spec / Code / Result；编号沿用历史前缀，与实际由哪个引擎审无关）</td></tr>
     <tr><td><code>SA-A## / CA-A## / RA-A##</code></td><td>内审意见编号（规格审计 / 代码审计 / 结果反虚报核查）</td></tr>
     <tr><td><code>AS#</code></td><td>假设登记簿条目：研报歧义的决议口径，含依据、影响面与 revise 指引；major-auto 为自动模式下的高影响假设（报告中高亮）</td></tr>
     <tr><td><code>A#</code></td><td>歧义清单条目（提取阶段登记，规划阶段裁决为对应 AS#）</td></tr>
@@ -603,13 +734,19 @@
     <tr><td><code>iter_01, iter_02, …</code></td><td>迭代轮次目录，每轮三件套：diagnosis（归因）/ changes（修改）/ comparison（复验对数）</td></tr>
     <tr><td><code>pass / partial / done_partial</code></td><td>达标判定：全指标过容差 = pass；有残余但全部归因且主线成立 = partial（收尾状态为 done_partial）</td></tr>
     <tr><td><code>feasible / degraded / blocked</code></td><td>分诊可行性：数据齐全 / 部分缺失走降级方案 / 关键缺失无法复现</td></tr>
+    <tr><td>工单 / <code>step_id</code></td><td>内核发给编排会话的一条指令：派哪个角色、读哪个任务文件、该交回哪些文件。步骤编号形如 <code>implement.m2.code#1</code>（阶段 . 里程碑 . 动作 # 第几次）</td></tr>
+    <tr><td>任务文件 / 回执</td><td>任务文件：内核为某一步拼好的输入，只含这一步需要的原文片段。回执：子 agent 交回的结构化说明，覆盖矩阵与假设登记簿的回填由内核据此合并</td></tr>
+    <tr><td>检查点 / 审阅包 / 短码</td><td>流水线停下等人的具体位置；每个检查点附一份机器生成的审阅包和一个放行短码</td></tr>
+    <tr><td>凭据等级</td><td>一次放行凭什么算数：钩子级（钩子记到了你的原话）/ 终端级（你在自己的终端输入了短码）/ 自述级（只有编排会话的转述，会被标出）</td></tr>
+    <tr><td>熔断</td><td>同一项门禁检查连续 3 次不过，内核停下交给人，不再自动重试</td></tr>
+    <tr><td>试跑（mock）</td><td>用模拟数据把代码与流水线跑通；不出达标结论、不写报告，结果写在单独目录</td></tr>
   </table></div>
 </section>
 
 <footer>
-  <span>quant-report-reproduce v2.11.0</span>
+  <span>quant-report-reproduce v3.0.0</span>
   <span><a href="https://github.com/Hedicx2020/ghquant_plugin">github.com/Hedicx2020/ghquant_plugin</a></span>
-  <span>12 阶段门禁状态机 · 8 子 agent · codex 三审查点 · 样本外延伸分析</span>
+  <span>12 阶段门禁状态机 · 代码驱动内核 · 8 子 agent · 异构外审三审查点 · 样本外延伸分析</span>
 </footer>
 </main>
 </div>

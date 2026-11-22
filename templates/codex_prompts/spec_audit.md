@@ -34,6 +34,14 @@ workspace/{report_id}/audit/external_prompt_spec.md 后，由双宿主共享执�
 
 只依据 `report_text.md` 和 `tables_extracted.md`，独立通读全文，产出你自己的一份轻量清单：逐条列出你识别到的要素（要素名 + 类别 D/F/B/R/SA + 页码 + 关键参数/数值）。**这一步禁止打开或引用 spec.md 的任何内容**——盲提取的价值就在于不被已有提取结果锚定，独立走一遍才能暴露系统性遗漏。
 
+阶段一禁读清单（你能检索整个工作目录，但这一阶段下列路径一律不得打开、检索或引用——它们要么是 spec.md 本身，要么是带有 spec.md 片段与摘要的流程产物）：
+
+- `{workspace}/spec/spec.md`
+- `{workspace}/flow/`（任务文件、回执、清单）
+- `{workspace}/reviews/`（审阅包）
+- `{workspace}/events.jsonl`（事件流）
+- `{workspace}/board.html`、`workspace/board.html`（看板）
+
 {difficulty} 难度下阶段一的覆盖要求：
 - `easy`：可只做 R 类结果表的逐格核对准备（记录你独立读到的每张核心结果表的全部数值）+ 图表编号完整清单，其余类别可从简。
 - `medium`：对全部结果表做盲抄（数值原样记录），D/F/B/R/SA 五类都要覆盖。

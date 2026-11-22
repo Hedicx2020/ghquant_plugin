@@ -79,6 +79,27 @@ UNPARSEABLE = object()  # ConfigField.value 哨兵：不可字面量求值 / 跨
 
 _HEADING_LINE_RE = re.compile(r"^### \[([A-Z]+)(\d+(?:\.\d+)?)\]", re.MULTILINE)
 _MILESTONE_RE = re.compile(r"m\d+")
+_MILESTONE_RANGE_RE = re.compile(r"(?<![A-Za-z0-9_])m(\d+)\s*[-–—~～至到]\s*m?(\d+)(?![A-Za-z0-9_])")
+_MILESTONE_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_])m(\d+)(?![A-Za-z0-9_])")
+
+
+def parse_milestones(text: str) -> list[str]:
+    """从「影响 milestone」字段里取 mN 编号：`m2-m4`、`m2~4` 这类区间展开成逐个编号，保持首次出现的顺序。"""
+    hits: list[tuple[int, str]] = []
+    covered: list[tuple[int, int]] = []
+    for m in _MILESTONE_RANGE_RE.finditer(text or ""):
+        lo, hi = int(m.group(1)), int(m.group(2))
+        if lo <= hi and hi - lo <= 30:
+            hits.extend((m.start(), f"m{n}") for n in range(lo, hi + 1))
+            covered.append((m.start(), m.end()))
+    for m in _MILESTONE_TOKEN_RE.finditer(text or ""):
+        if not any(a <= m.start() < b for a, b in covered):
+            hits.append((m.start(), f"m{m.group(1)}"))
+    out: list[str] = []
+    for _pos, mid in sorted(hits, key=lambda item: item[0]):
+        if mid not in out:
+            out.append(mid)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -464,7 +485,12 @@ def cmd_export(args: argparse.Namespace) -> int:
     for b in blocks:
         f = b.fields
         bind = f.get("参数绑定", "").strip()
-        if bind:
+        names = bind_fields(bind)
+        if len(names) > 1:
+            # 一条假设绑了几个字段：把各自的当前值都列出来；要改值走新口径文本通道
+            cur_repr = "; ".join(f"{name}={fields[name].value_repr if name in fields else '(字段不存在)'}" for name in names)
+            bound.append({"as_id": b.id, "field": bind})
+        elif bind:
             cfg = fields.get(bind)
             cur_repr = cfg.value_repr if cfg else "(字段不存在)"
             bound.append({"as_id": b.id, "field": bind})
@@ -602,6 +628,11 @@ def read_row_edits(xlsx_path: Path, blocks: list, fields: dict[str, ConfigField]
             has_new_value = False  # 新口径若同填仍生效
             if not new_text:
                 continue
+        if has_new_value and len(bind_fields(bind)) > 1:
+            rejected.append({"row": row_no, "as_id": as_id, "reason": f"本条绑定了多个 config 字段（{bind}），一个新值对不上；请改填新口径列走文本通道"})
+            has_new_value = False
+            if not new_text:
+                continue
         edit = {
             "as_id": as_id,
             "title": block.title,
@@ -609,7 +640,7 @@ def read_row_edits(xlsx_path: Path, blocks: list, fields: dict[str, ConfigField]
             "has_new_value": has_new_value,
             "new_text": new_text,
             "impact": block.fields.get("影响面", ""),
-            "milestones": _MILESTONE_RE.findall(block.fields.get("影响 milestone", "")),
+            "milestones": parse_milestones(block.fields.get("影响 milestone", "")),
             "bind": bind,
         }
         if has_new_value:
@@ -649,11 +680,37 @@ def split_edits(edits: list[dict]) -> tuple[list[dict], list[dict]]:
     return config_edits, text_revisions
 
 
+def bind_fields(bind: str) -> list[str]:
+    """参数绑定里的字段名。整格都是字段名（逗号隔开）时返回各个字段；带括注、取值的旧写法原样当成一个。"""
+    text = (bind or "").strip()
+    parts = [part for part in re.split(r"[,，、;；]|\s+", text) if part]
+    if len(parts) > 1 and all(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.]*", part) for part in parts):
+        return parts
+    return [text] if text else []
+
+
+def impact_parts(impact: str) -> list[str]:
+    """把影响面拆成各个面：一条假设可以跨几个面，登记簿里常写成「method、data」。"""
+    return [part for part in re.split(r"[,，、;；/+＋]|\s+", (impact or "").strip()) if part]
+
+
+def impact_scope(impact: str) -> str:
+    """一条假设的重跑档位。跨几个面的取最重的一面；认不出的写法（空、带括注、不在枚举里）归到 data。"""
+    parts = impact_parts(impact)
+    return max(parts, key=IMPACT_ORDER.__getitem__) if parts and all(part in IMPACT_ORDER for part in parts) else "data"
+
+
+def impact_rank(impact: str) -> int:
+    """影响面的轻重。认不出的写法按最重一档算：宁可多重跑，不能漏重跑。"""
+    return IMPACT_ORDER[impact_scope(impact)]
+
+
 def merged_scope(edits: list[dict]) -> str:
+    """多条修订合并后的重跑范围：取最重的一档；认不出的影响面归到 data。"""
     best = "output"
     for e in edits:
-        cur = e.get("impact", "")
-        if IMPACT_ORDER.get(cur, -1) > IMPACT_ORDER.get(best, -1):
+        cur = impact_scope(e.get("impact") or "")
+        if IMPACT_ORDER[cur] > IMPACT_ORDER[best]:
             best = cur
     return best
 

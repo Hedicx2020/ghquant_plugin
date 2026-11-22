@@ -24,7 +24,8 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 CONFIG_NAME = ".reproduce.json"
-CONFIG_VERSION = 1
+CONFIG_VERSION = 2  # 2：新增 default_on_missing / default_budget_* 与 flow 段（v3 内核读取；缺省时内核用默认值）
+VALID_ON_MISSING = ("ask", "mock", "stop")
 SEED_DIRS = ("templates", "common")
 WORK_DIRS = ("reports", "workspace", "src", "output")
 VALID_MODES = ("auto", "interactive")
@@ -81,6 +82,12 @@ class SetupReport:
             lines.append(f"  backtest_framework={bf or '（未指定，使用内置 common/ 回测框架）'}")
             mrd = self.config.get("default_max_rel_dev")
             lines.append(f"  default_max_rel_dev={f'{mrd}（所有相对偏差判定统一用此容忍度）' if mrd is not None else '（未指定，按 templates/standards.json 分类型精细容差）'}")
+            flow = self.config.get("flow") or {}
+            lines.append(
+                f"  数据缺口无人应答时={self.config.get('default_on_missing', 'ask')}  "
+                f"预算={self.config.get('default_budget_hours') or '不设'} 小时 / {self.config.get('default_budget_tokens') or '不设'} token  "
+                f"停滞阈值={flow.get('stall_hours') or 3} 小时"
+            )
             lines.append(f"  economy={self.config.get('economy', False)}（true 时机械性角色 extractor/verifier/oos-analyst 派发降为 sonnet）  audit_level={self.config.get('audit_level', 'strict')}（standard 时 spec/code 外审改触发式，result 外审任何档位必跑）")
         lines.append(f"种子拷贝: 新拷 {len(self.copied)} 个，已存在跳过 {len(self.skipped_existing)} 个")
         if self.plugin_newer:
@@ -103,6 +110,8 @@ class SetupReport:
                 lines.append(f"  Claude Code 主编排 → Codex 异构外审可用: {env['codex']}")
             else:
                 lines.append("  Claude Code 主编排 → Codex CLI 未找到，将降级为 Claude 同宿主独立盲审，可信度封顶 B")
+            if not env.get("python3"):
+                lines.append("  python3 未在 PATH 上：Claude Code 的禁读护栏与「人在场」记录两个钩子不会生效（流程照常，只是少了这层护栏）")
             if env.get("claude"):
                 lines.append(f"  Codex 主编排 → Claude Code 异构外审可用: {env['claude']}")
             else:
@@ -118,7 +127,9 @@ def _now_iso() -> str:
 def write_config(target: Path, data_root: str, mode: str, max_iter: int | None,
                  backtest_framework: str | None, max_rel_dev: float | None,
                  economy: bool, audit_level: str,
-                 force: bool, report: SetupReport) -> None:
+                 force: bool, report: SetupReport,
+                 on_missing: str = "ask", budget_hours: float | None = None,
+                 budget_tokens: float | None = None, stall_hours: float | None = None) -> None:
     cfg_path = target / CONFIG_NAME
     existed = cfg_path.is_file()
     if existed and not force:
@@ -135,6 +146,11 @@ def write_config(target: Path, data_root: str, mode: str, max_iter: int | None,
         raise SystemExit(f"default_max_rel_dev 必须在 0.005-0.5（即 0.5%-50%）之间或留空（按 standards.json 分类型精细容差），收到: {max_rel_dev}")
     if audit_level not in ("strict", "standard"):
         raise SystemExit(f"audit_level 必须是 strict|standard，收到: {audit_level}")
+    if on_missing not in VALID_ON_MISSING:
+        raise SystemExit(f"default_on_missing 必须是 {VALID_ON_MISSING} 之一，收到: {on_missing}")
+    for name, value in (("default_budget_hours", budget_hours), ("default_budget_tokens", budget_tokens), ("flow.stall_hours", stall_hours)):
+        if value is not None and value <= 0:
+            raise SystemExit(f"{name} 必须大于 0 或留空，收到: {value}")
     config = {
         "data_root": data_root,
         "default_mode": mode,
@@ -143,6 +159,16 @@ def write_config(target: Path, data_root: str, mode: str, max_iter: int | None,
         "default_max_rel_dev": max_rel_dev,
         "economy": economy,
         "audit_level": audit_level,
+        # —— 以下由 v3 内核（tools/flow.py）读取；建案时的命令行参数优先于这里的默认值 ——
+        "default_on_missing": on_missing,          # 数据缺口无人应答时：ask 停下等人 / mock 先用模拟数据试跑 / stop 停下不追问
+        "default_budget_hours": budget_hours,      # 单个案例的墙钟预算，超了开检查点；null 不设
+        "default_budget_tokens": budget_tokens,    # 单个案例的 token 预算（读得到宿主会话记录时才生效）；null 不设
+        "flow": {
+            "stall_hours": stall_hours,            # 在途步骤多久没有新进展算停滞；null 用默认 3 小时
+            "adhoc_limit": 5,                      # 每个案例步骤表之外的临时派发上限
+            "redispatch_limit": {},                # 按步骤名覆盖重派上限，如 {"verify.main": 3, "gate:verify": 3}；默认 2
+            "iterate_digest": "shadow",            # 迭代诊断摘要：shadow 与全部历史一起给 / on 第 2 轮只给摘要 / off 不生成
+        },
         "plugin_root": str(plugin_root()),
         "created_at": _now_iso(),
         "config_version": CONFIG_VERSION,
@@ -234,6 +260,7 @@ def check_env(target: Path, report: SetupReport) -> None:
     env["uv"] = shutil.which("uv")
     env["codex"] = shutil.which("codex")
     env["claude"] = shutil.which("claude")
+    env["python3"] = shutil.which("python3")
     missing: list[str] = []
     if env["uv"]:
         probe = "\n".join(
@@ -257,12 +284,17 @@ def run_setup(target: Path, data_root: str, mode: str, max_iter: int | None,
               backtest_framework: str | None = None,
               max_rel_dev: float | None = None,
               economy: bool = False,
-              audit_level: str = "strict") -> SetupReport:
+              audit_level: str = "strict",
+              on_missing: str = "ask",
+              budget_hours: float | None = None,
+              budget_tokens: float | None = None,
+              stall_hours: float | None = None) -> SetupReport:
     target = target.resolve()
     target.mkdir(parents=True, exist_ok=True)
     report = SetupReport(target=str(target))
     if not check_only:
-        write_config(target, data_root, mode, max_iter, backtest_framework, max_rel_dev, economy, audit_level, force_config, report)
+        write_config(target, data_root, mode, max_iter, backtest_framework, max_rel_dev, economy, audit_level, force_config, report,
+                     on_missing=on_missing, budget_hours=budget_hours, budget_tokens=budget_tokens, stall_hours=stall_hours)
         copy_seeds(target, report)
         copy_codex_agents(target, report)
         write_pyproject(target, report)
@@ -285,6 +317,11 @@ def main(argv: list[str] | None = None) -> int:
                         help="外审档位：strict=异构外审三审查点全跑（默认）；standard=spec/code 审查点触发式、result 必跑")
     parser.add_argument("--max-rel-dev", default=None,
                         help="可接受的与原报告的偏差（小数，0.005-0.5，如 0.1=10%%，对所有相对偏差判定统一生效）；留空=按 standards.json 分类型精细容差")
+    parser.add_argument("--on-missing", default="ask", choices=VALID_ON_MISSING,
+                        help="数据缺口无人应答时的默认做法：ask=停下等人（默认）/ mock=先用模拟数据试跑 / stop=停下不追问")
+    parser.add_argument("--budget-hours", type=float, default=None, help="单个案例的墙钟预算（小时），超了开检查点；留空=不设")
+    parser.add_argument("--budget-tokens", type=float, default=None, help="单个案例的 token 预算，超了开检查点；留空=不设")
+    parser.add_argument("--stall-hours", type=float, default=None, help="在途步骤多久没有新进展算停滞（小时）；留空=默认 3")
     parser.add_argument("--force-config", action="store_true", help="覆盖已存在的 .reproduce.json（默认保留）")
     parser.add_argument("--check-only", action="store_true", help="只做环境检测，不落任何文件")
     parser.add_argument("--json", action="store_true", help="输出机器可读 JSON 摘要")
@@ -321,6 +358,10 @@ def main(argv: list[str] | None = None) -> int:
         max_rel_dev=max_rel_dev,
         economy=args.economy,
         audit_level=args.audit_level,
+        on_missing=args.on_missing,
+        budget_hours=args.budget_hours,
+        budget_tokens=args.budget_tokens,
+        stall_hours=args.stall_hours,
     )
     print(report.to_json() if args.json else report.render_text())
     return 0

@@ -6,6 +6,20 @@
 
 本仓库同时是 **Claude Code / Codex 双宿主插件**（`quant-report-reproduce`）：两端共用同一套 12 阶段状态机和 8 个量化角色，并默认由另一宿主执行异构外审。
 
+## v3 概览
+
+v3 把流程控制从技能文字搬进了一个确定性的内核（`tools/flow.py`）：下一步派谁、让它读什么、该交回什么、门禁过不过、哪里必须停下等人，都由代码决定；编排会话只做「取工单 → 照单派发 → 点收」。
+
+| 方向 | 做了什么 |
+|---|---|
+| 省 token | 每一步只拿到按需切好的任务文件，不再整份读规格书、假设登记簿、覆盖矩阵；回填改为回执，由内核合并；编排会话不再读执行卡、手写派发提示词；外审改为一次送入输入包、指定推理强度、复审只审差量 |
+| 可控 | 检查点（审阅包 + 固定选项 + 放行凭据）；`interactive` / `--until` / `--step` 决定在哪里停；同一检查项连续 3 次不过自动熔断；停滞告警与预算；改了文书后标出哪些步骤过期、只重做受影响的部分 |
+| 可见 | 每个案例一张静态看板（`workspace/<id>/board.html`）与只追加的事件流；每步的用量入账（`flow cost`） |
+| 数据 | 机器体检数据目录与每条数据需求；缺口由人选处置方式，其中一种是先用 mock 数据把流程试跑通 |
+| 双宿主 | 内核与宿主无关，Claude Code、Codex 与通用宿主各一张薄适配卡；Codex 侧角色文件落后时自动改用通用子代理并内嵌合同 |
+
+设计、实测依据与实施记录见 `docs/specs/2026-11-21-reproduce-v3-design.md`（配图说明页是同名 `.html`）。多源数据层（数据库 / API / MCP）、多篇引用与知识库、本体接入属于后续各期，本版只留了扩展点。
+
 ## 作为插件安装（推荐给其他使用者）
 
 ```bash
@@ -31,9 +45,9 @@ Codex App 安装后请新建一个任务再使用插件，以确保新安装的 
    - **回测框架**：默认使用内置 `common/` 回测库；也可指定你自有回测框架的目录路径——复现代码的回测执行层将优先调用你的框架，内置库仅补缺口
    - **偏差容忍**：你能接受的复现值与原报告的偏差。默认按 `templates/standards.json` 分类型精细容差（年化/夏普等 5%、因子 IC 近零走绝对偏差等）；也可自定义统一百分比（如 10%）——所有相对偏差判定随之放宽或收紧，达标判定与最终报告一致生效
    - **经济模式**：开启后机械性角色（提取/验证/样本外）派发降为 sonnet，token 消耗约降三成；质量敏感角色（写码/审计/归因）保持 opus。另有配置文件项 `audit_level`（strict 默认 / standard 外审触发式）进一步控成本，见手册
-   随后 setup 自动落地：`.reproduce.json`、`templates/`、`common/`、`.codex/agents/`、`pyproject.toml` 与目录树，并检测 uv / Python 依赖 / codex CLI / claude CLI。
-2. **维护 `templates/data_catalog.md`**：按你数据目录的实际内容登记数据清单——分诊阶段判断「研报所需数据是否可得」完全依据此文件。
-3. 把研报 PDF 放进 `reports/`，运行 `/reproduce reports/xxx.pdf` 起跑。
+   随后 setup 自动落地：`.reproduce.json`、`templates/`、`common/`、`.codex/agents/`、`pyproject.toml` 与目录树，并检测 uv / Python 依赖 / codex CLI / claude CLI / python3。另有几项不进问卷、有默认值的配置（数据缺口无人应答时怎么办、单案预算、停滞阈值、外审设置），见手册。
+2. **看一眼数据体检结果**：setup 最后会体检你的数据目录（每个文件的字段、行数、日期起止、每年标的数），结果在 `workspace/_registry/data_probe.md`。分诊判断「研报所需数据是否可得」以这份实况和规划阶段的逐条核对为准；手写的 `templates/data_catalog.md` 只作说明，不必维护齐全。
+3. 把研报 PDF 放进 `reports/`，运行 `/reproduce reports/xxx.pdf` 起跑。数据有缺口时它会停下来问你怎么办（补数据 / 等价替代 / 缩小范围 / 先用 mock 试跑 / 砍掉相关要素 / 终止）。
 
 **环境要求**：
 - [uv](https://docs.astral.sh/uv/)（硬前置，所有工具经 `uv run` 调用）；依赖缺失时在工作目录 `uv sync`
@@ -41,6 +55,7 @@ Codex App 安装后请新建一个任务再使用插件，以确保新安装的 
 - Codex 主编排时，`claude` CLI 是异构外审软前置；缺失时降级为 Codex 独立盲审。
 - 两种降级都不断链，但会在最终报告中如实标注并把可信度封顶 B；外部 CLI 恢复后下一检查点自动回到异构主路径。
 - Claude 角色模型档位以 `agents/*.md` 为正本；Codex 项目级角色由 `tools/sync_codex_agents.py` 生成并由 setup 安装。
+- Claude Code 的两个钩子（读文件前的禁读护栏、检查点待决时记录你的原话作为放行凭据）靠 `python3` 启动；它不在 PATH 上时钩子不生效，流程照常，放行记录降为自述级并在看板标出。
 
 | 当前主编排 | 默认外审 | 一级降级 | 二级降级 |
 |---|---|---|---|
@@ -53,8 +68,22 @@ Codex App 安装后请新建一个任务再使用插件，以确保新安装的 
 /reproduce setup                          # 首次使用配置向导（形态 A 本仓库直跑可跳过）
 /reproduce reports/test.pdf --mode auto   # 新起一份复现（自动分配案例编号 rNNN_<slug>）
 /reproduce reports/us_paper.pdf --experimental   # 实验模式：海外报告市场迁移复现（等价数据替代，数值判定豁免）
+/reproduce reports/test.pdf --until plan  # 跑到规划结束停一次，看过再继续（--step 每一步都停）
+/reproduce reports/test.pdf --on-missing mock    # 数据有缺口且无人应答时，先用 mock 数据试跑
 /reproduce status                         # 全部案例一览表（编号 | id | 类型/难度 | 状态 | 阶段）
 /reproduce continue r3                    # 编号缩写即可续跑（r3 / r003 / 3 都指向 r003_xxx）
+/reproduce revise r3 --assumption AS4 --new-text "新口径"   # 评审后改一条假设，只重跑受影响的部分
+/reproduce reopen r3 --from m2 --reason "原因"              # 回退到某个阶段或里程碑重做
+/reproduce accept r3                      # 评审通过收尾
+```
+
+进度看板：`workspace/<id>/board.html`（单个案例）、`workspace/board.html`（全部案例），浏览器直接打开。终端里可随时跑的只读命令：
+
+```bash
+uv run python tools/flow.py status [id]     # 进度、在途步骤、停在哪个检查点（插件安装形态下把 tools/ 换成插件目录里的路径）
+uv run python tools/flow.py explain G-VF-6  # 某个阶段、门禁检查项或检查点的处理说明；explain index 看目录
+uv run python tools/flow.py cost <id>       # 用量汇总
+uv run python tools/flow.py stale <id>      # 改过文书后，哪些已完成的步骤因此过期
 ```
 
 **案例统一编号**：新案例自动分配 `rNNN_<slug>` 形式的 report_id（三位顺序号 + 语义短名，如 `r001_style_factor`），起跑时终端会明示编号；所有子命令（`continue` / `status` / `revise` / `accept`）都接受编号缩写或唯一前缀，忘了 id 就跑一次无参 `/reproduce status`。`--id` 仍可显式指定覆盖。
@@ -66,16 +95,20 @@ Codex App 安装后请新建一个任务再使用插件，以确保新安装的 
 | `.claude-plugin/plugin.json` | 插件清单 |
 | `.codex-plugin/plugin.json` | Codex 插件清单（与 Claude Code 共用 `skills/`） |
 | `.codex/agents/` | 由 Markdown 角色正本生成的 Codex 项目级 agents |
-| `docs/specs/2026-07-07-reproduce-v2-design.md` | v2 完整设计文档（状态机 / 门禁 / agent 契约 / 防偷懒审计体系） |
+| `docs/specs/2026-11-21-reproduce-v3-design.md` | v3 设计与实施记录（内核 / 上下文包 / 数据体检 / 外审引擎 / 检查点与看板）；同名 `.html` 是配图说明页 |
+| `docs/specs/2026-07-07-reproduce-v2-design.md` | v2 完整设计文档（状态机 / 门禁 / agent 契约 / 防偷懒审计体系，仍然有效） |
 | `docs/specs/2026-07-09-plugin-packaging-design.md` | 插件化设计（双形态 / 路径解耦 / setup 向导） |
 | `CLAUDE.md` | 编码与产出格式落地约定（命名 / Excel / 图表 / common 复用 / 数据对齐） |
-| `skills/reproduce/` | `/reproduce` 主编排 SKILL.md + stage 执行卡（`.claude/skills/` 为回指 symlink） |
+| `skills/reproduce/` | `/reproduce` 技能：`SKILL.md`（薄壳）、`adapters/`（三张宿主适配卡）、`explain/`（按需取的处理说明）、`stages/setup.md`；`stages/legacy/` 是 v2 执行卡，旧案例与被退回执行卡的阶段使用（`.claude/skills/` 为回指 symlink） |
+| `hooks/hooks.json` | Claude Code 钩子：禁读护栏（`tools/guard.py`）、「人在场」记录（`tools/presence.py`） |
 | `agents/` | 8 个角色合同正本（`.claude/agents` 回指；`.codex/agents` 由脚本生成） |
 | `templates/` | 分诊、类型、审计模板 + `standards.json` 达标标准（插件形态下作为种子拷贝到用户目录） |
 | `common/` | 公共回测库（同上，种子） |
-| `tools/` | 状态/门禁/PDF/setup 工具，以及 `external_review.py`（双引擎只读外审）与 `sync_codex_agents.py`（角色同步） |
+| `tools/flow.py`、`tools/flowlib/` | v3 内核：命令入口、步骤表、推进循环、上下文包与回执、检查点、外审、数据体检、一致性预检、用量 |
+| `tools/` 其余 | 状态 / 门禁 / PDF / setup 工具，`external_review.py`（双引擎只读外审执行器）、`board.py`（看板）、`mockdata.py`（模拟数据）、`sync_codex_agents.py`（角色同步） |
 | `reports/{id}.pdf` | PDF 收件箱 |
-| `workspace/{id}/` | 每份报告的管线文书（spec / plan / audit / iterations / final_report） |
+| `workspace/{id}/` | 每份报告的管线文书（spec / plan / audit / iterations / final_report），以及 `state.json`、事件流 `events.jsonl`、看板 `board.html`、审阅包 `reviews/`、内核写的任务文件与回执 `flow/` |
+| `workspace/_registry/` | 跨案例登记：数据目录体检结果、PDF 指纹索引 |
 | `src/{id}/`、`output/{id}/` | 策略代码与回测结果 |
 | `docs/legacy/` | 已退役旧命令 / 旧 agent 的存档备份 |
 
@@ -89,6 +122,7 @@ Codex App 安装后请新建一个任务再使用插件，以确保新安装的 
 
 ## 变更记录
 
+- 2026-11-22（v3.0.0）：代码驱动内核——流程控制从 SKILL.md 与执行卡的文字迁到 `tools/flow.py`（工单协议 `flow next` / `flow done`，12 个阶段全部入码，任何阶段可用 `flow pin` 退回执行卡驱动）。① 上下文包与回执：每一步的任务文件只装所需的原文片段，矩阵与假设登记簿的回填由内核按回执合并；② 闸门代码化：检查点、审阅包、放行凭据（钩子 / 终端 / 自述）、状态流转守卫、同一检查项连败 3 次熔断、重派上限、停滞哨兵与预算；③ 数据体检：数据目录体检、数据需求逐条核对、缺口处置检查点、mock 试跑（结果隔离在 `results_mock/`，门禁拦截真假数据混用）；④ 外审引擎重做：输入包、显式推理强度、关闭多代理、差量复审、盲提取两次调用、后台执行、多轮意见机器合并；⑤ 结果一致性预检与文书里的机器生成块（对比总表、达标计数、假设登记簿不再手抄）；⑥ 看板、带哈希链的事件流、分步用量记账（`flow cost`）；⑦ 失效标注（`flow stale`）与回退重开（`flow reopen`）；⑧ `SKILL.md` 由 28.7KB 压到约 5.6KB，新增通用宿主适配卡，Codex 经济档角色变体与角色漂移自动回退。状态文件升到 schema v2（事件与门禁历史移入 `events.jsonl`），旧案例不自动迁移：续跑仍按 `stages/legacy/` 的执行卡，`flow migrate <id>` 后可交给内核。现有门禁检查项的判定语义不变，新增的数据类与一致性类检查只对 v3 新建案例生效。设计与实施记录见 `docs/specs/2026-11-21-reproduce-v3-design.md`。
 - 2026-07-14（v2.12.0）：Claude Code / Codex 双宿主兼容——同一 `reproduce` skill 运行时识别宿主；Claude Code 默认调用 Codex 异构外审，Codex 默认调用 Claude Code 异构外审；新增 Codex 插件清单、8 个生成式项目 agents、统一只读外审执行器和对称降级链。新案例使用 `*_external.md`，门禁继续兼容历史 `*_codex.md`；同宿主替身统一封顶 B。
 - 2026-07-11：编排约定补记（ssrn_6115073 experimental 复现实践）——oos 阶段 oos-analyst 延伸 `config.py` 的 `TEST_END` 跑样本外后，主会话应将其**还原至复现基线**（本例 2024-12-31）；样本外区间仅存于 `output/{id}/results/oos_*` 静态产物、不依赖 config 保持延伸，从而保 `config.py` 与 verify 基线一致、`main.py` 复跑即得报告基线。属编排卫生、非框架变更、无门禁/工具代码改动。
 - 2026-07-12（v2.11.0）：术语人话化（客户可读性）——① 手册：22 处代号挂悬浮释义（悬停/轻点即看中文解释，纯前端自包含，无 JS 时术语表兜底）；② 结果页 final_report.html：全部枚举值中文为主、原始值括注（复现判定/类型难度/外审台账的审查点、引擎、结论/归因状态），降级引擎显著标注，未知枚举原样透传不吞值；③ 最终报告 final_report.md：reporter 新增人话化硬约束第 11 条（代号首次出现附中文说明、审计回应表必含"这条意见说什么·我们怎么处理"人话列、rejected 句式固定、评级句式固定防渲染器徽章误抓、状态枚举中文化）。内部文书与门禁零改动（代号仍是机器解析依赖），check_gates 全量回归通过。

@@ -24,6 +24,18 @@ data_requirements:
   - name: <数据名，如 A股日行情>
     source: <local_data 文件名，或「外部」>
     status: <available | derive | missing | substitute>   # substitute 仅实验模式：原文数据 → 本地等价替代（写明理由）
+    # —— 以下是机器可查字段，全部可选；填了才会被逐项核对，规则见下方「data_requirements 的机器可查字段」——
+    files: [ashare_stock_price_forward.parquet]   # 数据根目录下的相对路径，可多个
+    fields: [close, adj_factor]                   # 要用的字段
+    period: [2013-01-01, 2024-12-31]              # 起止，含预热窗口；也可写成 "2013-01-01~2024-12-31"
+    freq: D                                       # D / W / M / Q / A
+    min_codes: 2000                               # 截面最少标的数（每年）
+    core: true                                    # 是否核心数据
+    elements: [D2, F1]                            # 依赖它的 spec 要素 ID
+  - name: <非文件来源的数据，如 经接口取的一致预期>
+    source: <接口或库名>
+    status: available
+    probe: "<一条取数冒烟命令>"                    # 只有非文件来源才填，退出码 0 算通；填不了就不填，记「未机检」
   # ... 逐条列出复现所需数据，对照 templates/data_catalog.md 标 status
 milestones:
   - id: m1
@@ -39,6 +51,26 @@ milestones:
 - **type**：看研报最终回测对象。截面选股=`factor`；时序仓位信号=`timing`；多资产权重=`allocation`；债券/收益率曲线=`fixed_income`；需训练模型=`ml`。混合时取「最终回测形态」为 type，其余进 tags（例：深度学习选股 → `type: factor` + `tags: [ml]`）。
 - **difficulty**：按 §三 三步判定（方法复杂度定基准 → 修正项上调 → easy 收口）；plan 正文「难度判定」节必须写明基准档依据与各修正项触发情况，供审计核对。
 - **feasibility**：取值 ∈ `{feasible, degraded, blocked}`（与 `tools/state.py` 的 `FEASIBILITY_VALUES` 逐字对齐，注意不是 `ok/partial`）。所有核心 data_requirement 为 available/derive → `feasible`；部分非核心数据 missing 但不影响主结论、需降级复现 → `degraded`；核心数据 missing 或核心方法无法确定 → `blocked`（触发主流程停下问用户，`tools/check_gates.py` G-PL-9 断言 `feasibility != blocked` 才能放行）。
+- **data_requirements 的机器可查字段（全部可选）**：plan 阶段内核会做一次「数据需求体检」，逐条对着数据根目录核对，结论分四种——通过 / 部分满足（写明缺哪段或哪个字段）/ 缺失 / 未机检，写入 `workspace/{report_name}/data_check.json`。
+  - **这些字段都可选**，旧 plan 没有它们照样合法。**不填 `files` 时机器只能做文件存在性检查**：从 `source` 里认 `xxx.parquet` 这类文件名查在不在，认不出的记「未机检」；此时 `fields` / `period` 等写了也不会被核对。
+  - 填了 `files` 才逐项核对：字段齐不齐、区间盖不盖得住、每年标的数有没有塌陷、频率、主键重复、关键字段缺失率、财务类数据有没有披露日列（`info_publ_date` 等）。
+  - **填了 `status: available`（或 `derive`）而体检不过，会带着实测结果退回 planner 改一次**（改 status、换文件、收窄 period 或登记假设）；仍不过就进「数据缺口处置」检查点，由人在 补数据 / 等价替代 / 缩小范围 / 先用 mock 试跑 / 砍掉相关要素 / 终止 里选。`status: missing` 是已知缺口，直接等人处置；`status: substitute` 按替代数据核对，没查出问题即显示「已替代」。
+
+  | 字段 | 写法 | 机器怎么用 |
+  |------|------|-----------|
+  | `files` | 数据根目录下的相对路径，可多个；不支持通配符 | 查在不在；其余各项都以这些文件为对象，**所列文件每个都要过**（互为备选的数据源只列实际要用的那个）。目录和非 parquet 文件只查在不在 |
+  | `fields` | 字段名列表（`OHLC` 是 open/high/low/close 的简写） | 每个字段至少在所列文件之一里有；并查它们在所需区间内的缺失率（上限默认 50%） |
+  | `period` | `[起, 止]` 或 `"起~止"`，**含预热窗口**；可只写到年或月，止留空表示至今 | 与实测日期起止比对（容许出入：日频 10 天、周 14、月 35、季 100、年 370），并报区间内整年没有数据的年份 |
+  | `freq` | `D` / `W` / `M` / `Q` / `A` | 区间内每年的日期数达不到该频率即报（数据比它细不算问题）；填了它还会报区间内日期数明显偏少的年份 |
+  | `min_codes` | 整数 | 区间内每年不同标的数的下限。不填时只报断崖式塌陷（不到峰值一成）的年份；指数、基准这类只用少数几个代码的需求写 `min_codes: 1` |
+  | `core` | `true` / `false` | 是否核心数据（口径同上面 feasibility 的判定），缺口清单里标出供人判断轻重 |
+  | `elements` | 依赖它的 spec 要素 ID | 缺口顺 spec 的依赖关系传到受影响的 F / B / R / SA 要素，宁多勿漏 |
+  | `probe` | 一条 shell 命令，退出码 0 算通 | 只给非文件来源（API、数据库）用；体检默认不执行、记「未机检」，开启冒烟时才跑。填不了的同样记「未机检」 |
+  | `keys` | 主键列列表；`[]` 表示不查重 | 不填时，带日期列的表按（代码列, 日期列）查重，财务类与按报告期记的表默认不查；一个键本来就有多行的表（持仓、分档数据、分类型的现金流）写明主键 |
+  | `max_null_rate` | 0–1 的小数 | 个别字段本来就稀疏（如股息率），或一张表里只用其中少数代码时，放宽缺失率上限 |
+
+  体检按文件整体核对，不认「只用其中几个代码」：指数行情这类多代码的表，标的数与缺失率是全表的数，据此用 `min_codes` / `max_null_rate` 说明本需求的口径。
+
 - **milestones**：每个里程碑应是一个「可独立实现+验证」的闭环单元，粒度参考对应类型模板的「plan 正文结构」。**粒度下界**：预计实现 <100 行的 milestone 不单立——与相邻、同主题（同一因子/同一数据环节/同一回测环节）的 milestone 合并，`elements` 清单原样并入**一条不减**（审计逐条覆盖面不变）；合并后 hard 总数不得低于 3（G-PL-4 硬下限）。每个 milestone 的固定编排成本约为一次 coder+复核+验证（30-50 分钟），拆分收益必须大于该成本。`deps` 描述里程碑间的先后依赖（`tools/check_gates.py` G-PL-5 会检测环依赖，成环直接判 FAIL）；`elements` 是该里程碑要交付的 spec.md 要素 ID 清单，写完后须与 `coverage_matrix.md` 对应行的 milestone 列相互印证（一个要素只能落在一个 milestone）。
 
 ---

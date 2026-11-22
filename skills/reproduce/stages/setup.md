@@ -20,9 +20,10 @@
    - **经济模式**（header: 经济模式）：`关闭`（推荐首次使用——全 opus 质量优先）/ `开启`（机械性角色 extractor/verifier/oos-analyst 派发降为 sonnet，token 消耗约降三成；coder/auditor/diagnoser 等质量敏感角色不受影响）。
 
    > 外审档位 `audit_level`（strict|standard）不进问卷，默认 strict；需要降为 standard（spec/code 外审触发式、result 必跑）时直接编辑 `.reproduce.json` 或带 `--audit-level standard` 重跑本工具。
+   > 同样不进问卷、有默认值的还有四项：数据缺口无人应答时怎么办（`--on-missing ask|mock|stop`，默认 ask 停下等人）、单个案例的预算（`--budget-hours`、`--budget-tokens`，默认不设）、停滞阈值（`--stall-hours`，默认 3 小时）。用户提到了才带上对应参数；之后也可以直接编辑 `.reproduce.json`，或在建案时用同名参数单独指定。
    > 未来新增配置项时同样遵守 4 问上限分批；两批答案合并后一次性传给步骤 3。
 
-3. **落地骨架**（命令按 SKILL.md 二、工具定位协议展开）：
+3. **落地骨架**（工具在插件根的 `tools/` 下：本 skill 的 Base directory 上两级即插件根；命令前带 `REPORT_REPRODUCE_ROOT="$PWD"`）：
    ```
    uv run python tools/setup_workspace.py --target . --data-root "<答案1>" --mode <答案2> --max-iter <答案3|留空> --backtest-framework "<答案4|留空>" --max-rel-dev <答案5小数|留空> [--economy] [--audit-level strict|standard] [--force-config]
    ```
@@ -37,10 +38,12 @@
    - Codex 当前任务若刚安装 `.codex/agents` 尚未发现命名角色，可继续使用通用子代理 + 完整角色合同；新任务自动加载命名角色。
    - 「插件侧较新」清单非空 → 列给用户，说明这些模板文件插件有更新但你本地已定制、未覆盖，需要的话手动对比同步。
 
-5. **data_catalog 引导（关键一步，明确告知）**：`templates/data_catalog.md` 当前是模板/种子内容，描述的是维护者的数据清单；**用户必须按自己 data_root 下的实际数据维护它**——分诊阶段判断「研报需要的数据是否可得」完全依据此文件，写漏会被误判 missing、写多会引发运行期报错。给出维护建议：每张表一节，写明文件名、关键列、时间范围、已知口径注意事项（如财务数据必须用披露日 info_publ_date 对齐）。
+5. **数据目录体检（关键一步，明确告知）**：执行 `REPORT_REPRODUCE_ROOT="$PWD" uv run python <插件根>/tools/flow.py data probe`，把结果讲给用户：数据根下有多少个文件、总大小，以及它列出的提示（某张表哪几年标的数塌陷、与 `templates/data_catalog.md` 的说法对不上的地方）。体检结果写在 `workspace/_registry/data_probe.md`，这张「数据实况表」是分诊判断数据可得性的依据；手写的 `templates/data_catalog.md` 降为说明性文字（种子内容描述的是维护者的数据，用户可以按自己的数据改写，写不写全都不影响判定）。数据根目录不存在或是空的 → 明确告诉用户：没有数据时复现会停在「数据缺口处置」，可以选补数据、先用 mock 试跑或终止。
 
 6. **收尾打印**：
    - 快速开始：`/reproduce reports/<你的研报>.pdf` / `/reproduce status` / `/reproduce continue <id>`
+   - 进度看板：每个案例的 `workspace/<id>/board.html`，全部案例的总览 `workspace/board.html`（静态页，浏览器直接打开）。
+   - 环境检测里提示 python3 不在 PATH 上时转述：Claude Code 的两个钩子（禁读护栏、「人在场」记录）不会生效，流程照常，放行凭据会降为自述级。
    - 配置位置与改法：`.reproduce.json` 可直接编辑，或重跑 `/reproduce setup` 选「重新配置」。
 
 ## 失败处理

@@ -296,6 +296,35 @@ def test_apply_rejections(case: Path, monkeypatch, capsys, edits, expect_as, exp
     assert result["config_edits"] == [] and result["text_revisions"] == []
 
 
+def test_multi_field_binding_is_listed_but_edited_through_text(case: Path, monkeypatch, capsys) -> None:
+    """一条假设落到几个 config 字段上（登记簿里常见）：导出时把各字段的当前值都列出来；一个「新值」对不上，改走文本通道。"""
+    md = case / "workspace" / REPORT_ID / "assumptions.md"
+    md.write_text(
+        md.read_text(encoding="utf-8")
+        + "\n### [AS9] 回看窗口与调仓方式一并取默认\n- 来源: coder 主动简化\n- 假设内容: 两处都按默认\n- 行业惯例依据: 无\n"
+        "- 影响面: param、trading\n- 影响 milestone: m1\n- 影响指标: 无\n- 预期影响: 无\n- 验证后回看: 实测通过\n- 状态: assumed\n- 高亮等级: -\n"
+        "- 参数绑定: lookback_h, mode_name\n",
+        encoding="utf-8",
+    )
+    code, payload, _ = run_cli(monkeypatch, capsys, ["export", REPORT_ID])
+    assert code == 0 and {"as_id": "AS9", "field": "lookback_h, mode_name"} in payload["bound"]
+    xlsx = case / payload["xlsx"]
+    ws = load_workbook(xlsx)["假设登记簿"]
+    headers = {c.value: c.column for c in ws[1]}
+    row = next(r for r in ws.iter_rows(min_row=2) if r[headers["AS ID"] - 1].value == "AS9")
+    assert row[headers["当前值"] - 1].value == "lookback_h=60; mode_name='month_end'"
+
+    _edit_xlsx(xlsx, {"AS9": {"new_value": 40, "op": "revise"}})
+    code, result, _ = run_cli(monkeypatch, capsys, ["apply", REPORT_ID, "--dry-run"])
+    assert code == 1 and result["config_edits"] == []
+    assert any(r["as_id"] == "AS9" and "绑定了多个 config 字段" in r["reason"] and "新口径" in r["reason"] for r in result["rejected"])
+
+    _edit_xlsx(xlsx, {"AS9": {"new_value": 40, "new_text": "回看窗口改为 40 日", "op": "revise"}})
+    code, result, _ = run_cli(monkeypatch, capsys, ["apply", REPORT_ID, "--dry-run"])
+    assert code == 0 and result["config_edits"] == [] and [t["as_id"] for t in result["text_revisions"]] == ["AS9"]
+    assert result["merged_impact_scope"] == "param"  # 跨两个面的取最重的一面，不再因为认不出写法而归到 data
+
+
 def test_apply_field_conflict(case: Path, monkeypatch, capsys) -> None:
     """同批次两行绑同一字段 → 两行都拒绝。"""
     md_path = case / "workspace" / REPORT_ID / "assumptions.md"

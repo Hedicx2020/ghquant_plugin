@@ -1,6 +1,6 @@
 {
   "name": "quant-report-reproduce",
-  "version": "2.12.0",
+  "version": "3.0.0",
   "description": "Claude Code 与 Codex 双宿主量化研报复现流水线，内置 12 阶段门禁、8 个量化角色和异构外审。",
   "author": {
     "name": "Hedi"
